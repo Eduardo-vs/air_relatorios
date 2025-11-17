@@ -51,7 +51,7 @@ def render():
             
             col1, col2 = st.columns(2)
             with col1:
-                if st.form_submit_button("✅ Salvar", use_container_width=True):
+                if st.form_submit_button(" Salvar", use_container_width=True):
                     if nome and usuario and redes and base:
                         data_manager.criar_influenciador_base({
                             'nome': nome,
@@ -64,13 +64,13 @@ def render():
                             'endereco': endereco
                         })
                         st.session_state.show_new_inf = False
-                        st.success("✅ Influenciador cadastrado!")
+                        st.success(" Influenciador cadastrado!")
                         st.rerun()
                     else:
-                        st.error("❌ Preencha os campos obrigatórios")
+                        st.error(" Preencha os campos obrigatórios")
             
             with col2:
-                if st.form_submit_button("❌ Cancelar", use_container_width=True):
+                if st.form_submit_button(" Cancelar", use_container_width=True):
                     st.session_state.show_new_inf = False
                     st.rerun()
     
@@ -86,7 +86,7 @@ def render():
             filtro_classe = st.multiselect("Filtrar por classificação",
                                           ["Nano", "Micro", "Mid", "Macro", "Mega"])
         with col3:
-            busca_nome = st.text_input("🔍 Buscar por nome")
+            busca_nome = st.text_input(" Buscar por nome")
         
         st.markdown("---")
         
@@ -100,7 +100,7 @@ def render():
             if busca_nome and busca_nome.lower() not in inf['nome'].lower():
                 continue
             
-            with st.expander(f"⭐ {inf['nome']} ({inf['usuario']}) - {inf['classificacao']}"):
+            with st.expander(f" {inf['nome']} ({inf['usuario']}) - {inf['classificacao']}"):
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     st.write(f"**Redes:** {', '.join(inf['redes_sociais'])}")
@@ -111,6 +111,6 @@ def render():
                 with col3:
                     st.write(f"**Cidade:** {inf.get('cidade', '-')}")
                     if inf.get('perfil_link'):
-                        st.markdown(f"[🔗 Ver Perfil]({inf['perfil_link']})")
+                        st.markdown(f"[ Ver Perfil]({inf['perfil_link']})")
     else:
-        st.info("📭 Nenhum influenciador na base")
+        st.info(" Nenhum influenciador na base")

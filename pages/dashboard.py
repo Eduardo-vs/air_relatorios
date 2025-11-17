@@ -41,13 +41,13 @@ def render():
     st.markdown("---")
     
     if not st.session_state.campanhas:
-        st.info("📊 Crie campanhas para ver análises detalhadas")
+        st.info(" Crie campanhas para ver análises detalhadas")
         return
     
     # ========================================
     # VISÃO POR MÊS
     # ========================================
-    st.subheader("📈 Evolução Mensal")
+    st.subheader(" Evolução Mensal")
     
     # Simular dados mensais (em produção viria do banco)
     meses_dados = []
@@ -106,7 +106,7 @@ def render():
     # ========================================
     # TABELA RESUMO MENSAL
     # ========================================
-    st.subheader("📊 Resumo Mensal Detalhado (Geralzão)")
+    st.subheader(" Resumo Mensal Detalhado (Geralzão)")
     st.dataframe(df_meses, use_container_width=True, hide_index=True)
     
     # Totais
@@ -125,12 +125,12 @@ def render():
     # ========================================
     # DESTAQUES DO MÊS
     # ========================================
-    st.subheader("⭐ Destaques do Mês")
+    st.subheader(" Destaques do Mês")
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.markdown("**🏆 Campanha Destaque**")
+        st.markdown("** Campanha Destaque**")
         if st.session_state.campanhas:
             melhor_campanha = max(st.session_state.campanhas, 
                                  key=lambda c: data_manager.calcular_metricas_campanha(c)['total_views'])
@@ -141,7 +141,7 @@ def render():
             st.metric("AIR Score", air_score)
     
     with col2:
-        st.markdown("**⭐ Influenciador Destaque**")
+        st.markdown("** Influenciador Destaque**")
         todos_influs = []
         for camp in st.session_state.campanhas:
             for inf in camp['influenciadores']:
@@ -159,7 +159,7 @@ def render():
             st.caption(f"Classificação: {melhor_inf['classificacao']}")
     
     with col3:
-        st.markdown("**📱 Post Destaque**")
+        st.markdown("** Post Destaque**")
         todos_posts = []
         for camp in st.session_state.campanhas:
             for inf in camp['influenciadores']:
@@ -181,7 +181,7 @@ def render():
     # ========================================
     # INSIGHTS GERAIS
     # ========================================
-    st.subheader("💡 Insights do Sistema")
+    st.subheader(" Insights do Sistema")
     
     # Calcular médias
     if st.session_state.campanhas:
@@ -192,8 +192,8 @@ def render():
         col1, col2 = st.columns(2)
         
         with col1:
-            st.info(f"📊 **Média de Posts por Campanha:** {media_posts:.0f} posts")
-            st.info(f"📈 **Taxa Média de Engajamento:** {media_eng:.2f}%")
+            st.info(f" **Média de Posts por Campanha:** {media_posts:.0f} posts")
+            st.info(f" **Taxa Média de Engajamento:** {media_eng:.2f}%")
         
         with col2:
             # Classificação mais usada
@@ -205,9 +205,9 @@ def render():
             if todas_class:
                 from collections import Counter
                 mais_comum = Counter(todas_class).most_common(1)[0]
-                st.success(f"⭐ **Classificação Mais Usada:** {mais_comum[0]} ({mais_comum[1]} influenciadores)")
+                st.success(f" **Classificação Mais Usada:** {mais_comum[0]} ({mais_comum[1]} influenciadores)")
             
             # Total de conversões
             total_conversoes = sum([m['total_conversoes_cupom'] for m in todas_metricas])
             if total_conversoes > 0:
-                st.success(f"🎟️ **Total de Conversões Rastreadas:** {total_conversoes}")
+                st.success(f" **Total de Conversões Rastreadas:** {total_conversoes}")

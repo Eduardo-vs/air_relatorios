@@ -37,7 +37,7 @@ def render():
             
             col1, col2 = st.columns(2)
             with col1:
-                if st.form_submit_button("✅ Salvar", use_container_width=True):
+                if st.form_submit_button(" Salvar", use_container_width=True):
                     if nome_cli:
                         data_manager.criar_cliente({
                             'nome': nome_cli, 
@@ -47,13 +47,13 @@ def render():
                             'tipo': tipo_cliente.lower()
                         })
                         st.session_state.show_new_cliente = False
-                        st.success("✅ Cliente cadastrado com sucesso!")
+                        st.success(" Cliente cadastrado com sucesso!")
                         st.rerun()
                     else:
-                        st.error("❌ Preencha o nome da empresa")
+                        st.error(" Preencha o nome da empresa")
             
             with col2:
-                if st.form_submit_button("❌ Cancelar", use_container_width=True):
+                if st.form_submit_button(" Cancelar", use_container_width=True):
                     st.session_state.show_new_cliente = False
                     st.rerun()
     
@@ -66,7 +66,7 @@ def render():
         # Filtros
         col1, col2 = st.columns([2, 1])
         with col1:
-            busca = st.text_input("🔍 Buscar cliente", placeholder="Digite o nome...")
+            busca = st.text_input(" Buscar cliente", placeholder="Digite o nome...")
         with col2:
             filtro_tipo = st.selectbox("Filtrar por tipo", ["Todos", "Normal", "AON"])
         
@@ -83,7 +83,7 @@ def render():
             col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
             
             with col1:
-                badge = " 🌟 **AON**" if cli.get('tipo') == 'aon' else ""
+                badge = "  **AON**" if cli.get('tipo') == 'aon' else ""
                 st.write(f"**{cli['nome']}**{badge}")
             
             with col2:
@@ -95,13 +95,13 @@ def render():
             with col4:
                 # Contar campanhas do cliente
                 campanhas_cli = len([c for c in st.session_state.campanhas if c['cliente_id'] == cli['id']])
-                st.caption(f"📊 {campanhas_cli} campanhas")
+                st.caption(f" {campanhas_cli} campanhas")
             
             st.markdown("---")
     else:
-        st.info("📭 Nenhum cliente cadastrado ainda")
+        st.info(" Nenhum cliente cadastrado ainda")
         
-        with st.expander("💡 Dica: Como começar"):
+        with st.expander(" Dica: Como começar"):
             st.markdown("""
             **Primeiros passos:**
             

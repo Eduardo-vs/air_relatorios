@@ -1,40 +1,40 @@
-# 🚀 Guia de Deploy no Streamlit Cloud
+#  Guia de Deploy no Streamlit Cloud
 
-## ❌ Problema: "No module named pages"
+##  Problema: "No module named pages"
 
 Este erro acontece porque o Streamlit Cloud tem algumas particularidades. Aqui está a solução completa:
 
 ---
 
-## ✅ SOLUÇÃO 1: Estrutura de Arquivos Correta
+##  SOLUÇÃO 1: Estrutura de Arquivos Correta
 
 Certifique-se de que sua estrutura está assim:
 
 ```
 air_relatorios/
-├── app.py
-├── requirements.txt
-├── .streamlit/
-│   └── config.toml
-├── utils/
-│   ├── __init__.py          ✅ IMPORTANTE
-│   ├── funcoes_auxiliares.py
-│   └── data_manager.py
-└── pages/
-    ├── __init__.py           ✅ IMPORTANTE
-    ├── dashboard.py
-    ├── clientes.py
-    ├── influenciadores.py
-    ├── campanhas.py
-    ├── configuracoes.py
-    └── campanha/
-        ├── __init__.py       ✅ IMPORTANTE
-        └── relatorio_completo.py
+ app.py
+ requirements.txt
+ .streamlit/
+    config.toml
+ utils/
+    __init__.py           IMPORTANTE
+    funcoes_auxiliares.py
+    data_manager.py
+ pages/
+     __init__.py            IMPORTANTE
+     dashboard.py
+     clientes.py
+     influenciadores.py
+     campanhas.py
+     configuracoes.py
+     campanha/
+         __init__.py        IMPORTANTE
+         relatorio_completo.py
 ```
 
 ---
 
-## ✅ SOLUÇÃO 2: Arquivos __init__.py
+##  SOLUÇÃO 2: Arquivos __init__.py
 
 Todos os arquivos `__init__.py` já foram criados corretamente no ZIP.
 
@@ -66,7 +66,7 @@ __all__ = ['relatorio_completo']
 
 ---
 
-## ✅ SOLUÇÃO 3: requirements.txt
+##  SOLUÇÃO 3: requirements.txt
 
 Certifique-se de que o arquivo `requirements.txt` existe e contém:
 
@@ -79,9 +79,9 @@ fpdf>=1.7.2
 
 ---
 
-## ✅ SOLUÇÃO 4: Passo a Passo no Streamlit Cloud
+##  SOLUÇÃO 4: Passo a Passo no Streamlit Cloud
 
-### 1️⃣ Preparar o Repositório
+### 1⃣ Preparar o Repositório
 
 **Opção A: GitHub**
 ```bash
@@ -99,7 +99,7 @@ git push -u origin main
 - Extraia o ZIP
 - Faça upload dos arquivos diretamente no GitHub/GitLab
 
-### 2️⃣ Deploy no Streamlit Cloud
+### 2⃣ Deploy no Streamlit Cloud
 
 1. Acesse: https://share.streamlit.io/
 2. Clique em "New app"
@@ -110,7 +110,7 @@ git push -u origin main
    - **Main file path**: app.py
 5. Clique em "Deploy!"
 
-### 3️⃣ Aguarde o Deploy
+### 3⃣ Aguarde o Deploy
 - O Streamlit Cloud irá:
   - Instalar dependências do requirements.txt
   - Executar o app.py
@@ -118,7 +118,7 @@ git push -u origin main
 
 ---
 
-## ✅ SOLUÇÃO 5: Se Ainda Assim Não Funcionar
+##  SOLUÇÃO 5: Se Ainda Assim Não Funcionar
 
 Se o erro persistir, use esta versão alternativa do `app.py`:
 
@@ -147,7 +147,7 @@ try:
     import utils.funcoes_auxiliares as funcoes_auxiliares
     import utils.data_manager as data_manager
 except ImportError as e:
-    st.error(f"❌ Erro ao importar módulos: {e}")
+    st.error(f" Erro ao importar módulos: {e}")
     st.info("Verifique se todos os arquivos __init__.py existem")
     st.stop()
 
@@ -156,7 +156,7 @@ except ImportError as e:
 
 ---
 
-## ✅ SOLUÇÃO 6: Teste Local Antes de Deploy
+##  SOLUÇÃO 6: Teste Local Antes de Deploy
 
 Antes de fazer deploy, teste localmente:
 
@@ -176,7 +176,7 @@ streamlit run app.py
 
 ---
 
-## ✅ SOLUÇÃO 7: Verificar Logs no Streamlit Cloud
+##  SOLUÇÃO 7: Verificar Logs no Streamlit Cloud
 
 Se o erro aparecer no deploy:
 
@@ -187,13 +187,13 @@ Se o erro aparecer no deploy:
 
 ---
 
-## 🆘 SOLUÇÃO ALTERNATIVA: Arquivo Único
+##  SOLUÇÃO ALTERNATIVA: Arquivo Único
 
 Se NADA funcionar, posso criar uma versão em arquivo único (sem módulos):
 
 ```
 air_relatorios_single/
-└── app.py  (um único arquivo com tudo)
+ app.py  (um único arquivo com tudo)
 ```
 
 Esta versão é mais simples para deploy mas menos organizada.
@@ -202,7 +202,7 @@ Esta versão é mais simples para deploy mas menos organizada.
 
 ---
 
-## 📋 Checklist de Verificação
+##  Checklist de Verificação
 
 Antes de fazer deploy, verifique:
 
@@ -215,7 +215,7 @@ Antes de fazer deploy, verifique:
 
 ---
 
-## 💡 Dicas Adicionais
+##  Dicas Adicionais
 
 1. **Cache do Streamlit Cloud**: Às vezes precisa limpar o cache
    - No Streamlit Cloud: Manage app → Reboot app
@@ -228,13 +228,13 @@ Antes de fazer deploy, verifique:
 
 ---
 
-## 🎯 Resultado Esperado
+##  Resultado Esperado
 
 Após seguir estes passos, seu app deve:
-- ✅ Fazer deploy sem erros
-- ✅ Carregar todas as páginas
-- ✅ Funcionar completamente
-- ✅ Estar acessível via URL pública
+-  Fazer deploy sem erros
+-  Carregar todas as páginas
+-  Funcionar completamente
+-  Estar acessível via URL pública
 
 ---
 

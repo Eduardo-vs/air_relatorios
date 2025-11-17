@@ -27,7 +27,7 @@ except ImportError as e:
 # ========================================
 st.set_page_config(
     page_title="AIR Relatórios",
-    page_icon="📊",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -126,17 +126,17 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**Atalhos Rápidos**")
     
-    if st.button("➕ Nova Campanha", key="s1", use_container_width=True):
+    if st.button(" Nova Campanha", key="s1", use_container_width=True):
         st.session_state.current_page = 'Campanhas'
         st.session_state.show_new_campaign = True
         st.rerun()
     
-    if st.button("👥 Novo Cliente", key="s2", use_container_width=True):
+    if st.button(" Novo Cliente", key="s2", use_container_width=True):
         st.session_state.current_page = 'Clientes'
         st.session_state.show_new_cliente = True
         st.rerun()
     
-    if st.button("⭐ Novo Influenciador", key="s3", use_container_width=True):
+    if st.button(" Novo Influenciador", key="s3", use_container_width=True):
         st.session_state.current_page = 'Influenciadores'
         st.session_state.show_new_inf = True
         st.rerun()

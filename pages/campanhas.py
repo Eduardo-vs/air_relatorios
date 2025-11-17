@@ -35,7 +35,7 @@ def render():
                     cliente_id = cliente_obj['id'] if cliente_obj else None
                     cliente_nome = cliente_sel
                 else:
-                    st.warning("⚠️ Cadastre um cliente primeiro")
+                    st.warning(" Cadastre um cliente primeiro")
                     cliente_id = None
                     cliente_nome = ""
                 
@@ -49,7 +49,7 @@ def render():
             objetivo = st.text_area("Objetivo *", height=100)
             
             st.markdown("---")
-            st.subheader("📊 Selecione as Métricas da Campanha")
+            st.subheader(" Selecione as Métricas da Campanha")
             st.caption("Marque apenas as métricas que serão coletadas")
             
             col1, col2, col3, col4 = st.columns(4)
@@ -72,7 +72,7 @@ def render():
             
             col1, col2 = st.columns(2)
             with col1:
-                if st.form_submit_button("✅ Criar Campanha", use_container_width=True):
+                if st.form_submit_button(" Criar Campanha", use_container_width=True):
                     if nome and cliente_id and objetivo:
                         data_manager.criar_campanha({
                             'nome': nome,
@@ -94,13 +94,13 @@ def render():
                             }
                         })
                         st.session_state.show_new_campaign = False
-                        st.success("✅ Campanha criada com sucesso!")
+                        st.success(" Campanha criada com sucesso!")
                         st.rerun()
                     else:
-                        st.error("❌ Preencha todos os campos obrigatórios")
+                        st.error(" Preencha todos os campos obrigatórios")
             
             with col2:
-                if st.form_submit_button("❌ Cancelar", use_container_width=True):
+                if st.form_submit_button(" Cancelar", use_container_width=True):
                     st.session_state.show_new_campaign = False
                     st.rerun()
     
@@ -128,19 +128,19 @@ def render():
             
             with col4:
                 st.caption("AIR Score")
-                cor_score = "🟢" if air_score > 60 else "🟡" if air_score > 40 else "🔴"
+                cor_score = "🟢" if air_score > 60 else "🟡" if air_score > 40 else ""
                 st.write(f"**{cor_score} {air_score}**")
             
             with col5:
-                if st.button("📊 Abrir", key=f"open_{camp['id']}", use_container_width=True):
+                if st.button(" Abrir", key=f"open_{camp['id']}", use_container_width=True):
                     st.session_state.campanha_atual_id = camp['id']
                     st.rerun()
             
             st.markdown("---")
     else:
-        st.info("📭 Nenhuma campanha criada ainda")
+        st.info(" Nenhuma campanha criada ainda")
         
-        with st.expander("💡 Como começar"):
+        with st.expander(" Como começar"):
             st.markdown("""
             **Criando sua primeira campanha:**
             

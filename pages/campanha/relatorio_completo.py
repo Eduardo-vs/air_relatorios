@@ -39,30 +39,30 @@ def render():
     # Criar tabs baseado no tipo de cliente
     if is_aon:
         tabs_names = [
-            "⚙️ Configuração", 
-            "👥 Influenciadores", 
-            "📊 Big Numbers",
-            "📈 Gráficos Dinâmicos AON",
-            "📉 KPIs Dinâmicos",
-            "⭐ Top Influenciadores",
-            "🎬 Top Conteúdo",
-            "📋 Análise Detalhada",
-            "💬 Visão Comentários",
-            "☁️ Nuvem de Palavras",
-            "📚 Glossário"
+            " Configuração", 
+            " Influenciadores", 
+            " Big Numbers",
+            " Gráficos Dinâmicos AON",
+            " KPIs Dinâmicos",
+            " Top Influenciadores",
+            " Top Conteúdo",
+            " Análise Detalhada",
+            " Visão Comentários",
+            " Nuvem de Palavras",
+            " Glossário"
         ]
     else:
         tabs_names = [
-            "⚙️ Configuração", 
-            "👥 Influenciadores", 
-            "📊 Big Numbers",
-            "📉 KPIs Dinâmicos",
-            "⭐ Top Influenciadores",
-            "🎬 Top Conteúdo",
-            "📋 Análise Detalhada",
-            "💬 Visão Comentários",
-            "☁️ Nuvem de Palavras",
-            "📚 Glossário"
+            " Configuração", 
+            " Influenciadores", 
+            " Big Numbers",
+            " KPIs Dinâmicos",
+            " Top Influenciadores",
+            " Top Conteúdo",
+            " Análise Detalhada",
+            " Visão Comentários",
+            " Nuvem de Palavras",
+            " Glossário"
         ]
     
     tabs = st.tabs(tabs_names)
@@ -171,23 +171,23 @@ def render_tab_configuracao(campanha):
         """, unsafe_allow_html=True)
     
     st.markdown("---")
-    st.subheader("📊 Métricas Selecionadas")
+    st.subheader(" Métricas Selecionadas")
     
     metricas_sel = campanha.get('metricas_selecionadas', {})
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.write("✅ Views" if metricas_sel.get('views') else "❌ Views")
-        st.write("✅ Interações" if metricas_sel.get('interacoes') else "❌ Interações")
+        st.write(" Views" if metricas_sel.get('views') else " Views")
+        st.write(" Interações" if metricas_sel.get('interacoes') else " Interações")
     with col2:
-        st.write("✅ Curtidas" if metricas_sel.get('curtidas') else "❌ Curtidas")
-        st.write("✅ Comentários" if metricas_sel.get('comentarios') else "❌ Comentários")
+        st.write(" Curtidas" if metricas_sel.get('curtidas') else " Curtidas")
+        st.write(" Comentários" if metricas_sel.get('comentarios') else " Comentários")
     with col3:
-        st.write("✅ Compartilhamentos" if metricas_sel.get('compartilhamentos') else "❌ Compartilhamentos")
-        st.write("✅ Saves" if metricas_sel.get('saves') else "❌ Saves")
+        st.write(" Compartilhamentos" if metricas_sel.get('compartilhamentos') else " Compartilhamentos")
+        st.write(" Saves" if metricas_sel.get('saves') else " Saves")
     with col4:
-        st.write("✅ Cliques Link" if metricas_sel.get('clique_link') else "❌ Cliques Link")
-        st.write("✅ Conversões Cupom" if metricas_sel.get('cupom_conversoes') else "❌ Conversões Cupom")
+        st.write(" Cliques Link" if metricas_sel.get('clique_link') else " Cliques Link")
+        st.write(" Conversões Cupom" if metricas_sel.get('cupom_conversoes') else " Conversões Cupom")
 
 
 def render_tab_influenciadores(campanha):
@@ -209,21 +209,21 @@ def render_tab_influenciadores(campanha):
             
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("✅ Adicionar à Campanha", use_container_width=True):
+                if st.button(" Adicionar à Campanha", use_container_width=True):
                     nome_sel = inf_sel.split(" (")[0]
                     inf_obj = next((i for i in st.session_state.influenciadores_base 
                                   if i['nome'] == nome_sel), None)
                     if inf_obj:
                         data_manager.adicionar_influenciador_campanha(campanha['id'], inf_obj['id'])
                         st.session_state.show_add_inf_camp = False
-                        st.success("✅ Influenciador adicionado!")
+                        st.success(" Influenciador adicionado!")
                         st.rerun()
             with col2:
-                if st.button("❌ Cancelar", use_container_width=True):
+                if st.button(" Cancelar", use_container_width=True):
                     st.session_state.show_add_inf_camp = False
                     st.rerun()
         else:
-            st.warning("⚠️ Cadastre influenciadores na base primeiro")
+            st.warning(" Cadastre influenciadores na base primeiro")
             if st.button("Ir para Influenciadores"):
                 st.session_state.current_page = 'Influenciadores'
                 st.rerun()
@@ -232,11 +232,11 @@ def render_tab_influenciadores(campanha):
     
     # Lista de influenciadores
     if not campanha['influenciadores']:
-        st.info("📭 Nenhum influenciador adicionado ainda")
+        st.info(" Nenhum influenciador adicionado ainda")
         return
     
     for inf in campanha['influenciadores']:
-        with st.expander(f"⭐ {inf['nome']} - {len(inf['posts'])} posts - {inf['classificacao']}"):
+        with st.expander(f" {inf['nome']} - {len(inf['posts'])} posts - {inf['classificacao']}"):
             
             col1, col2, col3 = st.columns([2, 2, 1])
             
@@ -262,7 +262,7 @@ def render_tab_influenciadores(campanha):
             # Lista de posts
             if inf['posts']:
                 st.markdown("---")
-                st.markdown("**📱 Posts Publicados:**")
+                st.markdown("** Posts Publicados:**")
                 
                 for post in inf['posts']:
                     render_post_item(campanha, inf, post)
@@ -272,7 +272,7 @@ def render_form_post(campanha, inf):
     """Renderiza formulário de adicionar post"""
     
     with st.form(f"form_post_{inf['id']}"):
-        st.markdown("##### 📝 Novo Post")
+        st.markdown("#####  Novo Post")
         
         col1, col2, col3 = st.columns(3)
         
@@ -309,7 +309,7 @@ def render_form_post(campanha, inf):
                 if cupom_codigo:
                     cupom_conversoes = st.number_input("Conversões", min_value=0, value=0)
         
-        st.markdown("**📷 Imagens/Vídeos do Post**")
+        st.markdown("** Imagens/Vídeos do Post**")
         imagens_upload = st.file_uploader(
             "Upload de mídias (prints, fotos, vídeos)",
             type=['png', 'jpg', 'jpeg', 'mp4', 'gif'],
@@ -320,7 +320,7 @@ def render_form_post(campanha, inf):
         col1, col2 = st.columns(2)
         
         with col1:
-            if st.form_submit_button("✅ Salvar Post", use_container_width=True):
+            if st.form_submit_button(" Salvar Post", use_container_width=True):
                 imagens_b64 = []
                 if imagens_upload:
                     for img_file in imagens_upload:
@@ -344,11 +344,11 @@ def render_form_post(campanha, inf):
                     'imagens': imagens_b64
                 })
                 st.session_state.show_add_post = False
-                st.success("✅ Post adicionado com sucesso!")
+                st.success(" Post adicionado com sucesso!")
                 st.rerun()
         
         with col2:
-            if st.form_submit_button("❌ Cancelar", use_container_width=True):
+            if st.form_submit_button(" Cancelar", use_container_width=True):
                 st.session_state.show_add_post = False
                 st.rerun()
 
@@ -363,10 +363,10 @@ def render_post_item(campanha, inf, post):
         st.caption(post['data_publicacao'])
     
     with col2:
-        st.write(f"👁️ {post['metricas']['views']:,}")
+        st.write(f" {post['metricas']['views']:,}")
     
     with col3:
-        st.write(f"💬 {post['metricas']['interacoes']:,}")
+        st.write(f" {post['metricas']['interacoes']:,}")
     
     with col4:
         if st.button("Ver Detalhes", key=f"view_{post['id']}_{inf['id']}", use_container_width=True):
@@ -384,11 +384,11 @@ def render_post_item(campanha, inf, post):
 def render_post_detalhes(campanha, inf, post):
     """Renderiza detalhes completos do post"""
     
-    st.markdown("#### 📊 Detalhes Completos do Post")
+    st.markdown("####  Detalhes Completos do Post")
     
     # Imagens
     if post['imagens']:
-        st.markdown("**📷 Mídias do Post:**")
+        st.markdown("** Mídias do Post:**")
         cols_img = st.columns(min(len(post['imagens']), 4))
         for idx, img_b64 in enumerate(post['imagens']):
             with cols_img[idx % 4]:
@@ -398,7 +398,7 @@ def render_post_detalhes(campanha, inf, post):
                 except:
                     st.caption("Erro ao carregar mídia")
     
-    st.markdown("**📈 Métricas Completas:**")
+    st.markdown("** Métricas Completas:**")
     
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
@@ -413,22 +413,22 @@ def render_post_detalhes(campanha, inf, post):
         st.metric("Saves", f"{post['metricas']['saves']:,}")
     
     if post['metricas'].get('clique_link', 0) > 0:
-        st.metric("🔗 Cliques em Link", f"{post['metricas']['clique_link']:,}")
+        st.metric(" Cliques em Link", f"{post['metricas']['clique_link']:,}")
     
     if post['metricas'].get('cupom_codigo'):
         col1, col2 = st.columns(2)
         with col1:
-            st.write(f"**🎟️ Cupom:** {post['metricas']['cupom_codigo']}")
+            st.write(f"** Cupom:** {post['metricas']['cupom_codigo']}")
         with col2:
             st.metric("Conversões", f"{post['metricas']['cupom_conversoes']:,}")
     
     if post['link_post']:
-        st.markdown(f"**🔗 Link:** [{post['link_post']}]({post['link_post']})")
+        st.markdown(f"** Link:** [{post['link_post']}]({post['link_post']})")
     
     st.markdown("---")
     
     # Adicionar comentários
-    st.markdown("### 💬 Gerenciar Comentários para Análise")
+    st.markdown("###  Gerenciar Comentários para Análise")
     
     with st.form(f"form_comentario_{post['id']}_{inf['id']}"):
         texto_comentario = st.text_area(
@@ -437,7 +437,7 @@ def render_post_detalhes(campanha, inf, post):
             height=100
         )
         
-        if st.form_submit_button("🤖 Adicionar e Analisar com IA"):
+        if st.form_submit_button(" Adicionar e Analisar com IA"):
             if texto_comentario:
                 analise = funcoes_auxiliares.analisar_sentimento_comentario(texto_comentario)
                 comentario = {
@@ -446,14 +446,14 @@ def render_post_detalhes(campanha, inf, post):
                     'categoria': analise['categoria']
                 }
                 post['comentarios'].append(comentario)
-                st.success(f"✅ Comentário analisado! **{analise['categoria']}** ({analise['polaridade']})")
+                st.success(f" Comentário analisado! **{analise['categoria']}** ({analise['polaridade']})")
                 st.rerun()
             else:
                 st.error("Digite um comentário")
     
     # Mostrar comentários classificados
     if post['comentarios']:
-        st.markdown("**🤖 Comentários Classificados pela IA:**")
+        st.markdown("** Comentários Classificados pela IA:**")
         
         positivos = len([c for c in post['comentarios'] if c['polaridade'] == 'positivo'])
         neutros = len([c for c in post['comentarios'] if c['polaridade'] == 'neutro'])
@@ -462,27 +462,27 @@ def render_post_detalhes(campanha, inf, post):
         
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("🟢 Positivos", f"{positivos}/{total_com}", 
+            st.metric("[+] Positivos", f"{positivos}/{total_com}", 
                      f"{positivos/total_com*100:.1f}%" if total_com > 0 else "0%")
         with col2:
-            st.metric("🟡 Neutros", f"{neutros}/{total_com}",
+            st.metric("[~] Neutros", f"{neutros}/{total_com}",
                      f"{neutros/total_com*100:.1f}%" if total_com > 0 else "0%")
         with col3:
-            st.metric("🔴 Negativos", f"{negativos}/{total_com}",
+            st.metric(" Negativos", f"{negativos}/{total_com}",
                      f"{negativos/total_com*100:.1f}%" if total_com > 0 else "0%")
         
         st.markdown("**Últimos comentários:**")
         for com in post['comentarios'][:5]:
-            cor = {"positivo": "🟢", "neutro": "🟡", "negativo": "🔴"}
+            cor = {"positivo": "[+]", "neutro": "[~]", "negativo": ""}
             st.write(f"{cor[com['polaridade']]} **{com['categoria']}**: {com['texto'][:100]}...")
     else:
-        st.info("💡 Adicione comentários para análise de sentimento automática")
+        st.info(" Adicione comentários para análise de sentimento automática")
 
 
 def render_tab_big_numbers(campanha):
     """Tab 3: Big Numbers e Insights"""
     
-    st.subheader("📊 Big Numbers - Visão Geral")
+    st.subheader(" Big Numbers - Visão Geral")
     
     metricas = data_manager.calcular_metricas_campanha(campanha)
     air_score = funcoes_auxiliares.calcular_air_score(campanha)
@@ -501,35 +501,35 @@ def render_tab_big_numbers(campanha):
     with col2:
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("📱 Posts", metricas['total_posts'])
+            st.metric(" Posts", metricas['total_posts'])
         with col2:
-            st.metric("👁️ Views", f"{metricas['total_views']:,}")
+            st.metric(" Views", f"{metricas['total_views']:,}")
         with col3:
-            st.metric("💬 Interações", f"{metricas['total_interacoes']:,}")
+            st.metric(" Interações", f"{metricas['total_interacoes']:,}")
         with col4:
-            st.metric("📈 Eng. Efetivo", f"{metricas['engajamento_efetivo']}%")
+            st.metric(" Eng. Efetivo", f"{metricas['engajamento_efetivo']}%")
         
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("❤️ Curtidas", f"{metricas['total_curtidas']:,}")
+            st.metric(" Curtidas", f"{metricas['total_curtidas']:,}")
         with col2:
-            st.metric("💭 Comentários", f"{metricas['total_comentarios']:,}")
+            st.metric(" Comentários", f"{metricas['total_comentarios']:,}")
         with col3:
-            st.metric("💾 Saves", f"{metricas['total_saves']:,}")
+            st.metric(" Saves", f"{metricas['total_saves']:,}")
         with col4:
             if metricas['total_conversoes_cupom'] > 0:
-                st.metric("🎟️ Conversões", f"{metricas['total_conversoes_cupom']:,}")
+                st.metric(" Conversões", f"{metricas['total_conversoes_cupom']:,}")
             else:
-                st.metric("🔄 Compartilh.", f"{metricas['total_compartilhamentos']:,}")
+                st.metric(" Compartilh.", f"{metricas['total_compartilhamentos']:,}")
     
     st.markdown("---")
     
     if metricas['total_posts'] == 0:
-        st.info("📭 Adicione posts aos influenciadores para ver análises")
+        st.info(" Adicione posts aos influenciadores para ver análises")
         return
     
     # GRÁFICOS DE PERFORMANCE
-    st.subheader("📈 Performance por Formato")
+    st.subheader(" Performance por Formato")
     
     dados_formato = []
     for inf in campanha['influenciadores']:
@@ -565,7 +565,7 @@ def render_tab_big_numbers(campanha):
     st.markdown("---")
     
     # DESEMPENHO POR CLASSIFICAÇÃO
-    st.subheader("⭐ Performance por Tamanho de Influenciador")
+    st.subheader(" Performance por Tamanho de Influenciador")
     
     dados_class = []
     for inf in campanha['influenciadores']:
@@ -609,42 +609,42 @@ def render_tab_big_numbers(campanha):
     st.markdown("---")
     
     # INSIGHTS AUTOMÁTICOS
-    st.subheader("💡 Insights Automáticos Gerados")
+    st.subheader(" Insights Automáticos Gerados")
     
     # Melhor formato
     if dados_formato:
         melhor_formato = df_formato_agg.loc[df_formato_agg['Views'].idxmax()]
-        st.success(f"📱 **Formato Mais Efetivo:** {melhor_formato['Formato']} gerou {melhor_formato['Views']:,} views e {melhor_formato['Interações']:,} interações")
+        st.success(f" **Formato Mais Efetivo:** {melhor_formato['Formato']} gerou {melhor_formato['Views']:,} views e {melhor_formato['Interações']:,} interações")
     
     # Melhor classificação
     if dados_class:
         melhor_class = df_class_agg.loc[df_class_agg['Engajamento'].idxmax()]
-        st.info(f"⭐ **Melhor Performance:** Influenciadores **{melhor_class['Classificação']}** têm taxa média de engajamento de {melhor_class['Engajamento']:.2f}%")
+        st.info(f" **Melhor Performance:** Influenciadores **{melhor_class['Classificação']}** têm taxa média de engajamento de {melhor_class['Engajamento']:.2f}%")
     
     # Engajamento geral
     if metricas['engajamento_efetivo'] > 5:
-        st.success(f"📈 **Engajamento Excelente:** Taxa de {metricas['engajamento_efetivo']}% está acima da referência de mercado (3-5%)")
+        st.success(f" **Engajamento Excelente:** Taxa de {metricas['engajamento_efetivo']}% está acima da referência de mercado (3-5%)")
     elif metricas['engajamento_efetivo'] > 3:
-        st.info(f"📊 **Engajamento Adequado:** Taxa de {metricas['engajamento_efetivo']}% está dentro da referência de mercado")
+        st.info(f" **Engajamento Adequado:** Taxa de {metricas['engajamento_efetivo']}% está dentro da referência de mercado")
     else:
-        st.warning(f"⚠️ **Atenção:** Taxa de {metricas['engajamento_efetivo']}% está abaixo da referência. Considere ajustar a estratégia")
+        st.warning(f" **Atenção:** Taxa de {metricas['engajamento_efetivo']}% está abaixo da referência. Considere ajustar a estratégia")
     
     # Saves
     if metricas['total_saves'] > 0:
         taxa_saves = (metricas['total_saves'] / metricas['total_views'] * 100)
         if taxa_saves > 2:
-            st.success(f"💾 **Alto Valor Percebido:** {metricas['total_saves']:,} saves ({taxa_saves:.2f}% dos views). Conteúdo está sendo guardado para referência!")
+            st.success(f" **Alto Valor Percebido:** {metricas['total_saves']:,} saves ({taxa_saves:.2f}% dos views). Conteúdo está sendo guardado para referência!")
     
     # Conversões
     if metricas['total_conversoes_cupom'] > 0:
-        st.success(f"🎟️ **ROI Rastreável:** {metricas['total_conversoes_cupom']} conversões via cupom. Impacto mensurável!")
+        st.success(f" **ROI Rastreável:** {metricas['total_conversoes_cupom']} conversões via cupom. Impacto mensurável!")
 
 
 def render_tab_graficos_dinamicos_aon(campanha):
     """Tab 4 (AON): Gráficos Dinâmicos com Evolução Temporal"""
     
-    st.subheader("📈 Gráficos Dinâmicos - Evolução Temporal")
-    st.caption("🌟 Funcionalidade exclusiva para clientes AON")
+    st.subheader(" Gráficos Dinâmicos - Evolução Temporal")
+    st.caption(" Funcionalidade exclusiva para clientes AON")
     
     # Filtros
     col1, col2, col3 = st.columns(3)
@@ -666,7 +666,7 @@ def render_tab_graficos_dinamicos_aon(campanha):
     
     # Coletar dados temporais
     if not campanha['influenciadores'] or not any(inf['posts'] for inf in campanha['influenciadores']):
-        st.info("📭 Adicione posts com datas para visualizar evolução temporal")
+        st.info(" Adicione posts com datas para visualizar evolução temporal")
         return
     
     dados_tempo = []
@@ -694,14 +694,14 @@ def render_tab_graficos_dinamicos_aon(campanha):
                 pass
     
     if not dados_tempo:
-        st.warning("⚠️ Nenhum post no período selecionado")
+        st.warning(" Nenhum post no período selecionado")
         return
     
     df_tempo = pd.DataFrame(dados_tempo)
     df_tempo = df_tempo.sort_values('Data')
     
     # Gráfico 1: Evolução de Views
-    st.subheader("📊 Evolução de Views ao Longo do Tempo")
+    st.subheader(" Evolução de Views ao Longo do Tempo")
     fig1 = px.line(df_tempo, x='Data', y='Views',
                   markers=True,
                   color='Influenciador' if filtro_influ == "Todos" else None,
@@ -713,7 +713,7 @@ def render_tab_graficos_dinamicos_aon(campanha):
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("💬 Interações por Data")
+        st.subheader(" Interações por Data")
         fig2 = px.bar(df_tempo, x='Data', y='Interações',
                      color='Influenciador' if filtro_influ == "Todos" else None,
                      title='Interações Acumuladas')
@@ -721,7 +721,7 @@ def render_tab_graficos_dinamicos_aon(campanha):
         st.plotly_chart(fig2, use_container_width=True)
     
     with col2:
-        st.subheader("📈 Taxa de Engajamento")
+        st.subheader(" Taxa de Engajamento")
         fig3 = px.scatter(df_tempo, x='Views', y='Interações',
                          size='Saves',
                          color='Influenciador' if filtro_influ == "Todos" else None,
@@ -731,7 +731,7 @@ def render_tab_graficos_dinamicos_aon(campanha):
         st.plotly_chart(fig3, use_container_width=True)
     
     # Gráfico de formato ao longo do tempo
-    st.subheader("📱 Performance por Formato no Período")
+    st.subheader(" Performance por Formato no Período")
     df_formato_tempo = df_tempo.groupby(['Data', 'Formato']).agg({
         'Views': 'sum',
         'Interações': 'sum'
@@ -745,7 +745,7 @@ def render_tab_graficos_dinamicos_aon(campanha):
     
     # Estatísticas do período
     st.markdown("---")
-    st.subheader("📊 Estatísticas do Período Selecionado")
+    st.subheader(" Estatísticas do Período Selecionado")
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -761,30 +761,30 @@ def render_tab_graficos_dinamicos_aon(campanha):
 def render_tab_kpis_dinamicos(campanha):
     """Tab: KPIs Dinâmicos por Influenciador"""
     
-    st.subheader("📉 KPIs Dinâmicos por Influenciador")
+    st.subheader(" KPIs Dinâmicos por Influenciador")
     st.caption("Visualize diferentes métricas e compare até 30 influenciadores")
     
     # Seletores de métricas
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("**🎯 KPIs de Awareness:**")
+        st.markdown("** KPIs de Awareness:**")
         kpi_awareness = st.radio("", ["Views", "Alcance Único (Estimado)"], key="kpi_aw")
         
-        st.markdown("**📈 KPIs de Engajamento:**")
+        st.markdown("** KPIs de Engajamento:**")
         kpi_engajamento = st.radio("", ["Interações Totais", "Taxa de Engajamento (%)"], key="kpi_eng")
     
     with col2:
-        st.markdown("**💰 Taxas de Eficiência:**")
+        st.markdown("** Taxas de Eficiência:**")
         taxa_eficiencia = st.radio("", ["CPM (Custo por Mil)", "Custo por Interação"], key="taxa_ef")
         
-        st.markdown("**🔗 Métricas de Tráfego:**")
+        st.markdown("** Métricas de Tráfego:**")
         taxa_trafego = st.radio("", ["Cliques em Link", "Taxa de Cliques (CTR %)"], key="taxa_tr")
     
     st.markdown("---")
     
     if not campanha['influenciadores'] or not any(inf['posts'] for inf in campanha['influenciadores']):
-        st.info("📭 Adicione posts para visualizar KPIs")
+        st.info(" Adicione posts para visualizar KPIs")
         return
     
     # Preparar dados (limitado a 30 influenciadores)
@@ -866,10 +866,10 @@ def render_tab_kpis_dinamicos(campanha):
 def render_tab_top_influenciadores(campanha):
     """Tab: Top Influenciadores"""
     
-    st.subheader("⭐ Top Influenciadores - Ranking de Performance")
+    st.subheader(" Top Influenciadores - Ranking de Performance")
     
     if not campanha['influenciadores'] or not any(inf['posts'] for inf in campanha['influenciadores']):
-        st.info("📭 Adicione posts para ver o ranking")
+        st.info(" Adicione posts para ver o ranking")
         return
     
     # Calcular métricas por influenciador
@@ -895,7 +895,7 @@ def render_tab_top_influenciadores(campanha):
     df_top = pd.DataFrame(dados_top)
     
     # Gráfico de bolhas
-    st.markdown("### 💫 Mapa de Performance: Alcance vs Engajamento")
+    st.markdown("###  Mapa de Performance: Alcance vs Engajamento")
     
     fig = px.scatter(df_top, x='Alcance', y='Engajamento',
                     size='Posts', color='Classificação',
@@ -910,24 +910,24 @@ def render_tab_top_influenciadores(campanha):
     st.markdown("---")
     
     # Top 5 Rankings
-    st.subheader("🏆 Top 5 Rankings")
+    st.subheader(" Top 5 Rankings")
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.markdown("**👁️ Top 5 em Alcance:**")
+        st.markdown("** Top 5 em Alcance:**")
         top_views = df_top.nlargest(5, 'Alcance')[['Influenciador', 'Alcance']]
         for idx, row in top_views.iterrows():
             st.write(f"**{row['Influenciador']}**: {row['Alcance']:,}")
     
     with col2:
-        st.markdown("**📈 Top 5 em Engajamento:**")
+        st.markdown("** Top 5 em Engajamento:**")
         top_eng = df_top.nlargest(5, 'Taxa Eng. %')[['Influenciador', 'Taxa Eng. %']]
         for idx, row in top_eng.iterrows():
             st.write(f"**{row['Influenciador']}**: {row['Taxa Eng. %']}%")
     
     with col3:
-        st.markdown("**🔥 Mais Ativos:**")
+        st.markdown("** Mais Ativos:**")
         top_posts = df_top.nlargest(5, 'Posts')[['Influenciador', 'Posts']]
         for idx, row in top_posts.iterrows():
             st.write(f"**{row['Influenciador']}**: {row['Posts']} posts")
@@ -935,7 +935,7 @@ def render_tab_top_influenciadores(campanha):
     st.markdown("---")
     
     # Tabela completa
-    st.subheader("📊 Tabela Completa de Performance")
+    st.subheader(" Tabela Completa de Performance")
     df_top_sorted = df_top.sort_values('Engajamento', ascending=False)
     st.dataframe(df_top_sorted, use_container_width=True, hide_index=True)
 
@@ -943,10 +943,10 @@ def render_tab_top_influenciadores(campanha):
 def render_tab_top_conteudo(campanha):
     """Tab: Top Conteúdo com Análise Criativa"""
     
-    st.subheader("🎬 Top Conteúdo - Melhores Posts da Campanha")
+    st.subheader(" Top Conteúdo - Melhores Posts da Campanha")
     
     if not campanha['influenciadores'] or not any(inf['posts'] for inf in campanha['influenciadores']):
-        st.info("📭 Adicione posts para ver o top conteúdo")
+        st.info(" Adicione posts para ver o top conteúdo")
         return
     
     # Coletar todos os posts
@@ -974,7 +974,7 @@ def render_tab_top_conteudo(campanha):
     todos_posts.sort(key=lambda x: x['engajamento'], reverse=True)
     
     # Top 10
-    st.markdown("### 🏆 Top 10 Posts por Engajamento")
+    st.markdown("###  Top 10 Posts por Engajamento")
     
     for idx, post in enumerate(todos_posts[:10], 1):
         with st.expander(f"#{idx} - {post['influenciador']} - {post['formato']} ({post['views']:,} views)"):
@@ -987,9 +987,9 @@ def render_tab_top_conteudo(campanha):
                         img_bytes = base64.b64decode(post['imagens'][0])
                         st.image(img_bytes, use_container_width=True, caption="Post")
                     except:
-                        st.info("📷 Mídia indisponível")
+                        st.info(" Mídia indisponível")
                 else:
-                    st.info("📷 Sem mídia")
+                    st.info(" Sem mídia")
             
             with col2:
                 st.write(f"**Influenciador:** {post['influenciador']} ({post['classificacao']})")
@@ -1005,44 +1005,44 @@ def render_tab_top_conteudo(campanha):
                     st.metric("Taxa Eng.", f"{post['taxa_eng']:.2f}%")
                 
                 if post['link']:
-                    st.markdown(f"[🔗 Ver Post Original]({post['link']})")
+                    st.markdown(f"[ Ver Post Original]({post['link']})")
                 
                 # ANÁLISE CRIATIVA
-                st.markdown("**💡 Análise Criativa Automática:**")
+                st.markdown("** Análise Criativa Automática:**")
                 
                 analise_criativa = []
                 
                 if post['formato'] == 'Reels':
-                    analise_criativa.append("✅ **Formato Reels** é excelente para alcance orgânico e viralização")
+                    analise_criativa.append(" **Formato Reels** é excelente para alcance orgânico e viralização")
                 elif post['formato'] == 'Stories':
-                    analise_criativa.append("✅ **Stories** geram proximidade e urgência com a audiência")
+                    analise_criativa.append(" **Stories** geram proximidade e urgência com a audiência")
                 elif post['formato'] == 'Carrossel':
-                    analise_criativa.append("✅ **Carrosséis** têm alto tempo de permanência no conteúdo")
+                    analise_criativa.append(" **Carrosséis** têm alto tempo de permanência no conteúdo")
                 
                 if post['taxa_eng'] > 5:
-                    analise_criativa.append("🔥 **Taxa de engajamento excepcional!** Acima de 5%")
+                    analise_criativa.append(" **Taxa de engajamento excepcional!** Acima de 5%")
                 elif post['taxa_eng'] > 3:
-                    analise_criativa.append("✅ Taxa de engajamento saudável (acima de 3%)")
+                    analise_criativa.append(" Taxa de engajamento saudável (acima de 3%)")
                 
                 if post['saves'] > post['views'] * 0.02:
-                    analise_criativa.append("💾 **Alto valor percebido**: Taxa de saves acima de 2%")
+                    analise_criativa.append(" **Alto valor percebido**: Taxa de saves acima de 2%")
                 
                 if post['classificacao'] in ['Nano', 'Micro']:
-                    analise_criativa.append(f"⭐ Influenciador **{post['classificacao']}** com engajamento autêntico")
+                    analise_criativa.append(f" Influenciador **{post['classificacao']}** com engajamento autêntico")
                 
                 for analise in analise_criativa:
                     st.write(analise)
                 
-                st.success("💡 **Recomendação**: Replicar estilo criativo e abordagem deste post")
+                st.success(" **Recomendação**: Replicar estilo criativo e abordagem deste post")
 
 
 def render_tab_analise_detalhada(campanha):
     """Tab: Análise Detalhada por Influenciador"""
     
-    st.subheader("📋 Análise Detalhada de Performance")
+    st.subheader(" Análise Detalhada de Performance")
     
     if not campanha['influenciadores'] or not any(inf['posts'] for inf in campanha['influenciadores']):
-        st.info("📭 Adicione posts para ver análises detalhadas")
+        st.info(" Adicione posts para ver análises detalhadas")
         return
     
     # Calcular métricas completas
@@ -1081,30 +1081,30 @@ def render_tab_analise_detalhada(campanha):
     df_analise = df_analise.sort_values('Taxa Eng. (%)', ascending=False)
     
     # Tabela completa
-    st.markdown("### 📊 Tabela Completa de Performance")
+    st.markdown("###  Tabela Completa de Performance")
     st.dataframe(df_analise, use_container_width=True, hide_index=True)
     
     st.markdown("---")
     
     # Rankings por métrica
-    st.subheader("🏆 Rankings por Métrica")
+    st.subheader(" Rankings por Métrica")
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.markdown("**👁️ Top 5 em Views Totais:**")
+        st.markdown("** Top 5 em Views Totais:**")
         top = df_analise.nlargest(5, 'Total Views')
         for _, row in top.iterrows():
             st.write(f"{row['Influenciador']}: **{row['Total Views']:,}**")
     
     with col2:
-        st.markdown("**📈 Top 5 em Taxa de Engajamento:**")
+        st.markdown("** Top 5 em Taxa de Engajamento:**")
         top = df_analise.nlargest(5, 'Taxa Eng. (%)')
         for _, row in top.iterrows():
             st.write(f"{row['Influenciador']}: **{row['Taxa Eng. (%)']:.2f}%**")
     
     with col3:
-        st.markdown("**💾 Top 5 em Saves:**")
+        st.markdown("** Top 5 em Saves:**")
         top = df_analise.nlargest(5, 'Total Saves')
         for _, row in top.iterrows():
             st.write(f"{row['Influenciador']}: **{row['Total Saves']:,}**")
@@ -1112,7 +1112,7 @@ def render_tab_analise_detalhada(campanha):
     st.markdown("---")
     
     # Melhor por classificação
-    st.subheader("⭐ Melhor Desempenho por Classificação")
+    st.subheader(" Melhor Desempenho por Classificação")
     
     for classe in df_analise['Classificação'].unique():
         df_classe = df_analise[df_analise['Classificação'] == classe]
@@ -1131,7 +1131,7 @@ def render_tab_analise_detalhada(campanha):
 def render_tab_visao_comentarios(campanha):
     """Tab: Visão de Comentários com Análise de Sentimento"""
     
-    st.subheader("💬 Análise de Comentários por IA")
+    st.subheader(" Análise de Comentários por IA")
     
     # Filtros
     col1, col2, col3 = st.columns(3)
@@ -1170,9 +1170,9 @@ def render_tab_visao_comentarios(campanha):
                 })
     
     if not todos_comentarios:
-        st.info("💬 Nenhum comentário classificado ainda")
+        st.info(" Nenhum comentário classificado ainda")
         
-        with st.expander("💡 Como usar esta funcionalidade"):
+        with st.expander(" Como usar esta funcionalidade"):
             st.markdown("""
             **Passo a passo:**
             
@@ -1185,9 +1185,9 @@ def render_tab_visao_comentarios(campanha):
             7. Volte aqui para ver análises completas
             
             **A IA classifica em:**
-            - 🟢 **Positivo**: Elogios, satisfação
-            - 🟡 **Neutro**: Perguntas, informações
-            - 🔴 **Negativo**: Críticas, insatisfação
+            - [+] **Positivo**: Elogios, satisfação
+            - [~] **Neutro**: Perguntas, informações
+            -  **Negativo**: Críticas, insatisfação
             
             **Categorias:**
             - Elogio ao Produto
@@ -1208,16 +1208,16 @@ def render_tab_visao_comentarios(campanha):
     with col1:
         st.metric("Total Comentários", total_com)
     with col2:
-        st.metric("🟢 Positivos", positivos, f"{positivos/total_com*100:.1f}%")
+        st.metric("[+] Positivos", positivos, f"{positivos/total_com*100:.1f}%")
     with col3:
-        st.metric("🟡 Neutros", neutros, f"{neutros/total_com*100:.1f}%")
+        st.metric("[~] Neutros", neutros, f"{neutros/total_com*100:.1f}%")
     with col4:
-        st.metric("🔴 Negativos", negativos, f"{negativos/total_com*100:.1f}%")
+        st.metric(" Negativos", negativos, f"{negativos/total_com*100:.1f}%")
     
     st.markdown("---")
     
     # Distribuição por categoria
-    st.subheader("📊 Distribuição por Categoria")
+    st.subheader(" Distribuição por Categoria")
     
     categorias_count = Counter([c['categoria'] for c in todos_comentarios])
     df_cat = pd.DataFrame(categorias_count.items(), columns=['Categoria', 'Quantidade'])
@@ -1232,10 +1232,10 @@ def render_tab_visao_comentarios(campanha):
     
     # Mostrar comentários baseado na visão
     if visao == "Campanha Geral":
-        st.subheader("📝 Comentários Aderentes à Campanha")
+        st.subheader(" Comentários Aderentes à Campanha")
         
         for com in todos_comentarios[:20]:
-            cor = {"positivo": "🟢", "neutro": "🟡", "negativo": "🔴"}
+            cor = {"positivo": "[+]", "neutro": "[~]", "negativo": ""}
             st.write(f"{cor[com['polaridade']]} **{com['categoria']}** - {com['influenciador']}")
             st.caption(com['texto'])
             st.markdown("---")
@@ -1249,7 +1249,7 @@ def render_tab_visao_comentarios(campanha):
             influs_com[com['influenciador']].append(com)
         
         for influ_nome, comentarios in influs_com.items():
-            with st.expander(f"👤 {influ_nome} ({len(comentarios)} comentários)"):
+            with st.expander(f" {influ_nome} ({len(comentarios)} comentários)"):
                 pos = len([c for c in comentarios if c['polaridade'] == 'positivo'])
                 neu = len([c for c in comentarios if c['polaridade'] == 'neutro'])
                 neg = len([c for c in comentarios if c['polaridade'] == 'negativo'])
@@ -1263,7 +1263,7 @@ def render_tab_visao_comentarios(campanha):
                     st.metric("Negativos", f"{neg} ({neg/len(comentarios)*100:.0f}%)")
                 
                 for com in comentarios[:10]:
-                    cor = {"positivo": "🟢", "neutro": "🟡", "negativo": "🔴"}
+                    cor = {"positivo": "[+]", "neutro": "[~]", "negativo": ""}
                     st.write(f"{cor[com['polaridade']]} **{com['categoria']}**: {com['texto'][:100]}...")
     
     elif visao == "Por Post":
@@ -1276,9 +1276,9 @@ def render_tab_visao_comentarios(campanha):
             posts_com[key].append(com)
         
         for post_key, comentarios in posts_com.items():
-            with st.expander(f"📱 {post_key} ({len(comentarios)} comentários)"):
+            with st.expander(f" {post_key} ({len(comentarios)} comentários)"):
                 for com in comentarios[:5]:
-                    cor = {"positivo": "🟢", "neutro": "🟡", "negativo": "🔴"}
+                    cor = {"positivo": "[+]", "neutro": "[~]", "negativo": ""}
                     st.write(f"{cor[com['polaridade']]} **{com['categoria']}**: {com['texto'][:150]}...")
                     st.markdown("---")
 
@@ -1286,7 +1286,7 @@ def render_tab_visao_comentarios(campanha):
 def render_tab_nuvem_palavras(campanha):
     """Tab: Nuvem de Palavras e Principais Assuntos"""
     
-    st.subheader("☁️ Nuvem de Palavras e Análise de Assuntos")
+    st.subheader(" Nuvem de Palavras e Análise de Assuntos")
     
     # Coletar comentários
     todos_comentarios = []
@@ -1295,16 +1295,16 @@ def render_tab_nuvem_palavras(campanha):
             todos_comentarios.extend(post.get('comentarios', []))
     
     if not todos_comentarios:
-        st.info("💬 Adicione comentários aos posts para gerar a nuvem de palavras")
+        st.info(" Adicione comentários aos posts para gerar a nuvem de palavras")
         
-        with st.expander("💡 Como funciona"):
+        with st.expander(" Como funciona"):
             st.markdown("""
             A **Nuvem de Palavras** analisa automaticamente todos os comentários e:
             
-            1. 🔍 **Extrai palavras-chave** mais mencionadas
-            2. ☁️ **Gera visualização** com tamanho proporcional
-            3. 📊 **Identifica assuntos** principais
-            4. 💬 **Destaca comentários** relevantes
+            1.  **Extrai palavras-chave** mais mencionadas
+            2.  **Gera visualização** com tamanho proporcional
+            3.  **Identifica assuntos** principais
+            4.  **Destaca comentários** relevantes
             
             **Para usar:**
             - Adicione comentários aos posts
@@ -1321,7 +1321,7 @@ def render_tab_nuvem_palavras(campanha):
         return
     
     # Top 20 palavras
-    st.markdown("### 🔤 Palavras Mais Mencionadas")
+    st.markdown("###  Palavras Mais Mencionadas")
     
     df_palavras = pd.DataFrame(palavras_chave[:20], columns=['Palavra', 'Frequência'])
     
@@ -1335,7 +1335,7 @@ def render_tab_nuvem_palavras(campanha):
     st.markdown("---")
     
     # Nuvem visual (simulada com HTML)
-    st.markdown("### ☁️ Nuvem de Palavras")
+    st.markdown("###  Nuvem de Palavras")
     
     palavras_html = ""
     for palavra, freq in palavras_chave[:30]:
@@ -1356,17 +1356,17 @@ def render_tab_nuvem_palavras(campanha):
     st.markdown("---")
     
     # Principais assuntos por categoria
-    st.markdown("### 📌 Principais Assuntos Identificados")
+    st.markdown("###  Principais Assuntos Identificados")
     
     categorias = Counter([c['categoria'] for c in todos_comentarios])
     
     for categoria, qtd in categorias.most_common():
-        with st.expander(f"📂 {categoria} ({qtd} menções)"):
+        with st.expander(f" {categoria} ({qtd} menções)"):
             comentarios_cat = [c for c in todos_comentarios if c['categoria'] == categoria]
             
             st.markdown("**Exemplos de comentários:**")
             for com in comentarios_cat[:5]:
-                cor = {"positivo": "🟢", "neutro": "🟡", "negativo": "🔴"}
+                cor = {"positivo": "[+]", "neutro": "[~]", "negativo": ""}
                 st.write(f"{cor[com['polaridade']]} _{com['texto'][:120]}..._")
             
             # Palavras específicas
@@ -1379,12 +1379,12 @@ def render_tab_nuvem_palavras(campanha):
     st.markdown("---")
     
     # Comentários em destaque
-    st.markdown("### 📸 Comentários em Destaque")
+    st.markdown("###  Comentários em Destaque")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("**💚 Mais Positivos:**")
+        st.markdown("** Mais Positivos:**")
         positivos = [c for c in todos_comentarios if c['polaridade'] == 'positivo']
         for com in positivos[:3]:
             st.markdown(f"""
@@ -1396,7 +1396,7 @@ def render_tab_nuvem_palavras(campanha):
             """, unsafe_allow_html=True)
     
     with col2:
-        st.markdown("**💛 Intenção de Compra:**")
+        st.markdown("** Intenção de Compra:**")
         compra = [c for c in todos_comentarios if c['categoria'] == 'Intenção de Compra']
         if compra:
             for com in compra[:3]:
@@ -1422,7 +1422,7 @@ def render_tab_nuvem_palavras(campanha):
 def render_tab_glossario():
     """Tab: Glossário Completo de Métricas"""
     
-    st.subheader("📚 Glossário de Métricas e Termos")
+    st.subheader(" Glossário de Métricas e Termos")
     
     st.markdown("""
     Este glossário explica todos os termos e métricas utilizados no sistema AIR.
@@ -1431,7 +1431,7 @@ def render_tab_glossario():
     st.markdown("---")
     
     # Métricas Básicas
-    with st.expander("📊 MÉTRICAS BÁSICAS", expanded=True):
+    with st.expander(" MÉTRICAS BÁSICAS", expanded=True):
         st.markdown("""
         **Views (Visualizações)**
         - Número total de vezes que o conteúdo foi visualizado
@@ -1466,7 +1466,7 @@ def render_tab_glossario():
         """)
     
     # Métricas Calculadas
-    with st.expander("🧮 MÉTRICAS CALCULADAS"):
+    with st.expander(" MÉTRICAS CALCULADAS"):
         st.markdown("""
         **Taxa de Engajamento (Engajamento Efetivo)**
         - Fórmula: (Interações / Views) × 100
@@ -1494,7 +1494,7 @@ def render_tab_glossario():
         """)
     
     # AIR Score
-    with st.expander("⭐ AIR SCORE"):
+    with st.expander(" AIR SCORE"):
         st.markdown("""
         **O que é o AIR Score?**
         - Métrica proprietária da AIR (0-100)
@@ -1514,7 +1514,7 @@ def render_tab_glossario():
         """)
     
     # Classificação de Influenciadores
-    with st.expander("👥 CLASSIFICAÇÃO DE INFLUENCIADORES"):
+    with st.expander(" CLASSIFICAÇÃO DE INFLUENCIADORES"):
         st.markdown("""
         **Nano (< 10K seguidores)**
         - Alta proximidade com audiência
@@ -1543,7 +1543,7 @@ def render_tab_glossario():
         """)
     
     # Formatos
-    with st.expander("📱 FORMATOS DE CONTEÚDO"):
+    with st.expander(" FORMATOS DE CONTEÚDO"):
         st.markdown("""
         **Reels (Instagram/TikTok)**
         - Vídeos curtos (15-90s)
@@ -1572,13 +1572,13 @@ def render_tab_glossario():
         """)
     
     # Análise de Sentimento
-    with st.expander("🤖 ANÁLISE DE SENTIMENTO (IA)"):
+    with st.expander(" ANÁLISE DE SENTIMENTO (IA)"):
         st.markdown("""
         **Polaridade:**
         
-        🟢 **Positivo** - Comentários favoráveis, elogios
-        🟡 **Neutro** - Perguntas, informações
-        🔴 **Negativo** - Críticas, insatisfação
+        [+] **Positivo** - Comentários favoráveis, elogios
+        [~] **Neutro** - Perguntas, informações
+         **Negativo** - Críticas, insatisfação
         
         **Categorias:**
         
@@ -1591,7 +1591,7 @@ def render_tab_glossario():
         """)
     
     # Termos Técnicos
-    with st.expander("🔤 TERMOS TÉCNICOS"):
+    with st.expander(" TERMOS TÉCNICOS"):
         st.markdown("""
         **Awareness (Conscientização)**
         - Métrica de conhecimento da marca
@@ -1623,7 +1623,7 @@ def render_tab_glossario():
     st.markdown(f"""
     <div style='background: #f9fafb; padding: 1.5rem; border-radius: 12px; 
                 border-left: 4px solid {st.session_state.primary_color};'>
-        <strong>💡 Dica:</strong> Use este glossário como referência ao analisar campanhas. 
+        <strong> Dica:</strong> Use este glossário como referência ao analisar campanhas. 
         Entender as métricas é essencial para tomar decisões estratégicas informadas.
     </div>
     """, unsafe_allow_html=True)
