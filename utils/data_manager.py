@@ -8,11 +8,11 @@ from datetime import datetime, timedelta
 from utils.funcoes_auxiliares import classificar_influenciador
 
 # ========================================
-# INICIALIZAÇÃO
+# INICIALIZACAO
 # ========================================
 
 def inicializar_session_state():
-    """Inicializa todas as variáveis do session state"""
+    """Inicializa todas as variaveis do session state"""
     if 'campanhas' not in st.session_state:
         st.session_state.campanhas = []
     if 'clientes' not in st.session_state:
@@ -31,108 +31,16 @@ def inicializar_session_state():
     # Filtros globais
     if 'filtro_cliente_id' not in st.session_state:
         st.session_state.filtro_cliente_id = None
-    if 'filtro_campanha_id' not in st.session_state:
-        st.session_state.filtro_campanha_id = None
+    if 'filtro_campanhas_ids' not in st.session_state:
+        st.session_state.filtro_campanhas_ids = []
     if 'filtro_data_inicio' not in st.session_state:
         st.session_state.filtro_data_inicio = datetime.now() - timedelta(days=90)
     if 'filtro_data_fim' not in st.session_state:
         st.session_state.filtro_data_fim = datetime.now()
-
-# ========================================
-# FILTROS GLOBAIS
-# ========================================
-
-def renderizar_filtros_globais():
-    """Renderiza os filtros globais de cliente, campanha e data"""
-    with st.expander("🔍 Filtros Globais", expanded=False):
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            opcoes_clientes = ["Todos os Clientes"] + [c['nome'] for c in st.session_state.clientes]
-            cliente_sel = st.selectbox(
-                "Cliente",
-                opcoes_clientes,
-                index=0 if not st.session_state.filtro_cliente_id else 
-                      next((i+1 for i, c in enumerate(st.session_state.clientes) 
-                           if c['id'] == st.session_state.filtro_cliente_id), 0),
-                key="filtro_cliente_global"
-            )
-            
-            if cliente_sel == "Todos os Clientes":
-                st.session_state.filtro_cliente_id = None
-            else:
-                cliente_obj = next((c for c in st.session_state.clientes if c['nome'] == cliente_sel), None)
-                st.session_state.filtro_cliente_id = cliente_obj['id'] if cliente_obj else None
-        
-        with col2:
-            # Filtrar campanhas pelo cliente selecionado
-            if st.session_state.filtro_cliente_id:
-                campanhas_filtradas = [c for c in st.session_state.campanhas 
-                                       if c['cliente_id'] == st.session_state.filtro_cliente_id]
-            else:
-                campanhas_filtradas = st.session_state.campanhas
-            
-            opcoes_campanhas = ["Todas as Campanhas"] + [c['nome'] for c in campanhas_filtradas]
-            campanha_sel = st.selectbox(
-                "Campanha",
-                opcoes_campanhas,
-                index=0,
-                key="filtro_campanha_global"
-            )
-            
-            if campanha_sel == "Todas as Campanhas":
-                st.session_state.filtro_campanha_id = None
-            else:
-                camp_obj = next((c for c in campanhas_filtradas if c['nome'] == campanha_sel), None)
-                st.session_state.filtro_campanha_id = camp_obj['id'] if camp_obj else None
-        
-        with col3:
-            st.session_state.filtro_data_inicio = st.date_input(
-                "Data Início",
-                value=st.session_state.filtro_data_inicio,
-                key="filtro_data_ini"
-            )
-        
-        with col4:
-            st.session_state.filtro_data_fim = st.date_input(
-                "Data Fim",
-                value=st.session_state.filtro_data_fim,
-                key="filtro_data_f"
-            )
-
-
-def get_campanhas_filtradas():
-    """Retorna campanhas baseado nos filtros globais"""
-    campanhas = st.session_state.campanhas
     
-    if st.session_state.filtro_cliente_id:
-        campanhas = [c for c in campanhas if c['cliente_id'] == st.session_state.filtro_cliente_id]
-    
-    if st.session_state.filtro_campanha_id:
-        campanhas = [c for c in campanhas if c['id'] == st.session_state.filtro_campanha_id]
-    
-    # Filtrar por data
-    campanhas_filtradas = []
-    for camp in campanhas:
-        try:
-            data_inicio = datetime.strptime(camp['data_inicio'], '%d/%m/%Y').date()
-            data_fim = datetime.strptime(camp['data_fim'], '%d/%m/%Y').date()
-            
-            filtro_ini = st.session_state.filtro_data_inicio
-            filtro_fim = st.session_state.filtro_data_fim
-            
-            if isinstance(filtro_ini, datetime):
-                filtro_ini = filtro_ini.date()
-            if isinstance(filtro_fim, datetime):
-                filtro_fim = filtro_fim.date()
-            
-            # Campanha está no período se há interseção
-            if data_inicio <= filtro_fim and data_fim >= filtro_ini:
-                campanhas_filtradas.append(camp)
-        except:
-            campanhas_filtradas.append(camp)
-    
-    return campanhas_filtradas
+    # Modo de relatorio
+    if 'modo_relatorio' not in st.session_state:
+        st.session_state.modo_relatorio = 'campanha'  # 'campanha' ou 'cliente'
 
 # ========================================
 # CLIENTES
@@ -146,7 +54,7 @@ def criar_cliente(dados):
         'cnpj': dados.get('cnpj', ''),
         'contato': dados.get('contato', ''),
         'email': dados.get('email', ''),
-        'tipo': dados.get('tipo', 'normal'),  # normal (não mais AON por cliente)
+        'tipo': dados.get('tipo', 'normal'),
         'created_at': datetime.now().isoformat()
     }
     st.session_state.clientes.append(cliente)
@@ -212,7 +120,7 @@ def criar_campanha(dados):
         'data_inicio': dados['data_inicio'],
         'data_fim': dados['data_fim'],
         'tipo_dados': dados.get('tipo_dados', 'estatico'),
-        'is_aon': dados.get('is_aon', False),  # AON agora é por campanha
+        'is_aon': dados.get('is_aon', False),
         'metricas_selecionadas': dados.get('metricas_selecionadas', {
             'views': True,
             'alcance': True,
@@ -227,7 +135,7 @@ def criar_campanha(dados):
         }),
         'status': 'ativa',
         'influenciadores': [],
-        'notas': '',  # Campo para escrita livre
+        'notas': '',
         'created_at': datetime.now().isoformat()
     }
     st.session_state.campanhas.append(campanha)
@@ -240,8 +148,12 @@ def get_campanha(campanha_id):
             return camp
     return None
 
+def get_campanhas_por_cliente(cliente_id):
+    """Retorna todas as campanhas de um cliente"""
+    return [c for c in st.session_state.campanhas if c['cliente_id'] == cliente_id]
+
 def adicionar_influenciador_campanha(campanha_id, influencer_base_id):
-    """Adiciona influenciador da base à campanha"""
+    """Adiciona influenciador da base a campanha"""
     campanha = get_campanha(campanha_id)
     inf_base = next((i for i in st.session_state.influenciadores_base if i['id'] == influencer_base_id), None)
     
@@ -310,11 +222,11 @@ def adicionar_post(campanha_id, influencer_id, dados):
     return False
 
 # ========================================
-# MÉTRICAS
+# METRICAS
 # ========================================
 
 def calcular_metricas_campanha(campanha):
-    """Calcula todas as métricas de uma campanha"""
+    """Calcula todas as metricas de uma campanha"""
     total_views = 0
     total_alcance = 0
     total_interacoes = 0
@@ -368,28 +280,42 @@ def calcular_metricas_campanha(campanha):
     }
 
 
-def calcular_metricas_por_cliente(cliente_id):
-    """Calcula métricas agregadas por cliente"""
-    campanhas_cliente = [c for c in st.session_state.campanhas if c['cliente_id'] == cliente_id]
-    
+def calcular_metricas_multiplas_campanhas(campanhas_list):
+    """Calcula metricas agregadas de multiplas campanhas"""
     totais = {
-        'total_campanhas': len(campanhas_cliente),
+        'total_campanhas': len(campanhas_list),
         'total_views': 0,
         'total_alcance': 0,
         'total_interacoes': 0,
+        'total_impressoes': 0,
         'total_posts': 0,
+        'total_saves': 0,
+        'total_compartilhamentos': 0,
+        'total_conversoes_cupom': 0,
+        'total_curtidas': 0,
+        'total_comentarios': 0,
+        'total_cliques_link': 0,
         'total_influenciadores': 0,
-        'total_seguidores': 0
+        'total_seguidores': 0,
+        'engajamento_efetivo': 0,
+        'taxa_alcance': 0
     }
     
     influenciadores_unicos = set()
     
-    for camp in campanhas_cliente:
+    for camp in campanhas_list:
         metricas = calcular_metricas_campanha(camp)
         totais['total_views'] += metricas['total_views']
         totais['total_alcance'] += metricas['total_alcance']
         totais['total_interacoes'] += metricas['total_interacoes']
+        totais['total_impressoes'] += metricas['total_impressoes']
         totais['total_posts'] += metricas['total_posts']
+        totais['total_saves'] += metricas['total_saves']
+        totais['total_compartilhamentos'] += metricas['total_compartilhamentos']
+        totais['total_conversoes_cupom'] += metricas['total_conversoes_cupom']
+        totais['total_curtidas'] += metricas['total_curtidas']
+        totais['total_comentarios'] += metricas['total_comentarios']
+        totais['total_cliques_link'] += metricas['total_cliques_link']
         totais['total_seguidores'] += metricas['total_seguidores']
         
         for inf in camp['influenciadores']:
@@ -397,4 +323,16 @@ def calcular_metricas_por_cliente(cliente_id):
     
     totais['total_influenciadores'] = len(influenciadores_unicos)
     
+    # Calcular taxas agregadas
+    if totais['total_views'] > 0:
+        totais['engajamento_efetivo'] = round(totais['total_interacoes'] / totais['total_views'] * 100, 2)
+    if totais['total_seguidores'] > 0:
+        totais['taxa_alcance'] = round(totais['total_alcance'] / totais['total_seguidores'] * 100, 2)
+    
     return totais
+
+
+def calcular_metricas_por_cliente(cliente_id):
+    """Calcula metricas agregadas por cliente"""
+    campanhas_cliente = [c for c in st.session_state.campanhas if c['cliente_id'] == cliente_id]
+    return calcular_metricas_multiplas_campanhas(campanhas_cliente)

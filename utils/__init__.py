@@ -1,5 +1,5 @@
 """
-Módulo de utilitários do AIR Relatórios
+Modulo de utilitarios do AIR Relatorios
 """
 
 from utils import funcoes_auxiliares

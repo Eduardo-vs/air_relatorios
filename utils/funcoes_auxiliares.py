@@ -1,6 +1,6 @@
 """
-Utils - Funções Auxiliares
-Todas as funções de apoio do sistema
+Utils - Funcoes Auxiliares
+Todas as funcoes de apoio do sistema
 """
 
 import streamlit as st
@@ -9,7 +9,7 @@ from collections import Counter
 import re
 
 # ========================================
-# FUNÇÕES DE FORMATAÇÃO
+# FUNCOES DE FORMATACAO
 # ========================================
 
 def formatar_data_br(data_str):
@@ -28,7 +28,7 @@ def formatar_data_br(data_str):
         return data_str
 
 def formatar_numero(num):
-    """Formata número com separador de milhares"""
+    """Formata numero com separador de milhares"""
     if num >= 1000000:
         return f"{num/1000000:.1f}M"
     elif num >= 1000:
@@ -43,7 +43,7 @@ def get_text_color(hex_color):
     return '#000000' if luminosidade > 0.5 else '#ffffff'
 
 # ========================================
-# CLASSIFICAÇÃO E ANÁLISE
+# CLASSIFICACAO E ANALISE
 # ========================================
 
 def classificar_influenciador(seguidores_str):
@@ -81,21 +81,39 @@ def calcular_air_score(campanha):
         return 0
     
     # Componentes do score
-    score_engajamento = min(metricas['engajamento_efetivo'] * 10, 40)  # Até 40 pontos
-    score_alcance = min((metricas['total_views'] / 100000) * 20, 30)  # Até 30 pontos
-    score_conversao = min(metricas['total_conversoes_cupom'] / 10, 15)  # Até 15 pontos
-    score_saves = min((metricas['total_saves'] / metricas['total_views']) * 1000, 15) if metricas['total_views'] > 0 else 0  # Até 15 pontos
+    score_engajamento = min(metricas['engajamento_efetivo'] * 10, 40)
+    score_alcance = min((metricas['total_views'] / 100000) * 20, 30)
+    score_conversao = min(metricas['total_conversoes_cupom'] / 10, 15)
+    score_saves = min((metricas['total_saves'] / metricas['total_views']) * 1000, 15) if metricas['total_views'] > 0 else 0
+    
+    score_total = score_engajamento + score_alcance + score_conversao + score_saves
+    
+    return min(round(score_total, 1), 100)
+
+def calcular_air_score_agregado(campanhas_list):
+    """Calcula AIR Score agregado de multiplas campanhas"""
+    from utils.data_manager import calcular_metricas_multiplas_campanhas
+    
+    metricas = calcular_metricas_multiplas_campanhas(campanhas_list)
+    
+    if metricas['total_posts'] == 0:
+        return 0
+    
+    score_engajamento = min(metricas['engajamento_efetivo'] * 10, 40)
+    score_alcance = min((metricas['total_views'] / 100000) * 20, 30)
+    score_conversao = min(metricas['total_conversoes_cupom'] / 10, 15)
+    score_saves = min((metricas['total_saves'] / metricas['total_views']) * 1000, 15) if metricas['total_views'] > 0 else 0
     
     score_total = score_engajamento + score_alcance + score_conversao + score_saves
     
     return min(round(score_total, 1), 100)
 
 # ========================================
-# CORES PARA GRÁFICOS
+# CORES PARA GRAFICOS
 # ========================================
 
 def get_cores_graficos():
-    """Retorna paleta de cores mais vibrantes para gráficos"""
+    """Retorna paleta de cores mais vibrantes para graficos"""
     return [
         '#7c3aed',  # Roxo principal
         '#fb923c',  # Laranja
@@ -109,46 +127,35 @@ def get_cores_graficos():
         '#ec4899',  # Pink
     ]
 
-def get_color_scale_vibrante():
-    """Retorna escala de cores vibrante"""
-    return [
-        [0, '#7c3aed'],
-        [0.5, '#a855f7'],
-        [1, '#fb923c']
-    ]
-
 # ========================================
-# ANÁLISE DE SENTIMENTO (IA)
+# ANALISE DE SENTIMENTO (IA)
 # ========================================
 
 def analisar_sentimento_comentario(texto):
-    """Simula análise de sentimento com IA"""
+    """Simula analise de sentimento com IA"""
     texto_lower = texto.lower()
     
-    # Palavras positivas
-    positivas = ['amo', 'adoro', 'melhor', 'top', 'incrível', 'perfeito', 'maravilhoso', 
+    positivas = ['amo', 'adoro', 'melhor', 'top', 'incrivel', 'perfeito', 'maravilhoso', 
                  'excelente', 'bom', 'legal', 'nostalgia', 'comprar', 'quero', 'vou comprar',
-                 'amei', 'demais', 'show', 'fantástico', 'adorei']
+                 'amei', 'demais', 'show', 'fantastico', 'adorei']
     
-    # Palavras negativas
-    negativas = ['ruim', 'péssimo', 'horrível', 'não gostei', 'chato', 'fraco', 'caro',
-                 'terrível', 'decepção', 'pior']
+    negativas = ['ruim', 'pessimo', 'horrivel', 'nao gostei', 'chato', 'fraco', 'caro',
+                 'terrivel', 'decepcao', 'pior']
     
-    # Categorias
     if any(palavra in texto_lower for palavra in ['comprar', 'quero', 'vou comprar', 'onde compro', 'preciso', 'vou pegar']):
-        categoria = 'Intenção de Compra'
+        categoria = 'Intencao de Compra'
         polaridade = 'positivo'
-    elif any(palavra in texto_lower for palavra in ['nostalgia', 'lembra', 'memória', 'infância', 'saudade', 'antigamente']):
-        categoria = 'Conexão Emocional'
+    elif any(palavra in texto_lower for palavra in ['nostalgia', 'lembra', 'memoria', 'infancia', 'saudade', 'antigamente']):
+        categoria = 'Conexao Emocional'
         polaridade = 'positivo'
-    elif any(palavra in texto_lower for palavra in ['preço', 'quanto', 'valor', 'custa', 'valor']):
-        categoria = 'Dúvida'
+    elif any(palavra in texto_lower for palavra in ['preco', 'quanto', 'valor', 'custa', 'valor']):
+        categoria = 'Duvida'
         polaridade = 'neutro'
     elif any(palavra in texto_lower for palavra in positivas):
         categoria = 'Elogio ao Produto'
         polaridade = 'positivo'
     elif any(palavra in texto_lower for palavra in negativas):
-        categoria = 'Crítica'
+        categoria = 'Critica'
         polaridade = 'negativo'
     else:
         categoria = 'Geral'
@@ -160,15 +167,14 @@ def analisar_sentimento_comentario(texto):
     }
 
 def extrair_palavras_chave(comentarios):
-    """Extrai palavras-chave dos comentários para nuvem de palavras"""
-    stop_words = ['o', 'a', 'de', 'da', 'do', 'em', 'para', 'com', 'e', 'que', 'é', 'um', 'uma', 
-                  'os', 'as', 'dos', 'das', 'no', 'na', 'se', 'por', 'mais', 'muito', 'eu', 'você',
-                  'são', 'esse', 'essa', 'isso', 'ele', 'ela', 'seu', 'sua', 'meu', 'minha']
+    """Extrai palavras-chave dos comentarios para nuvem de palavras"""
+    stop_words = ['o', 'a', 'de', 'da', 'do', 'em', 'para', 'com', 'e', 'que', 'e', 'um', 'uma', 
+                  'os', 'as', 'dos', 'das', 'no', 'na', 'se', 'por', 'mais', 'muito', 'eu', 'voce',
+                  'sao', 'esse', 'essa', 'isso', 'ele', 'ela', 'seu', 'sua', 'meu', 'minha']
     
     palavras = []
     for comentario in comentarios:
         texto = comentario['texto'].lower()
-        # Remove pontuação e quebra em palavras
         texto_limpo = re.sub(r'[^\w\s]', '', texto)
         palavras_texto = [p for p in texto_limpo.split() if len(p) > 3 and p not in stop_words]
         palavras.extend(palavras_texto)
@@ -201,7 +207,6 @@ def aplicar_css_global(primary_color, secondary_color):
             max-width: 100%;
         }}
         
-        /* Navegação Top */
         .top-nav-logo {{
             display: flex;
             align-items: center;
@@ -223,7 +228,6 @@ def aplicar_css_global(primary_color, secondary_color):
             padding-left: 1rem;
         }}
         
-        /* Botões */
         .stButton>button {{
             background-color: {primary_color};
             color: {text_color_primary};
@@ -241,7 +245,6 @@ def aplicar_css_global(primary_color, secondary_color):
             box-shadow: 0 4px 8px rgba(0,0,0,0.15);
         }}
         
-        /* Sidebar */
         [data-testid="stSidebar"] {{
             background: #f9fafb;
             border-right: 1px solid #e5e7eb;
@@ -316,55 +319,6 @@ def aplicar_css_global(primary_color, secondary_color):
             font-size: 1rem;
             opacity: 0.9;
             margin-top: 0.5rem;
-        }}
-        
-        /* Cards de métricas */
-        .metric-card {{
-            background: white;
-            border: 1px solid #e5e7eb;
-            border-radius: 12px;
-            padding: 1.5rem;
-            text-align: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }}
-        
-        .metric-value {{
-            font-size: 2rem;
-            font-weight: 700;
-            color: {primary_color};
-        }}
-        
-        .metric-label {{
-            font-size: 0.85rem;
-            color: #6b7280;
-            margin-top: 0.5rem;
-        }}
-        
-        /* Influenciador card */
-        .influencer-card {{
-            background: white;
-            border: 1px solid #e5e7eb;
-            border-radius: 12px;
-            padding: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            margin-bottom: 0.5rem;
-        }}
-        
-        .influencer-photo {{
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            object-fit: cover;
-        }}
-        
-        /* Notas/Campo de escrita */
-        .notes-area {{
-            background: #fefce8;
-            border: 1px solid #fef08a;
-            border-radius: 12px;
-            padding: 1rem;
         }}
     </style>
     """, unsafe_allow_html=True)
