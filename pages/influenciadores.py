@@ -148,10 +148,14 @@ def render_modal_adicionar():
                 if st.button("Buscar", use_container_width=True):
                     if username:
                         with st.spinner("Buscando..."):
-                            dados = api_client.buscar_perfil_por_username(username.replace("@", ""), network)
-                            if dados:
-                                st.session_state.api_preview = dados
-                                st.success("Encontrado!")
+                            resultado = api_client.buscar_profile_id(username.replace("@", ""), network)
+                            if resultado.get('success') and resultado.get('data'):
+                                dados = api_client.processar_dados_api(resultado['data'])
+                                if dados:
+                                    st.session_state.api_preview = dados
+                                    st.success("Encontrado!")
+                                else:
+                                    st.error("Erro ao processar dados")
                             else:
                                 st.error("Nao encontrado")
             with col2:
