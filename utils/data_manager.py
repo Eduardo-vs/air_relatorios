@@ -90,6 +90,23 @@ def get_clientes() -> List[Dict]:
     return st.session_state.clientes
 
 
+def atualizar_cliente(cliente_id: int, dados: Dict) -> bool:
+    """Atualiza dados de um cliente"""
+    for i, cli in enumerate(st.session_state.clientes):
+        if cli['id'] == cliente_id:
+            for key, value in dados.items():
+                if key != 'id':
+                    st.session_state.clientes[i][key] = value
+            return True
+    return False
+
+
+def excluir_cliente(cliente_id: int) -> bool:
+    """Exclui um cliente"""
+    st.session_state.clientes = [c for c in st.session_state.clientes if c['id'] != cliente_id]
+    return True
+
+
 # ========================================
 # INFLUENCIADORES
 # ========================================
@@ -158,6 +175,17 @@ def get_influenciadores() -> List[Dict]:
     return st.session_state.influenciadores
 
 
+def excluir_influenciador(influenciador_id: int) -> bool:
+    """Exclui um influenciador"""
+    st.session_state.influenciadores = [i for i in st.session_state.influenciadores if i['id'] != influenciador_id]
+    return True
+
+
+def calcular_classificacao(seguidores: int) -> str:
+    """Alias para classificar_influenciador"""
+    return classificar_influenciador(seguidores)
+
+
 # ========================================
 # CAMPANHAS
 # ========================================
@@ -218,6 +246,14 @@ def atualizar_campanha(campanha_id: int, dados: Dict) -> bool:
 def get_campanhas() -> List[Dict]:
     """Retorna todas as campanhas"""
     return st.session_state.campanhas
+
+
+def excluir_campanha(campanha_id: int) -> bool:
+    """Exclui uma campanha"""
+    st.session_state.campanhas = [c for c in st.session_state.campanhas if c['id'] != campanha_id]
+    if st.session_state.campanha_atual_id == campanha_id:
+        st.session_state.campanha_atual_id = None
+    return True
 
 
 def get_campanhas_por_cliente(cliente_id: int) -> List[Dict]:

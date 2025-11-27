@@ -14,61 +14,73 @@ def render():
     with col2:
         if st.button("+ Nova Campanha", type="primary", use_container_width=True):
             st.session_state.show_new_campaign = True
+            st.session_state.edit_campanha_id = None
     
-    # Form nova campanha
-    if st.session_state.get('show_new_campaign', False):
+    # Form nova/editar campanha
+    if st.session_state.get('show_new_campaign', False) or st.session_state.get('edit_campanha_id'):
+        edit_id = st.session_state.get('edit_campanha_id')
+        camp_edit = data_manager.get_campanha(edit_id) if edit_id else None
+        
         with st.form("form_campanha"):
-            st.subheader("Criar Campanha")
+            st.subheader("Editar Campanha" if camp_edit else "Criar Campanha")
             
             col1, col2 = st.columns(2)
             
             with col1:
-                nome = st.text_input("Nome da Campanha *")
+                nome = st.text_input("Nome da Campanha *", value=camp_edit['nome'] if camp_edit else "")
                 
                 clientes = data_manager.get_clientes()
                 if clientes:
                     opcoes = {c['nome']: c for c in clientes}
-                    cliente_sel = st.selectbox("Cliente *", list(opcoes.keys()))
+                    cliente_atual = camp_edit.get('cliente_nome', '') if camp_edit else None
+                    idx = list(opcoes.keys()).index(cliente_atual) if cliente_atual in opcoes else 0
+                    cliente_sel = st.selectbox("Cliente *", list(opcoes.keys()), index=idx)
                     cliente_obj = opcoes.get(cliente_sel)
                 else:
                     st.warning("Cadastre um cliente primeiro")
                     cliente_obj = None
                 
-                data_inicio = st.date_input("Data Inicio", value=datetime.now())
-                data_fim = st.date_input("Data Fim", value=datetime.now() + timedelta(days=30))
+                di_val = datetime.strptime(camp_edit['data_inicio'], '%d/%m/%Y') if camp_edit else datetime.now()
+                df_val = datetime.strptime(camp_edit['data_fim'], '%d/%m/%Y') if camp_edit else datetime.now() + timedelta(days=30)
+                data_inicio = st.date_input("Data Inicio", value=di_val)
+                data_fim = st.date_input("Data Fim", value=df_val)
             
             with col2:
-                tipo_dados = st.selectbox("Tipo de Dados", ["estatico", "dinamico"],
+                tipo_idx = 0 if camp_edit and camp_edit.get('tipo_dados') == 'estatico' else 1
+                tipo_dados = st.selectbox("Tipo de Dados", ["estatico", "dinamico"], index=tipo_idx if camp_edit else 0,
                                          help="Estatico: dados congelados | Dinamico: atualiza via API")
-                is_aon = st.checkbox("Campanha AON", help="Habilita graficos de evolucao temporal")
-                objetivo = st.text_area("Objetivo", height=100)
+                is_aon = st.checkbox("Campanha AON", value=camp_edit.get('is_aon', False) if camp_edit else False,
+                                    help="Habilita graficos de evolucao temporal")
+                objetivo = st.text_area("Objetivo", value=camp_edit.get('objetivo', '') if camp_edit else "", height=100)
             
             st.markdown("**Metricas a Coletar:**")
+            metricas_cfg = camp_edit.get('metricas_selecionadas', {}) if camp_edit else {}
+            
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                views = st.checkbox("Views", value=True)
-                alcance = st.checkbox("Alcance", value=True)
+                views = st.checkbox("Views", value=metricas_cfg.get('views', True))
+                alcance = st.checkbox("Alcance", value=metricas_cfg.get('alcance', True))
             with col2:
-                interacoes = st.checkbox("Interacoes", value=True)
-                impressoes = st.checkbox("Impressoes", value=True)
+                interacoes = st.checkbox("Interacoes", value=metricas_cfg.get('interacoes', True))
+                impressoes = st.checkbox("Impressoes", value=metricas_cfg.get('impressoes', True))
             with col3:
-                curtidas = st.checkbox("Curtidas", value=True)
-                comentarios = st.checkbox("Comentarios", value=True)
+                curtidas = st.checkbox("Curtidas", value=metricas_cfg.get('curtidas', True))
+                comentarios = st.checkbox("Comentarios", value=metricas_cfg.get('comentarios', True))
             with col4:
-                compartilhamentos = st.checkbox("Compartilhamentos", value=True)
-                saves = st.checkbox("Saves", value=True)
+                compartilhamentos = st.checkbox("Compartilhamentos", value=metricas_cfg.get('compartilhamentos', True))
+                saves = st.checkbox("Saves", value=metricas_cfg.get('saves', True))
             
             col1, col2 = st.columns(2)
             with col1:
-                clique_link = st.checkbox("Cliques Link (Stories)")
+                clique_link = st.checkbox("Cliques Link (Stories)", value=metricas_cfg.get('clique_link', False))
             with col2:
-                cupom = st.checkbox("Conversoes Cupom")
+                cupom = st.checkbox("Conversoes Cupom", value=metricas_cfg.get('cupom_conversoes', False))
             
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             with col1:
-                if st.form_submit_button("Criar Campanha", use_container_width=True):
+                if st.form_submit_button("Salvar", use_container_width=True):
                     if nome and cliente_obj:
-                        data_manager.criar_campanha({
+                        dados = {
                             'nome': nome,
                             'cliente_id': cliente_obj['id'],
                             'cliente_nome': cliente_obj['nome'],
@@ -83,16 +95,30 @@ def render():
                                 'compartilhamentos': compartilhamentos, 'saves': saves,
                                 'clique_link': clique_link, 'cupom_conversoes': cupom
                             }
-                        })
+                        }
+                        if camp_edit:
+                            data_manager.atualizar_campanha(edit_id, dados)
+                            st.success("Campanha atualizada!")
+                        else:
+                            data_manager.criar_campanha(dados)
+                            st.success("Campanha criada!")
                         st.session_state.show_new_campaign = False
-                        st.success("Campanha criada!")
+                        st.session_state.edit_campanha_id = None
                         st.rerun()
                     else:
                         st.error("Preencha os campos obrigatorios")
             with col2:
                 if st.form_submit_button("Cancelar", use_container_width=True):
                     st.session_state.show_new_campaign = False
+                    st.session_state.edit_campanha_id = None
                     st.rerun()
+            with col3:
+                if camp_edit:
+                    if st.form_submit_button("Excluir", use_container_width=True):
+                        data_manager.excluir_campanha(edit_id)
+                        st.session_state.edit_campanha_id = None
+                        st.success("Campanha excluida!")
+                        st.rerun()
     
     st.markdown("---")
     
@@ -116,7 +142,7 @@ def render():
             metricas = data_manager.calcular_metricas_campanha(camp)
             aon = "[AON]" if camp.get('is_aon') else ""
             
-            col1, col2, col3, col4, col5, col6 = st.columns([3, 1, 1, 1, 1, 1])
+            col1, col2, col3, col4, col5, col6, col7 = st.columns([2.5, 0.8, 0.8, 1, 1.2, 1.2, 0.8])
             
             with col1:
                 st.write(f"**{camp['nome']}** {aon}")
@@ -128,7 +154,7 @@ def render():
             with col4:
                 st.metric("Views", funcoes_auxiliares.formatar_numero(metricas['total_views']))
             with col5:
-                if st.button("Central", key=f"ctrl_{camp['id']}"):
+                if st.button("Central da Campanha", key=f"ctrl_{camp['id']}"):
                     st.session_state.campanha_atual_id = camp['id']
                     st.session_state.current_page = 'Central'
                     st.rerun()
@@ -137,6 +163,11 @@ def render():
                     st.session_state.campanha_atual_id = camp['id']
                     st.session_state.modo_relatorio = 'campanha'
                     st.session_state.current_page = 'Relatorios'
+                    st.rerun()
+            with col7:
+                if st.button("Editar", key=f"edit_{camp['id']}"):
+                    st.session_state.edit_campanha_id = camp['id']
+                    st.session_state.show_new_campaign = False
                     st.rerun()
             
             st.markdown("---")

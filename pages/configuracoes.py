@@ -44,26 +44,71 @@ def render():
     with tab2:
         st.subheader("Configuracao de Banco de Dados")
         
-        st.info("""
-        **Recomendacao: PostgreSQL**
+        st.markdown("""
+        ### Como funciona?
         
-        Para producao, recomendamos usar PostgreSQL. Configure a variavel de ambiente:
+        **Por padrao**, o sistema usa **session_state** do Streamlit, ou seja, os dados ficam apenas 
+        na memoria enquanto a sessao esta ativa. Se voce fechar o navegador, os dados serao perdidos.
         
-        `DATABASE_URL=postgresql://user:password@host:port/database`
+        Para **persistir os dados**, voce pode configurar um banco de dados:
         
-        Para desenvolvimento, o sistema usa SQLite automaticamente.
+        ---
+        
+        ### Opcao 1: SQLite (mais simples, local)
+        
+        O SQLite salva os dados em um arquivo no servidor. Configure a variavel:
+        ```
+        DATABASE_URL=sqlite:///./air_relatorios.db
+        ```
+        
+        ---
+        
+        ### Opcao 2: PostgreSQL (recomendado para producao)
+        
+        **Sites gratuitos para testar PostgreSQL:**
+        
+        1. **Neon** (https://neon.tech) - 500MB gratis, mais rapido
+        2. **Supabase** (https://supabase.com) - 500MB gratis
+        3. **ElephantSQL** (https://elephantsql.com) - 20MB gratis (muito pequeno)
+        4. **Railway** (https://railway.app) - $5/mes de credito gratis
+        
+        **Como configurar (exemplo Neon):**
+        
+        1. Crie uma conta em https://neon.tech
+        2. Crie um novo projeto
+        3. Copie a connection string (algo como):
+           `postgresql://user:pass@ep-xyz.us-east-2.aws.neon.tech/neondb`
+        4. Configure a variavel de ambiente:
+           ```
+           DATABASE_URL=postgresql://user:pass@ep-xyz.us-east-2.aws.neon.tech/neondb
+           ```
+        
+        **No Streamlit Cloud:**
+        - Va em Settings > Secrets
+        - Adicione: `DATABASE_URL = "sua_connection_string"`
+        
+        **Localmente:**
+        - Crie um arquivo `.env` na raiz:
+          ```
+          DATABASE_URL=postgresql://user:pass@host/database
+          ```
         """)
         
+        st.markdown("---")
         st.markdown("**Status atual:**")
         
-        try:
-            from utils.database import DATABASE_URL, DB_AVAILABLE
-            if 'postgresql' in DATABASE_URL.lower():
-                st.success("Conectado ao PostgreSQL")
-            else:
-                st.warning("Usando SQLite (desenvolvimento)")
-        except:
-            st.warning("Usando session_state (sem persistencia)")
+        import os
+        db_url = os.getenv('DATABASE_URL', '')
+        
+        if 'postgresql' in db_url.lower():
+            st.success("Conectado ao PostgreSQL")
+            st.code(db_url[:50] + "..." if len(db_url) > 50 else db_url)
+        elif 'sqlite' in db_url.lower():
+            st.info("Usando SQLite (dados persistidos localmente)")
+            st.code(db_url)
+        else:
+            st.warning("Usando session_state (dados NAO persistidos - serao perdidos ao fechar)")
+            st.caption("Configure DATABASE_URL para persistir os dados")
     
     with tab3:
         st.subheader("Estatisticas do Sistema")

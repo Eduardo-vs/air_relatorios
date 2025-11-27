@@ -42,8 +42,8 @@ with col1:
     """, unsafe_allow_html=True)
 
 with col2:
-    cols = st.columns(7)
-    pages = ['Dashboard', 'Clientes', 'Influenciadores', 'Campanhas', 'Central', 'Relatorios', 'Config']
+    cols = st.columns(6)
+    pages = ['Dashboard', 'Clientes', 'Influenciadores', 'Campanhas', 'Relatorios', 'Config']
     
     for idx, page in enumerate(pages):
         with cols[idx]:
