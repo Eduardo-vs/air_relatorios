@@ -2,7 +2,6 @@
 Módulo de páginas do AIR Relatórios
 """
 
-# Importar todas as páginas para disponibilizar
 from pages import dashboard
 from pages import clientes
 from pages import influenciadores

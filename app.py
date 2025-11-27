@@ -1,6 +1,7 @@
 """
-AIR Relatórios - Sistema Completo v4.0
+AIR Relatórios - Sistema Completo v4.1
 Arquivo Principal - Estrutura Modular
+Com integração API e melhorias solicitadas
 """
 
 import streamlit as st
@@ -27,7 +28,7 @@ except ImportError as e:
 # ========================================
 st.set_page_config(
     page_title="AIR Relatórios",
-    page_icon="",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -74,7 +75,7 @@ st.markdown('<div style="margin-bottom: 2rem;"></div>', unsafe_allow_html=True)
 # SIDEBAR
 # ========================================
 with st.sidebar:
-    st.markdown("### Campanha Ativa")
+    st.markdown("### 🎯 Campanha Ativa")
     
     if st.session_state.campanhas:
         opcoes = ["Nenhuma"] + [c['nome'] for c in st.session_state.campanhas]
@@ -97,13 +98,17 @@ with st.sidebar:
                     
                     # AIR Score na sidebar
                     air_score = funcoes_auxiliares.calcular_air_score(camp)
+                    aon_badge = "🔷" if camp.get('is_aon') else ""
+                    
                     st.markdown(f"""
                     <div style='background: linear-gradient(135deg, {primary_color}, {secondary_color}); 
                                 color: white; padding: 1rem; border-radius: 12px; text-align: center; margin-bottom: 1rem;'>
                         <div style='font-size: 2.5rem; font-weight: 700;'>{air_score}</div>
-                        <div style='font-size: 0.75rem; opacity: 0.9;'>AIR SCORE</div>
+                        <div style='font-size: 0.75rem; opacity: 0.9;'>AIR SCORE {aon_badge}</div>
                     </div>
                     """, unsafe_allow_html=True)
+                    
+                    metricas = data_manager.calcular_metricas_campanha(camp)
                     
                     st.markdown(f"""
                     <div class="sidebar-campaign-card">
@@ -111,8 +116,9 @@ with st.sidebar:
                         <div style="font-size: 0.7rem; color: #6b7280;">
                             {camp['cliente_nome']}<br>
                             {funcoes_auxiliares.formatar_data_br(camp['data_inicio'])} até {funcoes_auxiliares.formatar_data_br(camp['data_fim'])}<br>
-                            <strong>{len(camp['influenciadores'])}</strong> influs • 
-                            <strong>{sum([len(inf['posts']) for inf in camp['influenciadores']])}</strong> posts
+                            <strong>{metricas['total_influenciadores']}</strong> influs • 
+                            <strong>{metricas['total_posts']}</strong> posts<br>
+                            <strong>{funcoes_auxiliares.formatar_numero(metricas['total_views'])}</strong> views
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
@@ -124,22 +130,25 @@ with st.sidebar:
     
     st.markdown("<div style='height: 50px;'></div>", unsafe_allow_html=True)
     st.markdown("---")
-    st.markdown("**Atalhos Rápidos**")
+    st.markdown("**⚡ Atalhos Rápidos**")
     
-    if st.button(" Nova Campanha", key="s1", use_container_width=True):
+    if st.button("🎯 Nova Campanha", key="s1", use_container_width=True):
         st.session_state.current_page = 'Campanhas'
         st.session_state.show_new_campaign = True
         st.rerun()
     
-    if st.button(" Novo Cliente", key="s2", use_container_width=True):
+    if st.button("👥 Novo Cliente", key="s2", use_container_width=True):
         st.session_state.current_page = 'Clientes'
         st.session_state.show_new_cliente = True
         st.rerun()
     
-    if st.button(" Novo Influenciador", key="s3", use_container_width=True):
+    if st.button("👤 Novo Influenciador", key="s3", use_container_width=True):
         st.session_state.current_page = 'Influenciadores'
         st.session_state.show_new_inf = True
         st.rerun()
+    
+    st.markdown("---")
+    st.caption("v4.1 - Com integração API")
 
 # ========================================
 # ROTEAMENTO DE PÁGINAS
@@ -175,6 +184,6 @@ st.markdown("""
         <span style='color: #d1d5db;'>|</span>
         <span>Respiramos influência</span>
     </div>
-    <div>Sistema de Análise de Campanhas © 2025 | Versão 4.0 Modular</div>
+    <div>Sistema de Análise de Campanhas © 2025 | Versão 4.1 com Integração API</div>
 </div>
 """, unsafe_allow_html=True)

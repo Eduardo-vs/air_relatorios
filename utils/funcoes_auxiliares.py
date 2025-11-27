@@ -27,6 +27,14 @@ def formatar_data_br(data_str):
     except:
         return data_str
 
+def formatar_numero(num):
+    """Formata número com separador de milhares"""
+    if num >= 1000000:
+        return f"{num/1000000:.1f}M"
+    elif num >= 1000:
+        return f"{num/1000:.0f}K"
+    return str(num)
+
 def get_text_color(hex_color):
     """Retorna preto ou branco baseado na luminosidade da cor"""
     hex_color = hex_color.lstrip('#')
@@ -81,6 +89,33 @@ def calcular_air_score(campanha):
     score_total = score_engajamento + score_alcance + score_conversao + score_saves
     
     return min(round(score_total, 1), 100)
+
+# ========================================
+# CORES PARA GRÁFICOS
+# ========================================
+
+def get_cores_graficos():
+    """Retorna paleta de cores mais vibrantes para gráficos"""
+    return [
+        '#7c3aed',  # Roxo principal
+        '#fb923c',  # Laranja
+        '#22c55e',  # Verde
+        '#3b82f6',  # Azul
+        '#f43f5e',  # Rosa/Vermelho
+        '#a855f7',  # Roxo claro
+        '#14b8a6',  # Teal
+        '#eab308',  # Amarelo
+        '#6366f1',  # Indigo
+        '#ec4899',  # Pink
+    ]
+
+def get_color_scale_vibrante():
+    """Retorna escala de cores vibrante"""
+    return [
+        [0, '#7c3aed'],
+        [0.5, '#a855f7'],
+        [1, '#fb923c']
+    ]
 
 # ========================================
 # ANÁLISE DE SENTIMENTO (IA)
@@ -281,6 +316,55 @@ def aplicar_css_global(primary_color, secondary_color):
             font-size: 1rem;
             opacity: 0.9;
             margin-top: 0.5rem;
+        }}
+        
+        /* Cards de métricas */
+        .metric-card {{
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }}
+        
+        .metric-value {{
+            font-size: 2rem;
+            font-weight: 700;
+            color: {primary_color};
+        }}
+        
+        .metric-label {{
+            font-size: 0.85rem;
+            color: #6b7280;
+            margin-top: 0.5rem;
+        }}
+        
+        /* Influenciador card */
+        .influencer-card {{
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+        }}
+        
+        .influencer-photo {{
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            object-fit: cover;
+        }}
+        
+        /* Notas/Campo de escrita */
+        .notes-area {{
+            background: #fefce8;
+            border: 1px solid #fef08a;
+            border-radius: 12px;
+            padding: 1rem;
         }}
     </style>
     """, unsafe_allow_html=True)

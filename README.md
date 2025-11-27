@@ -1,173 +1,160 @@
-#  AIR Relatórios v4.0 - Sistema Modular
+# 📊 AIR Relatórios v4.1 - Sistema Completo
 
-##  Estrutura do Projeto
+## 🚀 Novidades da Versão 4.1
+
+### Integração com API
+- **Busca de Perfis via API**: Endpoint para buscar ID do perfil
+- **Dados Completos do Perfil**: Endpoint para dados detalhados
+- **Inserção em Lote**: Adicione múltiplos influenciadores de uma vez
+
+### Melhorias Solicitadas
+
+#### 📊 Relatório - Página 1 (Big Numbers)
+- ✅ Total de influenciadores adicionado
+- ✅ Total de seguidores adicionado
+- ✅ Alcance adicionado
+- ✅ Filtro por Views/Alcance/Interações/Impressões
+- ✅ Gráfico de barras com percentual por formato (removido pizza)
+- ✅ Gráfico RADAR para performance por tamanho de influenciador
+- ✅ Campo de notas/escrita livre
+
+#### 📈 Relatório - Página 2 (Gráficos AON)
+- ✅ Gráficos combinados com barra + linha
+- ✅ Cores mais vibrantes nos gráficos
+
+#### 🏆 Relatório - Página 3 (Top Conteúdo)
+- ✅ Tabela melhorada com foto e link do conteúdo
+- ✅ Ordenação por Taxa de Engajamento e Taxa de Alcance
+- ✅ Visualização de mídias dos posts
+
+#### 👤 Relatório - Página 4 (Influenciadores)
+- ✅ Ranking de métricas
+- ✅ Desempenho por classificação
+- ✅ Gráficos combinados barra + linha
+
+#### 🔧 Outras Melhorias
+- ✅ **AON por Campanha**: Agora é configurado por campanha, não mais por cliente
+- ✅ **Filtros Globais**: Cliente, campanha e janela de data em todas as páginas
+- ✅ **Relatório por Cliente**: Métricas agrupadas por cliente
+- ✅ Novas métricas: Alcance e Impressões
+
+## 📁 Estrutura do Projeto
 
 ```
 air_relatorios/
-
- app.py                          # Arquivo principal (já criado )
-
- utils/                          # Módulos auxiliares
-    __init__.py
-    funcoes_auxiliares.py      # Funções de apoio ()
-    data_manager.py             # Gerenciamento de dados ()
-
- pages/                          # Páginas do sistema
-     __init__.py
-     dashboard.py                # Dashboard geral ()
-     clientes.py                 # Gestão de clientes ()
-     influenciadores.py          # Gestão de influs ()
-     campanhas.py                # Lista de campanhas ()
-     configuracoes.py            # Configurações ()
-    
-     campanha/                   # Módulo de relatório
-         __init__.py
-         relatorio_completo.py   # RELATÓRIO COMPLETO (⏳ próximo)
+├── app.py                          # Arquivo principal
+├── requirements.txt                # Dependências
+├── .gitignore
+├── .streamlit/
+│   └── config.toml                 # Configurações do Streamlit
+├── utils/
+│   ├── __init__.py
+│   ├── api_client.py               # 🆕 Cliente API para endpoints
+│   ├── data_manager.py             # Gerenciamento de dados
+│   └── funcoes_auxiliares.py       # Funções auxiliares
+└── pages/
+    ├── __init__.py
+    ├── dashboard.py                # Dashboard geral
+    ├── clientes.py                 # Gestão de clientes
+    ├── influenciadores.py          # 🔄 Com integração API
+    ├── campanhas.py                # 🔄 Com AON por campanha
+    ├── configuracoes.py            # Configurações
+    └── campanha/
+        ├── __init__.py
+        └── relatorio_completo.py   # 🔄 Relatório completo melhorado
 ```
 
-##  Arquivos Criados (1250+ linhas)
+## 🔌 Endpoints da API
 
-1. **app.py** - Arquivo principal com navegação
-2. **utils/funcoes_auxiliares.py** - Todas as funções auxiliares
-3. **utils/data_manager.py** - Gerenciamento de dados
-4. **pages/dashboard.py** - Dashboard com evolução temporal
-5. **pages/clientes.py** - Gerenciamento de clientes
-6. **pages/influenciadores.py** - Base de influenciadores
-7. **pages/campanhas.py** - Lista e criação de campanhas
-8. **pages/configuracoes.py** - Personalização do sistema
-
-##  Próximo Arquivo: relatorio_completo.py
-
-Este arquivo conterá TODAS as funcionalidades de análise:
-
-###  Tabs do Relatório Completo:
-
-1. **Configuração** - Informações da campanha, AIR Score
-2. **Influenciadores** - Gestão de influs e posts
-3. **Big Numbers** - Métricas gerais e insights
-4. **Gráficos Dinâmicos AON**  (só para clientes AON)
-   - Evolução temporal
-   - Filtros de período
-   - Análise por influenciador
-
-5. **KPIs Dinâmicos** - Gráficos interativos
-   - Awareness (Views, Alcance)
-   - Engajamento (Interações, Taxa)
-   - Eficiência (CPM, Custo/Int)
-   - Tráfego (Cliques, CTR)
-
-6. **Top Influenciadores** - Ranking e análise
-7. **Top Conteúdo** - Melhores posts com mídia
-8. **Análise Detalhada** - Performance individual
-9. **Visão Comentários** - Análise de sentimento
-10. **Nuvem de Palavras** - Principais assuntos
-11. **Glossário** - Explicação de métricas
-
-##  Como Executar
-
-```bash
-cd /mnt/user-data/outputs/air_relatorios
-streamlit run app.py
+### 1. Buscar ID do Perfil
+```
+GET https://n8n.air.com.vc/webhook/2e7956e8-2f15-497d-9a10-efb21038d5e5
+Query: username=casaldr_ofc&network=instagram
 ```
 
-##  Funcionalidades Implementadas
+### 2. Buscar Dados Completos
+```
+POST https://n8n.air.com.vc/webhook-test/5246e807-0d6a-44aa-935a-88a26d831428
+Body: {"profiles": ["profile_id_1", "profile_id_2"]}
+```
 
-###  CORE
-- [x] Sistema de navegação modular
-- [x] Session state gerenciado
-- [x] CSS customizável
-- [x] Sidebar com campanha ativa
-- [x] Atalhos rápidos funcionais
+## 🎯 Como Usar a Integração com API
 
-###  CLIENTES
-- [x] CRUD de clientes
-- [x] Tipo Normal e AON
-- [x] Filtros e busca
+1. Vá para **Influenciadores** → **Adicionar via API**
+2. Digite o username (sem @) e selecione a rede
+3. Adicione à lista ou faça busca rápida
+4. Clique em **Buscar Todos na API**
+5. Os influenciadores serão adicionados automaticamente à base
 
-###  INFLUENCIADORES
-- [x] CRUD de influenciadores
-- [x] Classificação automática (Nano/Micro/Mid/Macro/Mega)
-- [x] Filtros por rede e classificação
-
-###  CAMPANHAS
-- [x] CRUD de campanhas
-- [x] Seleção de métricas condicionais
-- [x] AIR Score calculado
-- [x] Visão de lista
-
-###  DASHBOARD
-- [x] Big numbers do sistema
-- [x] Evolução mensal (6 meses)
-- [x] Destaques do mês
-- [x] Insights automáticos
-- [x] Tabela resumo (geralzão)
-
-###  ANÁLISE
-- [x] Funções de análise de sentimento (IA simulada)
-- [x] Extração de palavras-chave
-- [x] Cálculo de métricas
-- [x] AIR Score (0-100)
-
-### ⏳ EM DESENVOLVIMENTO
-- [ ] Relatório completo da campanha (próximo arquivo)
-- [ ] Todas as 11 tabs de análise
-- [ ] Gráficos dinâmicos completos
-- [ ] Sistema de comentários completo
-
-##  Diferencial: Cliente AON
-
-Clientes marcados como **AON** têm acesso a:
--  Gráficos de evolução temporal
--  Filtros avançados de período
--  Análise macro de múltiplas campanhas
--  KPIs ao longo do tempo
-
-##  Personalização
-
-O sistema permite personalizar:
-- Cor principal (botões, destaques)
-- Cor secundária (elementos)
-- Cores adaptam texto automaticamente (preto/branco)
-
-##  Métricas Disponíveis
+## 📊 Métricas Disponíveis
 
 ### Básicas
-- Views, Interações, Curtidas
-- Comentários, Compartilhamentos, Saves
+- Views, Alcance, Impressões
+- Interações, Curtidas, Comentários
+- Compartilhamentos, Saves
+
+### Calculadas
+- Taxa de Engajamento (%)
+- Taxa de Alcance (%)
+- AIR Score (0-100)
 
 ### Condicionais
 - Cliques em Link (só Stories)
 - Conversões de Cupom
 
-### Calculadas
-- Taxa de Engajamento
-- AIR Score proprietário
-- CPM, Custo por Interação
-- Taxa de Cliques (CTR)
+## 🔷 Campanhas AON
 
-##  Backup
+Campanhas marcadas como **AON** têm acesso a:
+- 📈 Gráficos de evolução temporal
+- 🔍 Filtros avançados de período
+- 📊 Análise por influenciador ao longo do tempo
+- 📉 Dados acumulados e diários
 
-Sistema completo de backup/restauração em JSON:
-- Exporta todos os dados
-- Importa com validação
-- Versionamento incluído
+## 🚀 Como Executar
 
-##  Performance
+```bash
+# Instalar dependências
+pip install -r requirements.txt
 
-- Arquitetura modular = carregamento rápido
-- Session state otimizado
-- Cálculos em cache quando possível
+# Executar
+streamlit run app.py
+```
+
+## 📦 Dependências
+
+```
+streamlit>=1.28.0
+pandas>=2.0.0
+plotly>=5.17.0
+fpdf>=1.7.2
+requests>=2.31.0
+Pillow>=10.0.0
+```
+
+## 🔄 Changelog v4.1
+
+### Adicionado
+- Integração com endpoints da API para busca de perfis
+- Inserção em lote de influenciadores
+- Métricas de Alcance e Impressões
+- Gráfico Radar para performance por classificação
+- Campo de notas/observações nas campanhas
+- AON configurável por campanha
+- Filtros globais de cliente, campanha e data
+- Relatório agrupado por cliente
+
+### Melhorado
+- Gráficos com cores mais vibrantes
+- Gráficos combinados (barra + linha)
+- Tabela de top conteúdo com fotos e links
+- Ranking de métricas na página de influenciadores
+- Performance por classificação
+
+### Removido
+- Gráfico de pizza de distribuição (substituído por barras com %)
+- AON por cliente (agora é por campanha)
 
 ---
 
-##  Status Atual
-
-**Linhas de código**: 1250+
-**Arquivos criados**: 8/9
-**Funcionalidades**: 75% completo
-
-**Falta**: Criar o arquivo `relatorio_completo.py` com todas as 11 tabs de análise (~2000 linhas)
-
----
-
-Quer que eu crie agora o arquivo `relatorio_completo.py`?
+**Versão:** 4.1
+**Última atualização:** 2025
