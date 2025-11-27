@@ -1,9 +1,4 @@
-"""
-Modulo de utilitarios do AIR Relatorios
-"""
-
+"""Modulo de utilitarios"""
 from utils import funcoes_auxiliares
 from utils import data_manager
 from utils import api_client
-
-__all__ = ['funcoes_auxiliares', 'data_manager', 'api_client']
