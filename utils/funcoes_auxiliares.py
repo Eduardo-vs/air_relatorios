@@ -222,38 +222,31 @@ def aplicar_css_global(primary_color, secondary_color):
             white-space: nowrap;
         }}
         
-        /* Botoes de navegacao superior - fundo transparente */
-        .nav-button {{
+        /* BOTOES DE NAVEGACAO - FUNDO TRANSPARENTE */
+        [data-testid="stHorizontalBlock"]:first-of-type .stButton > button {{
             background: transparent !important;
             border: none !important;
             color: {primary_color} !important;
             font-weight: 600 !important;
             padding: 0.5rem 1rem !important;
             position: relative;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: clamp(0.7rem, 1.2vw, 0.9rem);
-            white-space: nowrap;
+            box-shadow: none !important;
         }}
         
-        .nav-button:hover {{
+        [data-testid="stHorizontalBlock"]:first-of-type .stButton > button:hover {{
+            background: transparent !important;
             transform: scale(1.05);
+            color: {primary_color} !important;
+            border-bottom: 3px solid {primary_color} !important;
         }}
         
-        .nav-button:hover::after,
-        .nav-button.active::after {{
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: {primary_color};
-            border-radius: 2px;
+        [data-testid="stHorizontalBlock"]:first-of-type .stButton > button:focus {{
+            background: transparent !important;
+            box-shadow: none !important;
         }}
         
         /* Botoes gerais */
-        .stButton>button {{
+        .stButton > button {{
             background-color: {primary_color};
             color: {text_color_primary};
             border: none;
@@ -265,7 +258,7 @@ def aplicar_css_global(primary_color, secondary_color):
             white-space: nowrap;
         }}
         
-        .stButton>button:hover {{
+        .stButton > button:hover {{
             opacity: 0.9;
             transform: translateY(-1px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.15);
@@ -320,6 +313,7 @@ def aplicar_css_global(primary_color, secondary_color):
             color: {text_color_primary};
         }}
         
+        /* AIR SCORE CARD */
         .air-score-card {{
             background: linear-gradient(135deg, {primary_color}, {secondary_color});
             color: white;
@@ -327,6 +321,7 @@ def aplicar_css_global(primary_color, secondary_color):
             border-radius: 16px;
             text-align: center;
             box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+            grid-row: span 2;
         }}
         
         .air-score-number {{
@@ -343,6 +338,7 @@ def aplicar_css_global(primary_color, secondary_color):
             white-space: nowrap;
         }}
         
+        /* CARDS DE METRICAS */
         .card-metric {{
             background: #f9fafb;
             border: 1px solid #e5e7eb;
@@ -378,32 +374,24 @@ def aplicar_css_global(primary_color, secondary_color):
             white-space: nowrap;
         }}
         
-        /* Posts selecionados */
-        .post-selecionado {{
-            background: rgba(124, 58, 237, 0.1);
+        /* Janela de posts com scroll */
+        .posts-scroll-container {{
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 10px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 1rem;
+            background: #fafafa;
+        }}
+        
+        .posts-selecionados-container {{
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 1rem;
             border: 1px solid {primary_color};
             border-radius: 8px;
-            padding: 0.5rem;
-            margin: 0.25rem 0;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }}
-        
-        .post-selecionado img {{
-            width: 40px;
-            height: 40px;
-            object-fit: cover;
-            border-radius: 4px;
-        }}
-        
-        .post-selecionado .legenda {{
-            font-size: 0.75rem;
-            color: #6b7280;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            max-width: 150px;
+            background: rgba(124, 58, 237, 0.05);
         }}
         
         /* Tabelas */

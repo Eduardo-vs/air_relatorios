@@ -173,164 +173,183 @@ def render_form_post_api(campanha, inf):
         st.session_state.posts_selecionados = []
     if 'posts_api_result' not in st.session_state:
         st.session_state.posts_api_result = None
-    if 'posts_api_page' not in st.session_state:
-        st.session_state.posts_api_page = 0
+    if 'api_filters' not in st.session_state:
+        st.session_state.api_filters = {}
     
-    col1, col2 = st.columns(2)
+    # Filtros
+    st.markdown("**Filtros:**")
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        # Filtros
-        st.markdown("**Filtros:**")
-        
-        col_a, col_b = st.columns(2)
-        with col_a:
-            start_date = st.date_input("Data Inicio", value=datetime.now() - timedelta(days=30), key=f"api_di_{inf['id']}")
-        with col_b:
-            end_date = st.date_input("Data Fim", value=datetime.now(), key=f"api_df_{inf['id']}")
-        
-        post_types = st.multiselect("Tipos de Post", ["post", "reel", "story"], default=["post", "reel"], key=f"api_types_{inf['id']}")
-        
-        text_filter = st.text_input("Filtrar por texto na legenda", placeholder="Ex: pantene", key=f"api_text_{inf['id']}")
-        
-        col_a, col_b = st.columns(2)
-        with col_a:
-            if st.button("Buscar Posts", use_container_width=True, key=f"buscar_posts_{inf['id']}"):
-                with st.spinner("Buscando posts..."):
-                    profile_id = inf.get('profile_id')
-                    if profile_id:
-                        resultado = api_client.buscar_posts(
-                            profile_id=profile_id,
-                            start_date=start_date.strftime('%Y-%m-%d'),
-                            end_date=end_date.strftime('%Y-%m-%d'),
-                            post_types=post_types if post_types else None,
-                            text=text_filter if text_filter else None,
-                            page=0
-                        )
-                        
-                        if resultado.get('success'):
-                            st.session_state.posts_api_result = resultado.get('data', {})
-                            st.session_state.posts_api_page = 0
-                            st.session_state.posts_selecionados = []
-                            st.success(f"Encontrados {resultado.get('data', {}).get('count', 0)} posts!")
-                        else:
-                            st.error(f"Erro: {resultado.get('error', 'Erro desconhecido')}")
+        start_date = st.date_input("Data Inicio", value=datetime.now() - timedelta(days=30), key=f"api_di_{inf['id']}")
+    with col2:
+        end_date = st.date_input("Data Fim", value=datetime.now(), key=f"api_df_{inf['id']}")
+    with col3:
+        post_types = st.multiselect("Tipos", ["post", "reel", "story"], default=["post", "reel"], key=f"api_types_{inf['id']}")
+    with col4:
+        text_filter = st.text_input("Texto", placeholder="Ex: pantene", key=f"api_text_{inf['id']}")
+    
+    # Salvar filtros para paginacao
+    st.session_state.api_filters = {
+        'start_date': start_date.strftime('%Y-%m-%d'),
+        'end_date': end_date.strftime('%Y-%m-%d'),
+        'post_types': post_types,
+        'text_filter': text_filter,
+        'profile_id': inf.get('profile_id')
+    }
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Buscar Posts", use_container_width=True, key=f"buscar_posts_{inf['id']}"):
+            with st.spinner("Buscando posts..."):
+                profile_id = inf.get('profile_id')
+                if profile_id:
+                    resultado = api_client.buscar_posts(
+                        profile_id=profile_id,
+                        start_date=start_date.strftime('%Y-%m-%d'),
+                        end_date=end_date.strftime('%Y-%m-%d'),
+                        post_types=post_types if post_types else None,
+                        text=text_filter if text_filter else None,
+                        page=0
+                    )
+                    
+                    if resultado.get('success'):
+                        st.session_state.posts_api_result = resultado.get('data', {})
+                        st.success(f"Encontrados {resultado.get('data', {}).get('count', 0)} posts!")
                     else:
-                        st.error("Influenciador sem profile_id")
+                        st.error(f"Erro: {resultado.get('error', 'Erro desconhecido')}")
+                else:
+                    st.error("Influenciador sem profile_id")
+    
+    with col2:
+        if st.button("Cancelar", use_container_width=True, key=f"cancel_api_{inf['id']}"):
+            st.session_state.show_api_post_inf = None
+            st.session_state.posts_api_result = None
+            st.session_state.posts_selecionados = []
+            st.rerun()
+    
+    # Resultados e Selecionados lado a lado
+    if st.session_state.posts_api_result:
+        col_posts, col_selecionados = st.columns([3, 2])
         
-        with col_b:
-            if st.button("Cancelar", use_container_width=True, key=f"cancel_api_{inf['id']}"):
-                st.session_state.show_api_post_inf = None
-                st.session_state.posts_api_result = None
-                st.session_state.posts_selecionados = []
-                st.rerun()
-        
-        # Resultados
-        if st.session_state.posts_api_result:
+        with col_posts:
+            st.markdown("**Posts Encontrados:**")
+            
             result = st.session_state.posts_api_result
             items = result.get('items', [])
             total_pages = result.get('pages', 1)
             current_page = result.get('current_page', 0)
             
-            st.markdown(f"**Pagina {current_page + 1} de {total_pages}** ({result.get('count', 0)} posts)")
+            # Paginacao no topo
+            col_prev, col_info, col_next = st.columns([1, 2, 1])
+            with col_prev:
+                if current_page > 0:
+                    if st.button("< Anterior", key=f"prev_{inf['id']}", use_container_width=True):
+                        filters = st.session_state.api_filters
+                        with st.spinner("Carregando..."):
+                            resultado = api_client.buscar_posts(
+                                profile_id=filters['profile_id'],
+                                start_date=filters['start_date'],
+                                end_date=filters['end_date'],
+                                post_types=filters['post_types'] if filters['post_types'] else None,
+                                text=filters['text_filter'] if filters['text_filter'] else None,
+                                page=current_page - 1
+                            )
+                            if resultado.get('success'):
+                                st.session_state.posts_api_result = resultado.get('data', {})
+                                st.rerun()
+            with col_info:
+                st.markdown(f"<p style='text-align:center'>Pagina {current_page + 1} de {total_pages}</p>", unsafe_allow_html=True)
+            with col_next:
+                if current_page < total_pages - 1:
+                    if st.button("Proximo >", key=f"next_{inf['id']}", use_container_width=True):
+                        filters = st.session_state.api_filters
+                        with st.spinner("Carregando..."):
+                            resultado = api_client.buscar_posts(
+                                profile_id=filters['profile_id'],
+                                start_date=filters['start_date'],
+                                end_date=filters['end_date'],
+                                post_types=filters['post_types'] if filters['post_types'] else None,
+                                text=filters['text_filter'] if filters['text_filter'] else None,
+                                page=current_page + 1
+                            )
+                            if resultado.get('success'):
+                                st.session_state.posts_api_result = resultado.get('data', {})
+                                st.rerun()
             
-            for post in items:
-                post_id = post.get('post_id')
-                is_selected = post_id in [p.get('post_id') for p in st.session_state.posts_selecionados]
-                
-                col_a, col_b, col_c = st.columns([1, 3, 1])
-                
-                with col_a:
-                    if post.get('thumbnail'):
-                        st.image(post['thumbnail'], width=60)
-                
-                with col_b:
-                    legenda = post.get('caption', '')[:100] + '...' if len(post.get('caption', '')) > 100 else post.get('caption', '')
-                    st.write(f"**{post.get('type', '')}** - {post.get('posted_at', '')[:10]}")
-                    st.caption(legenda)
-                    st.caption(f"Views: {post.get('counters', {}).get('views', 0):,} | Likes: {post.get('counters', {}).get('likes', 0):,}")
-                
-                with col_c:
-                    if is_selected:
-                        st.write("Selecionado")
-                    else:
-                        if st.button("Selecionar", key=f"sel_{post_id}"):
-                            st.session_state.posts_selecionados.append(post)
-                            st.rerun()
-                
-                st.markdown("---")
+            # Container com scroll para posts
+            posts_container = st.container(height=400)
             
-            # Paginacao
-            if total_pages > 1:
-                col_a, col_b, col_c = st.columns(3)
-                with col_a:
-                    if current_page > 0:
-                        if st.button("< Anterior", key=f"prev_{inf['id']}"):
-                            with st.spinner("Carregando..."):
-                                profile_id = inf.get('profile_id')
-                                resultado = api_client.buscar_posts(
-                                    profile_id=profile_id,
-                                    start_date=start_date.strftime('%Y-%m-%d'),
-                                    end_date=end_date.strftime('%Y-%m-%d'),
-                                    post_types=post_types if post_types else None,
-                                    text=text_filter if text_filter else None,
-                                    page=current_page - 1
-                                )
-                                if resultado.get('success'):
-                                    st.session_state.posts_api_result = resultado.get('data', {})
-                                    st.rerun()
-                with col_c:
-                    if current_page < total_pages - 1:
-                        if st.button("Proximo >", key=f"next_{inf['id']}"):
-                            with st.spinner("Carregando..."):
-                                profile_id = inf.get('profile_id')
-                                resultado = api_client.buscar_posts(
-                                    profile_id=profile_id,
-                                    start_date=start_date.strftime('%Y-%m-%d'),
-                                    end_date=end_date.strftime('%Y-%m-%d'),
-                                    post_types=post_types if post_types else None,
-                                    text=text_filter if text_filter else None,
-                                    page=current_page + 1
-                                )
-                                if resultado.get('success'):
-                                    st.session_state.posts_api_result = resultado.get('data', {})
-                                    st.rerun()
-    
-    with col2:
-        # Posts selecionados
-        st.markdown("**Posts Selecionados:**")
+            with posts_container:
+                for post in items:
+                    post_id = post.get('post_id')
+                    is_selected = post_id in [p.get('post_id') for p in st.session_state.posts_selecionados]
+                    
+                    col_a, col_b, col_c = st.columns([1, 3, 1])
+                    
+                    with col_a:
+                        if post.get('thumbnail'):
+                            st.image(post['thumbnail'], width=60)
+                    
+                    with col_b:
+                        legenda = post.get('caption', '')[:80] + '...' if len(post.get('caption', '')) > 80 else post.get('caption', '')
+                        st.write(f"**{post.get('type', '')}** - {post.get('posted_at', '')[:10]}")
+                        st.caption(legenda)
+                        st.caption(f"Views: {post.get('counters', {}).get('views', 0):,} | Likes: {post.get('counters', {}).get('likes', 0):,}")
+                    
+                    with col_c:
+                        if is_selected:
+                            st.success("Selecionado")
+                        else:
+                            if st.button("+ Selecionar", key=f"sel_{post_id}"):
+                                st.session_state.posts_selecionados.append(post)
+                                st.rerun()
+                    
+                    st.divider()
         
-        if st.session_state.posts_selecionados:
-            for idx, post in enumerate(st.session_state.posts_selecionados):
-                col_a, col_b, col_c = st.columns([1, 3, 1])
-                
-                with col_a:
-                    if post.get('thumbnail'):
-                        st.image(post['thumbnail'], width=40)
-                
-                with col_b:
-                    legenda = post.get('caption', '')[:50] + '...' if len(post.get('caption', '')) > 50 else post.get('caption', '')
-                    st.caption(f"{post.get('type', '')} - {post.get('posted_at', '')[:10]}")
-                    st.caption(legenda)
-                
-                with col_c:
-                    if st.button("X", key=f"rem_sel_{idx}"):
-                        st.session_state.posts_selecionados.pop(idx)
-                        st.rerun()
-                
-                st.markdown("---")
+        with col_selecionados:
+            st.markdown("**Posts Selecionados:**")
             
-            if st.button("Adicionar Posts Selecionados", type="primary", use_container_width=True):
-                for post in st.session_state.posts_selecionados:
-                    post_processado = api_client.processar_post_api(post)
-                    data_manager.adicionar_post(campanha['id'], inf['id'], post_processado)
-                
-                st.session_state.show_api_post_inf = None
-                st.session_state.posts_api_result = None
-                st.session_state.posts_selecionados = []
-                st.success(f"{len(st.session_state.posts_selecionados)} posts adicionados!")
-                st.rerun()
-        else:
-            st.info("Selecione posts na lista ao lado")
+            # Container com scroll para selecionados
+            sel_container = st.container(height=400)
+            
+            with sel_container:
+                if st.session_state.posts_selecionados:
+                    for idx, post in enumerate(st.session_state.posts_selecionados):
+                        col_a, col_b, col_c = st.columns([1, 2, 1])
+                        
+                        with col_a:
+                            if post.get('thumbnail'):
+                                st.image(post['thumbnail'], width=40)
+                        
+                        with col_b:
+                            legenda = post.get('caption', '')[:40] + '...' if len(post.get('caption', '')) > 40 else post.get('caption', '')
+                            st.caption(f"{post.get('type', '')} - {post.get('posted_at', '')[:10]}")
+                            st.caption(legenda)
+                        
+                        with col_c:
+                            if st.button("X", key=f"rem_sel_{idx}"):
+                                st.session_state.posts_selecionados.pop(idx)
+                                st.rerun()
+                        
+                        st.divider()
+                else:
+                    st.info("Selecione posts na lista ao lado")
+            
+            # Botao de adicionar
+            if st.session_state.posts_selecionados:
+                st.markdown(f"**{len(st.session_state.posts_selecionados)} posts selecionados**")
+                if st.button("Adicionar Posts Selecionados", type="primary", use_container_width=True):
+                    count = len(st.session_state.posts_selecionados)
+                    for post in st.session_state.posts_selecionados:
+                        post_processado = api_client.processar_post_api(post)
+                        data_manager.adicionar_post(campanha['id'], inf['id'], post_processado)
+                    
+                    st.session_state.show_api_post_inf = None
+                    st.session_state.posts_api_result = None
+                    st.session_state.posts_selecionados = []
+                    st.success(f"{count} posts adicionados!")
+                    st.rerun()
 
 
 def render_form_post_manual(campanha, inf):
@@ -422,7 +441,7 @@ def render_modal_add_influenciador(campanha):
     """Modal para adicionar influenciador a campanha"""
     
     with st.container():
-        st.markdown("### Adicionar Influenciador")
+        st.markdown("### Adicionar Influenciadores")
         
         influenciadores_disponiveis = data_manager.get_influenciadores()
         
@@ -440,16 +459,25 @@ def render_modal_add_influenciador(campanha):
             else:
                 opcoes = {f"{i['nome']} (@{i['usuario']}) - {i['classificacao']}": i['id'] for i in disponiveis}
                 
-                selecionado = st.selectbox("Selecione o influenciador:", list(opcoes.keys()))
+                # Multiselect para escolher varios
+                selecionados = st.multiselect(
+                    "Selecione os influenciadores:",
+                    list(opcoes.keys()),
+                    help="Voce pode selecionar varios de uma vez"
+                )
                 
                 col1, col2 = st.columns(2)
                 with col1:
-                    if st.button("Adicionar", type="primary", use_container_width=True):
-                        inf_id = opcoes[selecionado]
-                        data_manager.adicionar_influenciador_campanha(campanha['id'], inf_id)
-                        st.session_state.show_add_inf_to_campaign = False
-                        st.success("Influenciador adicionado!")
-                        st.rerun()
+                    if st.button("Adicionar Selecionados", type="primary", use_container_width=True):
+                        if selecionados:
+                            for sel in selecionados:
+                                inf_id = opcoes[sel]
+                                data_manager.adicionar_influenciador_campanha(campanha['id'], inf_id)
+                            st.session_state.show_add_inf_to_campaign = False
+                            st.success(f"{len(selecionados)} influenciadores adicionados!")
+                            st.rerun()
+                        else:
+                            st.warning("Selecione pelo menos um influenciador")
                 with col2:
                     if st.button("Cancelar", use_container_width=True):
                         st.session_state.show_add_inf_to_campaign = False

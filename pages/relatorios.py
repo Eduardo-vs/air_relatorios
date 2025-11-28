@@ -150,6 +150,9 @@ def render_relatorio(campanhas_list, cliente=None):
 def render_big_numbers(campanhas_list, metricas, cores):
     """Pagina 1 - Big Numbers"""
     
+    primary_color = st.session_state.get('primary_color', '#7c3aed')
+    secondary_color = st.session_state.get('secondary_color', '#fb923c')
+    
     st.subheader("Metricas Gerais")
     
     # Filtro de metrica principal
@@ -163,74 +166,136 @@ def render_big_numbers(campanhas_list, metricas, cores):
     
     st.markdown("---")
     
-    # Big Numbers em grid
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    # Layout com AIR Score ocupando 2 linhas
+    col_score, col_metrics = st.columns([1, 5])
     
-    with col1:
+    with col_score:
+        # AIR Score grande ocupando 2 linhas
         st.markdown(f"""
-        <div class="card-metric">
-            <div class="card-metric-value">{metricas['total_influenciadores']}</div>
-            <div class="card-metric-label">Influenciadores</div>
+        <div style="
+            background: linear-gradient(135deg, {primary_color}, {secondary_color});
+            color: white;
+            padding: 2rem 1rem;
+            border-radius: 16px;
+            text-align: center;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+            height: 200px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        ">
+            <div style="font-size: 3rem; font-weight: 700;">{metricas['engajamento_efetivo']}%</div>
+            <div style="font-size: 0.9rem; opacity: 0.9; margin-top: 0.5rem;">TAXA DE ENGAJAMENTO</div>
+            <div style="font-size: 1.5rem; font-weight: 600; margin-top: 1rem;">{metricas['taxa_alcance']}%</div>
+            <div style="font-size: 0.8rem; opacity: 0.9;">Taxa Alcance</div>
         </div>
         """, unsafe_allow_html=True)
     
-    with col2:
-        st.markdown(f"""
-        <div class="card-metric">
-            <div class="card-metric-value">{funcoes_auxiliares.formatar_numero(metricas['total_seguidores'])}</div>
-            <div class="card-metric-label">Seguidores</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown(f"""
-        <div class="card-metric">
-            <div class="card-metric-value">{funcoes_auxiliares.formatar_numero(metricas['total_alcance'])}</div>
-            <div class="card-metric-label">Alcance</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col4:
-        st.markdown(f"""
-        <div class="card-metric">
-            <div class="card-metric-value">{funcoes_auxiliares.formatar_numero(metricas['total_views'])}</div>
-            <div class="card-metric-label">Views</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col5:
-        st.markdown(f"""
-        <div class="card-metric">
-            <div class="card-metric-value">{funcoes_auxiliares.formatar_numero(metricas['total_interacoes'])}</div>
-            <div class="card-metric-label">Interacoes</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col6:
-        st.markdown(f"""
-        <div class="card-metric">
-            <div class="card-metric-value">{metricas['total_posts']}</div>
-            <div class="card-metric-label">Posts</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    # Segunda linha
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
-    
-    with col1:
-        st.metric("Impressoes", funcoes_auxiliares.formatar_numero(metricas['total_impressoes']))
-    with col2:
-        st.metric("Curtidas", funcoes_auxiliares.formatar_numero(metricas['total_curtidas']))
-    with col3:
-        st.metric("Comentarios", funcoes_auxiliares.formatar_numero(metricas['total_comentarios']))
-    with col4:
-        st.metric("Saves", funcoes_auxiliares.formatar_numero(metricas['total_saves']))
-    with col5:
-        st.metric("Taxa Eng.", f"{metricas['engajamento_efetivo']}%")
-    with col6:
-        st.metric("Taxa Alcance", f"{metricas['taxa_alcance']}%")
+    with col_metrics:
+        # Primeira linha de cards
+        col1, col2, col3, col4, col5, col6 = st.columns(6)
+        
+        with col1:
+            st.markdown(f"""
+            <div class="card-metric">
+                <div class="card-metric-value">{metricas['total_influenciadores']}</div>
+                <div class="card-metric-label">Influenciadores</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown(f"""
+            <div class="card-metric">
+                <div class="card-metric-value">{funcoes_auxiliares.formatar_numero(metricas['total_seguidores'])}</div>
+                <div class="card-metric-label">Seguidores</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col3:
+            st.markdown(f"""
+            <div class="card-metric">
+                <div class="card-metric-value">{funcoes_auxiliares.formatar_numero(metricas['total_alcance'])}</div>
+                <div class="card-metric-label">Alcance</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col4:
+            st.markdown(f"""
+            <div class="card-metric">
+                <div class="card-metric-value">{funcoes_auxiliares.formatar_numero(metricas['total_views'])}</div>
+                <div class="card-metric-label">Views</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col5:
+            st.markdown(f"""
+            <div class="card-metric">
+                <div class="card-metric-value">{funcoes_auxiliares.formatar_numero(metricas['total_interacoes'])}</div>
+                <div class="card-metric-label">Interacoes</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col6:
+            st.markdown(f"""
+            <div class="card-metric">
+                <div class="card-metric-value">{metricas['total_posts']}</div>
+                <div class="card-metric-label">Posts</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Segunda linha de cards (todas com estilo igual)
+        col1, col2, col3, col4, col5, col6 = st.columns(6)
+        
+        with col1:
+            st.markdown(f"""
+            <div class="card-metric">
+                <div class="card-metric-value">{funcoes_auxiliares.formatar_numero(metricas['total_impressoes'])}</div>
+                <div class="card-metric-label">Impressoes</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown(f"""
+            <div class="card-metric">
+                <div class="card-metric-value">{funcoes_auxiliares.formatar_numero(metricas['total_curtidas'])}</div>
+                <div class="card-metric-label">Curtidas</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col3:
+            st.markdown(f"""
+            <div class="card-metric">
+                <div class="card-metric-value">{funcoes_auxiliares.formatar_numero(metricas['total_comentarios'])}</div>
+                <div class="card-metric-label">Comentarios</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col4:
+            st.markdown(f"""
+            <div class="card-metric">
+                <div class="card-metric-value">{funcoes_auxiliares.formatar_numero(metricas['total_saves'])}</div>
+                <div class="card-metric-label">Saves</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col5:
+            st.markdown(f"""
+            <div class="card-metric">
+                <div class="card-metric-value">{funcoes_auxiliares.formatar_numero(metricas.get('total_cliques_link', 0))}</div>
+                <div class="card-metric-label">Cliques Link</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col6:
+            custo_formatado = f"R${metricas.get('total_custo', 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            st.markdown(f"""
+            <div class="card-metric">
+                <div class="card-metric-value" style="font-size: 1rem;">{custo_formatado}</div>
+                <div class="card-metric-label">Custo Total</div>
+            </div>
+            """, unsafe_allow_html=True)
     
     st.markdown("---")
     
