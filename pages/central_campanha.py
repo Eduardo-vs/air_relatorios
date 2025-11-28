@@ -4,9 +4,9 @@ Gerenciamento de influenciadores, posts e configuracoes da campanha
 """
 
 import streamlit as st
-from datetime import datetime
+from datetime import datetime, timedelta
 import base64
-from utils import data_manager, funcoes_auxiliares
+from utils import data_manager, funcoes_auxiliares, api_client
 
 def render():
     """Renderiza central de controle da campanha"""
@@ -18,12 +18,23 @@ def render():
         return
     
     # Header
-    col1, col2 = st.columns([4, 1])
+    col1, col2, col3 = st.columns([3, 1, 1])
     with col1:
         aon_badge = "[AON]" if campanha.get('is_aon') else ""
         st.markdown(f'<p class="main-header">Central: {campanha["nome"]} {aon_badge}</p>', unsafe_allow_html=True)
         st.markdown(f'<p class="subtitle">{campanha.get("cliente_nome", "")} | {funcoes_auxiliares.formatar_data_br(campanha["data_inicio"])} - {funcoes_auxiliares.formatar_data_br(campanha["data_fim"])}</p>', unsafe_allow_html=True)
     with col2:
+        # Exportar CSV
+        influenciadores_data = data_manager.get_influenciadores_campanha(campanha['id'])
+        csv_data = funcoes_auxiliares.exportar_campanha_csv(campanha, influenciadores_data)
+        st.download_button(
+            "Exportar CSV",
+            data=csv_data,
+            file_name=f"{campanha['nome']}_dados.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+    with col3:
         if st.button("Ver Relatorio", type="primary", use_container_width=True):
             st.session_state.modo_relatorio = 'campanha'
             st.session_state.current_page = 'Relatorios'
@@ -37,27 +48,15 @@ def render():
         "Categorias de Comentarios"
     ])
     
-    # ========================================
-    # TAB 1: INFLUENCIADORES E POSTS
-    # ========================================
     with tab1:
         render_influenciadores_posts(campanha)
     
-    # ========================================
-    # TAB 2: CONFIGURACOES DA CAMPANHA
-    # ========================================
     with tab2:
         render_configuracoes_campanha(campanha)
     
-    # ========================================
-    # TAB 3: CONFIGURAR INSIGHTS
-    # ========================================
     with tab3:
         render_configurar_insights(campanha)
     
-    # ========================================
-    # TAB 4: CATEGORIAS DE COMENTARIOS
-    # ========================================
     with tab4:
         render_categorias_comentarios(campanha)
 
@@ -67,17 +66,14 @@ def render_influenciadores_posts(campanha):
     
     st.subheader("Influenciadores da Campanha")
     
-    # Botao para adicionar influenciador
     if st.button("+ Adicionar Influenciador", use_container_width=False):
         st.session_state.show_add_inf_to_campaign = True
     
-    # Modal de adicionar
     if st.session_state.get('show_add_inf_to_campaign', False):
         render_modal_add_influenciador(campanha)
     
     st.markdown("---")
     
-    # Lista de influenciadores da campanha
     influenciadores = data_manager.get_influenciadores_campanha(campanha['id'])
     
     if not influenciadores:
@@ -100,21 +96,29 @@ def render_influenciadores_posts(campanha):
             with col3:
                 st.write(f"**Rede:** {inf['network'].title()}")
                 st.write(f"**Classificacao:** {inf['classificacao']}")
-                
                 if campanha['tipo_dados'] == 'estatico':
                     st.caption("Dados congelados (campanha estatica)")
             
             st.markdown("---")
-            
-            # Posts do influenciador
             st.markdown("**Posts:**")
             
-            if st.button("+ Adicionar Post", key=f"add_post_{inf['id']}"):
-                st.session_state.show_add_post_inf = inf['id']
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("+ Buscar Posts na API", key=f"api_post_{inf['id']}"):
+                    st.session_state.show_api_post_inf = inf['id']
+                    st.session_state.show_manual_post_inf = None
+            with col2:
+                if st.button("+ Adicionar Manualmente", key=f"manual_post_{inf['id']}"):
+                    st.session_state.show_manual_post_inf = inf['id']
+                    st.session_state.show_api_post_inf = None
             
-            # Form de adicionar post
-            if st.session_state.get('show_add_post_inf') == inf['id']:
-                render_form_post(campanha, inf)
+            # Form API posts
+            if st.session_state.get('show_api_post_inf') == inf['id']:
+                render_form_post_api(campanha, inf)
+            
+            # Form manual
+            if st.session_state.get('show_manual_post_inf') == inf['id']:
+                render_form_post_manual(campanha, inf)
             
             # Lista de posts
             if inf['posts']:
@@ -140,13 +144,11 @@ def render_influenciadores_posts(campanha):
                         st.write(f"{post['interacoes']:,}")
                     
                     with col5:
-                        if post.get('imagens'):
+                        if post.get('imagens') and len(post['imagens']) > 0:
                             try:
-                                img_data = post['imagens'][0]
-                                if img_data.startswith('http'):
-                                    st.image(img_data, width=50)
-                                else:
-                                    st.image(base64.b64decode(img_data), width=50)
+                                img = post['imagens'][0]
+                                if img.startswith('http'):
+                                    st.image(img, width=50)
                             except:
                                 pass
                     
@@ -154,10 +156,265 @@ def render_influenciadores_posts(campanha):
             else:
                 st.caption("Nenhum post cadastrado")
             
-            # Remover influenciador
             if st.button("Remover da Campanha", key=f"rem_inf_{inf['id']}", type="secondary"):
                 data_manager.remover_influenciador_campanha(campanha['id'], inf['id'])
                 st.success("Influenciador removido!")
+                st.rerun()
+
+
+def render_form_post_api(campanha, inf):
+    """Formulario para buscar posts via API"""
+    
+    st.markdown("---")
+    st.markdown("#### Buscar Posts na API")
+    
+    # Inicializar estados
+    if 'posts_selecionados' not in st.session_state:
+        st.session_state.posts_selecionados = []
+    if 'posts_api_result' not in st.session_state:
+        st.session_state.posts_api_result = None
+    if 'posts_api_page' not in st.session_state:
+        st.session_state.posts_api_page = 0
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Filtros
+        st.markdown("**Filtros:**")
+        
+        col_a, col_b = st.columns(2)
+        with col_a:
+            start_date = st.date_input("Data Inicio", value=datetime.now() - timedelta(days=30), key=f"api_di_{inf['id']}")
+        with col_b:
+            end_date = st.date_input("Data Fim", value=datetime.now(), key=f"api_df_{inf['id']}")
+        
+        post_types = st.multiselect("Tipos de Post", ["post", "reel", "story"], default=["post", "reel"], key=f"api_types_{inf['id']}")
+        
+        text_filter = st.text_input("Filtrar por texto na legenda", placeholder="Ex: pantene", key=f"api_text_{inf['id']}")
+        
+        col_a, col_b = st.columns(2)
+        with col_a:
+            if st.button("Buscar Posts", use_container_width=True, key=f"buscar_posts_{inf['id']}"):
+                with st.spinner("Buscando posts..."):
+                    profile_id = inf.get('profile_id')
+                    if profile_id:
+                        resultado = api_client.buscar_posts(
+                            profile_id=profile_id,
+                            start_date=start_date.strftime('%Y-%m-%d'),
+                            end_date=end_date.strftime('%Y-%m-%d'),
+                            post_types=post_types if post_types else None,
+                            text=text_filter if text_filter else None,
+                            page=0
+                        )
+                        
+                        if resultado.get('success'):
+                            st.session_state.posts_api_result = resultado.get('data', {})
+                            st.session_state.posts_api_page = 0
+                            st.session_state.posts_selecionados = []
+                            st.success(f"Encontrados {resultado.get('data', {}).get('count', 0)} posts!")
+                        else:
+                            st.error(f"Erro: {resultado.get('error', 'Erro desconhecido')}")
+                    else:
+                        st.error("Influenciador sem profile_id")
+        
+        with col_b:
+            if st.button("Cancelar", use_container_width=True, key=f"cancel_api_{inf['id']}"):
+                st.session_state.show_api_post_inf = None
+                st.session_state.posts_api_result = None
+                st.session_state.posts_selecionados = []
+                st.rerun()
+        
+        # Resultados
+        if st.session_state.posts_api_result:
+            result = st.session_state.posts_api_result
+            items = result.get('items', [])
+            total_pages = result.get('pages', 1)
+            current_page = result.get('current_page', 0)
+            
+            st.markdown(f"**Pagina {current_page + 1} de {total_pages}** ({result.get('count', 0)} posts)")
+            
+            for post in items:
+                post_id = post.get('post_id')
+                is_selected = post_id in [p.get('post_id') for p in st.session_state.posts_selecionados]
+                
+                col_a, col_b, col_c = st.columns([1, 3, 1])
+                
+                with col_a:
+                    if post.get('thumbnail'):
+                        st.image(post['thumbnail'], width=60)
+                
+                with col_b:
+                    legenda = post.get('caption', '')[:100] + '...' if len(post.get('caption', '')) > 100 else post.get('caption', '')
+                    st.write(f"**{post.get('type', '')}** - {post.get('posted_at', '')[:10]}")
+                    st.caption(legenda)
+                    st.caption(f"Views: {post.get('counters', {}).get('views', 0):,} | Likes: {post.get('counters', {}).get('likes', 0):,}")
+                
+                with col_c:
+                    if is_selected:
+                        st.write("Selecionado")
+                    else:
+                        if st.button("Selecionar", key=f"sel_{post_id}"):
+                            st.session_state.posts_selecionados.append(post)
+                            st.rerun()
+                
+                st.markdown("---")
+            
+            # Paginacao
+            if total_pages > 1:
+                col_a, col_b, col_c = st.columns(3)
+                with col_a:
+                    if current_page > 0:
+                        if st.button("< Anterior", key=f"prev_{inf['id']}"):
+                            with st.spinner("Carregando..."):
+                                profile_id = inf.get('profile_id')
+                                resultado = api_client.buscar_posts(
+                                    profile_id=profile_id,
+                                    start_date=start_date.strftime('%Y-%m-%d'),
+                                    end_date=end_date.strftime('%Y-%m-%d'),
+                                    post_types=post_types if post_types else None,
+                                    text=text_filter if text_filter else None,
+                                    page=current_page - 1
+                                )
+                                if resultado.get('success'):
+                                    st.session_state.posts_api_result = resultado.get('data', {})
+                                    st.rerun()
+                with col_c:
+                    if current_page < total_pages - 1:
+                        if st.button("Proximo >", key=f"next_{inf['id']}"):
+                            with st.spinner("Carregando..."):
+                                profile_id = inf.get('profile_id')
+                                resultado = api_client.buscar_posts(
+                                    profile_id=profile_id,
+                                    start_date=start_date.strftime('%Y-%m-%d'),
+                                    end_date=end_date.strftime('%Y-%m-%d'),
+                                    post_types=post_types if post_types else None,
+                                    text=text_filter if text_filter else None,
+                                    page=current_page + 1
+                                )
+                                if resultado.get('success'):
+                                    st.session_state.posts_api_result = resultado.get('data', {})
+                                    st.rerun()
+    
+    with col2:
+        # Posts selecionados
+        st.markdown("**Posts Selecionados:**")
+        
+        if st.session_state.posts_selecionados:
+            for idx, post in enumerate(st.session_state.posts_selecionados):
+                col_a, col_b, col_c = st.columns([1, 3, 1])
+                
+                with col_a:
+                    if post.get('thumbnail'):
+                        st.image(post['thumbnail'], width=40)
+                
+                with col_b:
+                    legenda = post.get('caption', '')[:50] + '...' if len(post.get('caption', '')) > 50 else post.get('caption', '')
+                    st.caption(f"{post.get('type', '')} - {post.get('posted_at', '')[:10]}")
+                    st.caption(legenda)
+                
+                with col_c:
+                    if st.button("X", key=f"rem_sel_{idx}"):
+                        st.session_state.posts_selecionados.pop(idx)
+                        st.rerun()
+                
+                st.markdown("---")
+            
+            if st.button("Adicionar Posts Selecionados", type="primary", use_container_width=True):
+                for post in st.session_state.posts_selecionados:
+                    post_processado = api_client.processar_post_api(post)
+                    data_manager.adicionar_post(campanha['id'], inf['id'], post_processado)
+                
+                st.session_state.show_api_post_inf = None
+                st.session_state.posts_api_result = None
+                st.session_state.posts_selecionados = []
+                st.success(f"{len(st.session_state.posts_selecionados)} posts adicionados!")
+                st.rerun()
+        else:
+            st.info("Selecione posts na lista ao lado")
+
+
+def render_form_post_manual(campanha, inf):
+    """Formulario para adicionar post manualmente"""
+    
+    st.markdown("---")
+    st.markdown("#### Adicionar Post Manualmente")
+    
+    metricas_config = campanha.get('metricas_selecionadas', {})
+    
+    with st.form(f"form_post_manual_{inf['id']}"):
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            formato = st.selectbox("Formato *", ["Reels", "Stories", "Carrossel", "Feed", "TikTok", "YouTube"])
+            plataforma = st.selectbox("Plataforma *", [inf['network'].title()])
+            data_pub = st.date_input("Data Publicacao *", value=datetime.now())
+            link_post = st.text_input("Link do Post", placeholder="https://...")
+        
+        with col2:
+            views = st.number_input("Views", min_value=0, value=0)
+            alcance = st.number_input("Alcance", min_value=0, value=0)
+            interacoes = st.number_input("Interacoes", min_value=0, value=0)
+            impressoes = st.number_input("Impressoes", min_value=0, value=0)
+        
+        with col3:
+            curtidas = st.number_input("Curtidas", min_value=0, value=0)
+            comentarios = st.number_input("Comentarios", min_value=0, value=0)
+            compartilhamentos = st.number_input("Compartilhamentos", min_value=0, value=0)
+            saves = st.number_input("Saves", min_value=0, value=0)
+        
+        # Metricas de Stories
+        if formato == "Stories":
+            st.markdown("**Metricas de Stories:**")
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                clique_link = st.number_input("Cliques no Link", min_value=0, value=0)
+            with col2:
+                taps_forward = st.number_input("Taps Forward", min_value=0, value=0)
+            with col3:
+                taps_back = st.number_input("Taps Back", min_value=0, value=0)
+            with col4:
+                exits = st.number_input("Exits", min_value=0, value=0)
+        else:
+            clique_link = 0
+        
+        # Cupom e custo
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            cupom_codigo = st.text_input("Codigo do Cupom")
+        with col2:
+            cupom_conversoes = st.number_input("Conversoes", min_value=0, value=0)
+        with col3:
+            custo = st.number_input("Custo (R$)", min_value=0.0, value=0.0, step=0.01)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.form_submit_button("Salvar Post", use_container_width=True):
+                data_manager.adicionar_post(campanha['id'], inf['id'], {
+                    'formato': formato,
+                    'plataforma': plataforma,
+                    'data_publicacao': data_pub.strftime('%d/%m/%Y'),
+                    'link_post': link_post,
+                    'views': views,
+                    'alcance': alcance,
+                    'interacoes': interacoes,
+                    'impressoes': impressoes,
+                    'curtidas': curtidas,
+                    'comentarios_qtd': comentarios,
+                    'compartilhamentos': compartilhamentos,
+                    'saves': saves,
+                    'clique_link': clique_link,
+                    'cupom_codigo': cupom_codigo,
+                    'cupom_conversoes': cupom_conversoes,
+                    'custo': custo,
+                    'imagens': []
+                })
+                st.session_state.show_manual_post_inf = None
+                st.success("Post adicionado!")
+                st.rerun()
+        
+        with col2:
+            if st.form_submit_button("Cancelar", use_container_width=True):
+                st.session_state.show_manual_post_inf = None
                 st.rerun()
 
 
@@ -175,7 +432,6 @@ def render_modal_add_influenciador(campanha):
                 st.session_state.current_page = 'Influenciadores'
                 st.rerun()
         else:
-            # Filtrar os que ja estao na campanha
             ids_na_campanha = [i['influenciador_id'] for i in campanha['influenciadores']]
             disponiveis = [i for i in influenciadores_disponiveis if i['id'] not in ids_na_campanha]
             
@@ -200,103 +456,6 @@ def render_modal_add_influenciador(campanha):
                         st.rerun()
         
         st.markdown("---")
-
-
-def render_form_post(campanha, inf):
-    """Formulario para adicionar post"""
-    
-    with st.form(f"form_post_{inf['id']}"):
-        st.markdown("##### Novo Post")
-        
-        metricas_config = campanha.get('metricas_selecionadas', {})
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            formato = st.selectbox("Formato *", ["Reels", "Stories", "Carrossel", "Feed", "TikTok", "YouTube"])
-            plataforma = st.selectbox("Plataforma *", [inf['network'].title()])
-            data_pub = st.date_input("Data Publicacao *", value=datetime.now())
-            link_post = st.text_input("Link do Post", placeholder="https://...")
-        
-        with col2:
-            views = st.number_input("Views", min_value=0, value=0) if metricas_config.get('views', True) else 0
-            alcance = st.number_input("Alcance", min_value=0, value=0) if metricas_config.get('alcance', True) else 0
-            interacoes = st.number_input("Interacoes", min_value=0, value=0) if metricas_config.get('interacoes', True) else 0
-            impressoes = st.number_input("Impressoes", min_value=0, value=0) if metricas_config.get('impressoes', True) else 0
-        
-        with col3:
-            curtidas = st.number_input("Curtidas", min_value=0, value=0) if metricas_config.get('curtidas', True) else 0
-            comentarios = st.number_input("Comentarios", min_value=0, value=0) if metricas_config.get('comentarios', True) else 0
-            compartilhamentos = st.number_input("Compartilhamentos", min_value=0, value=0) if metricas_config.get('compartilhamentos', True) else 0
-            saves = st.number_input("Saves", min_value=0, value=0) if metricas_config.get('saves', True) else 0
-        
-        # Metricas opcionais
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            if formato == "Stories" and metricas_config.get('clique_link', False):
-                clique_link = st.number_input("Cliques no Link", min_value=0, value=0)
-            else:
-                clique_link = 0
-        
-        with col2:
-            if metricas_config.get('cupom_conversoes', False):
-                cupom_codigo = st.text_input("Codigo do Cupom")
-                cupom_conversoes = st.number_input("Conversoes", min_value=0, value=0)
-            else:
-                cupom_codigo = ""
-                cupom_conversoes = 0
-        
-        with col3:
-            custo = st.number_input("Custo (R$)", min_value=0.0, value=0.0, step=0.01)
-        
-        # Upload de imagens
-        st.markdown("**Imagens/Videos do Post**")
-        imagens_upload = st.file_uploader(
-            "Selecione as midias",
-            type=['png', 'jpg', 'jpeg', 'gif', 'mp4'],
-            accept_multiple_files=True,
-            key=f"upload_post_{inf['id']}"
-        )
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.form_submit_button("Salvar Post", use_container_width=True):
-                # Processar imagens
-                imagens_b64 = []
-                if imagens_upload:
-                    for img_file in imagens_upload:
-                        img_bytes = img_file.read()
-                        imagens_b64.append(base64.b64encode(img_bytes).decode())
-                
-                data_manager.adicionar_post(campanha['id'], inf['id'], {
-                    'formato': formato,
-                    'plataforma': plataforma,
-                    'data_publicacao': data_pub.strftime('%d/%m/%Y'),
-                    'link_post': link_post,
-                    'views': views,
-                    'alcance': alcance,
-                    'interacoes': interacoes,
-                    'impressoes': impressoes,
-                    'curtidas': curtidas,
-                    'comentarios_qtd': comentarios,
-                    'compartilhamentos': compartilhamentos,
-                    'saves': saves,
-                    'clique_link': clique_link,
-                    'cupom_codigo': cupom_codigo,
-                    'cupom_conversoes': cupom_conversoes,
-                    'custo': custo,
-                    'imagens': imagens_b64
-                })
-                st.session_state.show_add_post_inf = None
-                st.success("Post adicionado!")
-                st.rerun()
-        
-        with col2:
-            if st.form_submit_button("Cancelar", use_container_width=True):
-                st.session_state.show_add_post_inf = None
-                st.rerun()
 
 
 def render_configuracoes_campanha(campanha):
@@ -401,15 +560,11 @@ def render_configurar_insights(campanha):
         st.markdown("**Insights Personalizados**")
         st.caption("Adicione insights manuais que devem aparecer no relatorio")
         
-        # Insights existentes
         insights_personalizados = insights.get('insights_personalizados', [])
         
         for idx, insight in enumerate(insights_personalizados):
-            col1, col2 = st.columns([4, 1])
-            with col1:
-                st.text_input(f"Insight {idx+1}", value=insight, key=f"insight_{idx}", disabled=True)
+            st.text_input(f"Insight {idx+1}", value=insight, key=f"insight_{idx}", disabled=True)
         
-        # Novo insight
         novo_insight = st.text_input("Novo Insight", placeholder="Digite um insight personalizado...")
         
         if st.form_submit_button("Salvar Configuracao de Insights", use_container_width=True):

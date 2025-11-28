@@ -137,60 +137,78 @@ def render_modal_adicionar():
         tipo = st.radio("Tipo de cadastro:", ["Buscar na API", "Cadastro Manual"], horizontal=True)
         
         if tipo == "Buscar na API":
+            st.markdown("**Digite os usernames separados por virgula para adicionar varios de uma vez**")
+            
             col1, col2 = st.columns(2)
             with col1:
-                username = st.text_input("Username", placeholder="@usuario")
+                usernames = st.text_input("Usernames", placeholder="@usuario1, @usuario2, @usuario3")
             with col2:
                 network = st.selectbox("Rede Social", ["instagram", "tiktok", "youtube"])
             
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("Buscar", use_container_width=True):
-                    if username:
-                        with st.spinner("Buscando..."):
-                            resultado = api_client.buscar_profile_id(username.replace("@", ""), network)
-                            if resultado.get('success') and resultado.get('data'):
-                                dados = api_client.processar_dados_api(resultado['data'])
-                                if dados:
-                                    st.session_state.api_preview = dados
-                                    st.success("Encontrado!")
-                                else:
-                                    st.error("Erro ao processar dados")
+                    if usernames:
+                        # Separar por virgula
+                        lista_users = [u.strip().replace("@", "") for u in usernames.split(",") if u.strip()]
+                        
+                        if lista_users:
+                            st.session_state.api_preview_list = []
+                            
+                            with st.spinner(f"Buscando {len(lista_users)} perfis..."):
+                                for username in lista_users:
+                                    resultado = api_client.buscar_profile_id(username, network)
+                                    if resultado.get('success') and resultado.get('data'):
+                                        dados = api_client.processar_dados_api(resultado['data'])
+                                        if dados:
+                                            st.session_state.api_preview_list.append(dados)
+                            
+                            if st.session_state.api_preview_list:
+                                st.success(f"Encontrados {len(st.session_state.api_preview_list)} de {len(lista_users)} perfis!")
                             else:
-                                st.error("Nao encontrado")
+                                st.error("Nenhum perfil encontrado")
             with col2:
                 if st.button("Cancelar", use_container_width=True):
                     st.session_state.show_add_influenciador = False
-                    st.session_state.api_preview = None
+                    st.session_state.api_preview_list = []
                     st.rerun()
             
-            # Preview
-            if st.session_state.get('api_preview'):
-                dados = st.session_state.api_preview
+            # Preview de todos encontrados
+            if st.session_state.get('api_preview_list'):
                 st.markdown("---")
-                st.markdown("**Preview:**")
+                st.markdown(f"**{len(st.session_state.api_preview_list)} perfis encontrados:**")
                 
-                col1, col2 = st.columns([1, 3])
-                with col1:
-                    if dados.get('foto'):
-                        st.image(dados['foto'], width=80)
-                with col2:
-                    st.write(f"**{dados['nome']}** (@{dados['usuario']})")
-                    st.write(f"Seguidores: {funcoes_auxiliares.formatar_numero(dados.get('seguidores', 0))}")
-                    st.write(f"AIR Score: {dados.get('air_score', 0)} | Taxa Eng: {dados.get('engagement_rate', 0):.2f}%")
+                for idx, dados in enumerate(st.session_state.api_preview_list):
+                    col1, col2, col3 = st.columns([1, 3, 1])
+                    with col1:
+                        if dados.get('foto'):
+                            st.image(dados['foto'], width=50)
+                    with col2:
+                        st.write(f"**{dados['nome']}** (@{dados['usuario']})")
+                        st.caption(f"{funcoes_auxiliares.formatar_numero(dados.get('seguidores', 0))} seguidores | AIR Score: {dados.get('air_score', 0)}")
+                    with col3:
+                        # Verificar se ja existe
+                        existente = next((i for i in data_manager.get_influenciadores() 
+                                         if i.get('profile_id') == dados.get('profile_id')), None)
+                        if existente:
+                            st.caption("Ja existe")
+                        else:
+                            st.caption("Novo")
+                    st.markdown("---")
                 
-                if st.button("Adicionar a Base", type="primary", use_container_width=True):
-                    # Verificar duplicata
-                    existente = next((i for i in data_manager.get_influenciadores() 
-                                     if i.get('profile_id') == dados.get('profile_id')), None)
-                    if existente:
-                        st.warning("Influenciador ja existe na base!")
-                    else:
-                        data_manager.criar_influenciador(dados)
-                        st.session_state.show_add_influenciador = False
-                        st.session_state.api_preview = None
-                        st.success("Adicionado!")
-                        st.rerun()
+                if st.button("Adicionar Todos a Base", type="primary", use_container_width=True):
+                    adicionados = 0
+                    for dados in st.session_state.api_preview_list:
+                        existente = next((i for i in data_manager.get_influenciadores() 
+                                         if i.get('profile_id') == dados.get('profile_id')), None)
+                        if not existente:
+                            data_manager.criar_influenciador(dados)
+                            adicionados += 1
+                    
+                    st.session_state.show_add_influenciador = False
+                    st.session_state.api_preview_list = []
+                    st.success(f"{adicionados} influenciadores adicionados!")
+                    st.rerun()
         
         else:  # Cadastro Manual
             with st.form("form_manual"):

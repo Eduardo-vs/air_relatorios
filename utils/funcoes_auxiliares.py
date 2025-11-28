@@ -129,6 +129,50 @@ def extrair_palavras_chave(comentarios: list) -> list:
     return Counter(palavras).most_common(50)
 
 
+def exportar_campanha_csv(campanha: dict, influenciadores_data: list) -> str:
+    """Exporta dados da campanha para CSV"""
+    import csv
+    import io
+    
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=';')
+    
+    # Header
+    writer.writerow([
+        'Influenciador', 'Usuario', 'Rede', 'Classificacao', 'Seguidores',
+        'Formato', 'Data', 'Link', 'Views', 'Alcance', 'Interacoes', 
+        'Impressoes', 'Curtidas', 'Comentarios', 'Compartilhamentos', 
+        'Saves', 'Cliques Link', 'Conversoes', 'Custo'
+    ])
+    
+    # Dados
+    for inf_data in influenciadores_data:
+        for post in inf_data.get('posts', []):
+            writer.writerow([
+                inf_data.get('nome', ''),
+                inf_data.get('usuario', ''),
+                inf_data.get('network', ''),
+                inf_data.get('classificacao', ''),
+                inf_data.get('seguidores', 0),
+                post.get('formato', ''),
+                post.get('data_publicacao', ''),
+                post.get('link_post', ''),
+                post.get('views', 0),
+                post.get('alcance', 0),
+                post.get('interacoes', 0),
+                post.get('impressoes', 0),
+                post.get('curtidas', 0),
+                post.get('comentarios_qtd', 0),
+                post.get('compartilhamentos', 0),
+                post.get('saves', 0),
+                post.get('clique_link', 0),
+                post.get('cupom_conversoes', 0),
+                post.get('custo', 0)
+            ])
+    
+    return output.getvalue()
+
+
 # ========================================
 # CSS GLOBAL
 # ========================================
@@ -162,20 +206,53 @@ def aplicar_css_global(primary_color, secondary_color):
         }}
         
         .top-nav-logo h1 {{
-            font-size: 1.8rem;
+            font-size: clamp(1.2rem, 3vw, 1.8rem);
             font-weight: 700;
             margin: 0;
             color: #1a1a1a;
+            white-space: nowrap;
         }}
         
         .top-nav-logo p {{
-            font-size: 0.8rem;
+            font-size: clamp(0.6rem, 1.2vw, 0.8rem);
             margin: 0;
             color: #6b7280;
             border-left: 2px solid #e5e7eb;
             padding-left: 1rem;
+            white-space: nowrap;
         }}
         
+        /* Botoes de navegacao superior - fundo transparente */
+        .nav-button {{
+            background: transparent !important;
+            border: none !important;
+            color: {primary_color} !important;
+            font-weight: 600 !important;
+            padding: 0.5rem 1rem !important;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: clamp(0.7rem, 1.2vw, 0.9rem);
+            white-space: nowrap;
+        }}
+        
+        .nav-button:hover {{
+            transform: scale(1.05);
+        }}
+        
+        .nav-button:hover::after,
+        .nav-button.active::after {{
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: {primary_color};
+            border-radius: 2px;
+        }}
+        
+        /* Botoes gerais */
         .stButton>button {{
             background-color: {primary_color};
             color: {text_color_primary};
@@ -184,6 +261,8 @@ def aplicar_css_global(primary_color, secondary_color):
             padding: 0.6rem 1.5rem;
             font-weight: 500;
             transition: all 0.2s ease;
+            font-size: clamp(0.7rem, 1.2vw, 0.9rem);
+            white-space: nowrap;
         }}
         
         .stButton>button:hover {{
@@ -197,19 +276,26 @@ def aplicar_css_global(primary_color, secondary_color):
             border-right: 1px solid #e5e7eb;
         }}
         
+        /* Texto adaptavel - nao quebra linha */
         .main-header {{
-            font-size: 2rem;
+            font-size: clamp(1.2rem, 3vw, 2rem);
             font-weight: 600;
             color: #1a1a1a;
             margin-bottom: 0.5rem;
             border-bottom: 3px solid {primary_color};
             padding-bottom: 0.5rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }}
         
         .subtitle {{
-            font-size: 0.95rem;
+            font-size: clamp(0.7rem, 1.5vw, 0.95rem);
             color: #6b7280;
             margin-bottom: 2rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }}
         
         .stTabs [data-baseweb="tab-list"] {{
@@ -225,6 +311,8 @@ def aplicar_css_global(primary_color, secondary_color):
             padding: 0.6rem 1.2rem;
             color: #6b7280;
             font-weight: 500;
+            font-size: clamp(0.7rem, 1.2vw, 0.9rem);
+            white-space: nowrap;
         }}
         
         .stTabs [aria-selected="true"] {{
@@ -242,15 +330,17 @@ def aplicar_css_global(primary_color, secondary_color):
         }}
         
         .air-score-number {{
-            font-size: 3rem;
+            font-size: clamp(2rem, 4vw, 3rem);
             font-weight: 700;
             margin: 0;
+            white-space: nowrap;
         }}
         
         .air-score-label {{
-            font-size: 0.9rem;
+            font-size: clamp(0.7rem, 1.2vw, 0.9rem);
             opacity: 0.9;
             margin-top: 0.5rem;
+            white-space: nowrap;
         }}
         
         .card-metric {{
@@ -262,15 +352,63 @@ def aplicar_css_global(primary_color, secondary_color):
         }}
         
         .card-metric-value {{
-            font-size: 1.8rem;
+            font-size: clamp(1.2rem, 2.5vw, 1.8rem);
             font-weight: 700;
             color: {primary_color};
+            white-space: nowrap;
         }}
         
         .card-metric-label {{
-            font-size: 0.8rem;
+            font-size: clamp(0.6rem, 1vw, 0.8rem);
             color: #6b7280;
             margin-top: 0.25rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+        
+        /* Metricas Streamlit */
+        [data-testid="stMetricValue"] {{
+            font-size: clamp(1rem, 2vw, 1.5rem) !important;
+            white-space: nowrap;
+        }}
+        
+        [data-testid="stMetricLabel"] {{
+            font-size: clamp(0.6rem, 1vw, 0.8rem) !important;
+            white-space: nowrap;
+        }}
+        
+        /* Posts selecionados */
+        .post-selecionado {{
+            background: rgba(124, 58, 237, 0.1);
+            border: 1px solid {primary_color};
+            border-radius: 8px;
+            padding: 0.5rem;
+            margin: 0.25rem 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }}
+        
+        .post-selecionado img {{
+            width: 40px;
+            height: 40px;
+            object-fit: cover;
+            border-radius: 4px;
+        }}
+        
+        .post-selecionado .legenda {{
+            font-size: 0.75rem;
+            color: #6b7280;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 150px;
+        }}
+        
+        /* Tabelas */
+        .stDataFrame {{
+            font-size: clamp(0.7rem, 1.2vw, 0.9rem);
         }}
     </style>
     """, unsafe_allow_html=True)

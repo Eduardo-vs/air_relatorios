@@ -1,31 +1,104 @@
 """
-Data Manager - Gerenciamento de dados com suporte a banco de dados e session_state
+Data Manager - Gerenciamento de dados com SQLite persistente
 """
 
 import streamlit as st
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List, Dict, Optional
 import json
+import sqlite3
+import os
 
-# Tentar importar banco de dados (pode nao estar disponivel em todos os ambientes)
-try:
-    from utils.database import get_db, Cliente, Influenciador, Campanha, CampanhaInfluenciador, Post, Comentario
-    DB_AVAILABLE = True
-except:
-    DB_AVAILABLE = False
+# Caminho do banco de dados
+DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'air_relatorios.db')
+
+
+def get_db_connection():
+    """Retorna conexao com o banco SQLite"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db():
+    """Inicializa as tabelas do banco de dados"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Tabela de clientes
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS clientes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            cnpj TEXT,
+            contato TEXT,
+            email TEXT,
+            created_at TEXT
+        )
+    ''')
+    
+    # Tabela de influenciadores
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS influenciadores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            profile_id TEXT,
+            nome TEXT NOT NULL,
+            usuario TEXT NOT NULL,
+            network TEXT,
+            seguidores INTEGER DEFAULT 0,
+            foto TEXT,
+            bio TEXT,
+            engagement_rate REAL DEFAULT 0,
+            air_score REAL DEFAULT 0,
+            reach_rate REAL DEFAULT 0,
+            means TEXT,
+            hashtags TEXT,
+            classificacao TEXT,
+            total_posts INTEGER DEFAULT 0,
+            total_likes INTEGER DEFAULT 0,
+            total_views INTEGER DEFAULT 0,
+            total_comments INTEGER DEFAULT 0,
+            created_at TEXT,
+            updated_at TEXT
+        )
+    ''')
+    
+    # Tabela de campanhas
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS campanhas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            cliente_id INTEGER,
+            cliente_nome TEXT,
+            objetivo TEXT,
+            data_inicio TEXT,
+            data_fim TEXT,
+            tipo_dados TEXT DEFAULT 'estatico',
+            is_aon INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'ativa',
+            metricas_selecionadas TEXT,
+            insights_config TEXT,
+            categorias_comentarios TEXT,
+            notas TEXT,
+            influenciadores TEXT,
+            created_at TEXT
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+
+
+# Inicializa o banco ao importar o modulo
+init_db()
+
 
 # ========================================
 # INICIALIZACAO
 # ========================================
 
 def inicializar_session_state():
-    """Inicializa todas as variaveis do session state"""
-    if 'clientes' not in st.session_state:
-        st.session_state.clientes = []
-    if 'influenciadores' not in st.session_state:
-        st.session_state.influenciadores = []
-    if 'campanhas' not in st.session_state:
-        st.session_state.campanhas = []
+    """Inicializa variaveis do session state (apenas UI, nao dados)"""
     if 'campanha_atual_id' not in st.session_state:
         st.session_state.campanha_atual_id = None
     if 'current_page' not in st.session_state:
@@ -34,8 +107,6 @@ def inicializar_session_state():
         st.session_state.primary_color = '#7c3aed'
     if 'secondary_color' not in st.session_state:
         st.session_state.secondary_color = '#fb923c'
-    
-    # Modo de relatorio
     if 'modo_relatorio' not in st.session_state:
         st.session_state.modo_relatorio = 'campanha'
     if 'relatorio_cliente_id' not in st.session_state:
@@ -58,52 +129,93 @@ def classificar_influenciador(seguidores: int) -> str:
         return 'Mega'
 
 
+def calcular_classificacao(seguidores: int) -> str:
+    """Alias para classificar_influenciador"""
+    return classificar_influenciador(seguidores)
+
+
 # ========================================
 # CLIENTES
 # ========================================
 
 def criar_cliente(dados: Dict) -> Dict:
     """Cria novo cliente"""
-    cliente = {
-        'id': len(st.session_state.clientes) + 1,
-        'nome': dados['nome'],
-        'cnpj': dados.get('cnpj', ''),
-        'contato': dados.get('contato', ''),
-        'email': dados.get('email', ''),
-        'is_aon': dados.get('is_aon', False),
-        'created_at': datetime.now().isoformat()
-    }
-    st.session_state.clientes.append(cliente)
-    return cliente
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT INTO clientes (nome, cnpj, contato, email, created_at)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (
+        dados['nome'],
+        dados.get('cnpj', ''),
+        dados.get('contato', ''),
+        dados.get('email', ''),
+        datetime.now().isoformat()
+    ))
+    
+    cliente_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    
+    return {'id': cliente_id, **dados}
 
 
 def get_cliente(cliente_id: int) -> Optional[Dict]:
     """Busca cliente por ID"""
-    for cli in st.session_state.clientes:
-        if cli['id'] == cliente_id:
-            return cli
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM clientes WHERE id = ?', (cliente_id,))
+    row = cursor.fetchone()
+    conn.close()
+    
+    if row:
+        return dict(row)
     return None
 
 
 def get_clientes() -> List[Dict]:
     """Retorna todos os clientes"""
-    return st.session_state.clientes
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM clientes ORDER BY nome')
+    rows = cursor.fetchall()
+    conn.close()
+    
+    return [dict(row) for row in rows]
 
 
 def atualizar_cliente(cliente_id: int, dados: Dict) -> bool:
     """Atualiza dados de um cliente"""
-    for i, cli in enumerate(st.session_state.clientes):
-        if cli['id'] == cliente_id:
-            for key, value in dados.items():
-                if key != 'id':
-                    st.session_state.clientes[i][key] = value
-            return True
-    return False
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        UPDATE clientes SET nome=?, cnpj=?, contato=?, email=? WHERE id=?
+    ''', (
+        dados.get('nome', ''),
+        dados.get('cnpj', ''),
+        dados.get('contato', ''),
+        dados.get('email', ''),
+        cliente_id
+    ))
+    
+    conn.commit()
+    conn.close()
+    return True
 
 
 def excluir_cliente(cliente_id: int) -> bool:
     """Exclui um cliente"""
-    st.session_state.clientes = [c for c in st.session_state.clientes if c['id'] != cliente_id]
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('DELETE FROM clientes WHERE id = ?', (cliente_id,))
+    
+    conn.commit()
+    conn.close()
     return True
 
 
@@ -112,78 +224,153 @@ def excluir_cliente(cliente_id: int) -> bool:
 # ========================================
 
 def criar_influenciador(dados: Dict) -> Dict:
-    """Cria influenciador na base (dados da API ou manual)"""
-    influenciador = {
-        'id': len(st.session_state.influenciadores) + 1,
-        'profile_id': dados.get('profile_id', ''),
-        'nome': dados.get('nome', ''),
-        'usuario': dados.get('usuario', ''),
-        'network': dados.get('network', 'instagram'),
-        'seguidores': dados.get('seguidores', 0),
-        'foto': dados.get('foto', ''),
-        'bio': dados.get('bio', ''),
-        'engagement_rate': dados.get('engagement_rate', 0),
-        'air_score': dados.get('air_score', 0),
-        'reach_rate': dados.get('reach_rate', 0),
-        'means': dados.get('means', {}),
-        'hashtags': dados.get('hashtags', []),
-        'classificacao': classificar_influenciador(dados.get('seguidores', 0)),
-        'total_posts': dados.get('total_posts', 0),
-        'total_likes': dados.get('total_likes', 0),
-        'total_views': dados.get('total_views', 0),
-        'total_comments': dados.get('total_comments', 0),
-        'created_at': datetime.now().isoformat(),
-        'updated_at': datetime.now().isoformat()
-    }
-    st.session_state.influenciadores.append(influenciador)
-    return influenciador
+    """Cria influenciador na base"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    classificacao = classificar_influenciador(dados.get('seguidores', 0))
+    now = datetime.now().isoformat()
+    
+    cursor.execute('''
+        INSERT INTO influenciadores (
+            profile_id, nome, usuario, network, seguidores, foto, bio,
+            engagement_rate, air_score, reach_rate, means, hashtags,
+            classificacao, total_posts, total_likes, total_views, total_comments,
+            created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        dados.get('profile_id', ''),
+        dados.get('nome', ''),
+        dados.get('usuario', ''),
+        dados.get('network', 'instagram'),
+        dados.get('seguidores', 0),
+        dados.get('foto', ''),
+        dados.get('bio', ''),
+        dados.get('engagement_rate', 0),
+        dados.get('air_score', 0),
+        dados.get('reach_rate', 0),
+        json.dumps(dados.get('means', {})),
+        json.dumps(dados.get('hashtags', [])),
+        classificacao,
+        dados.get('total_posts', 0),
+        dados.get('total_likes', 0),
+        dados.get('total_views', 0),
+        dados.get('total_comments', 0),
+        now,
+        now
+    ))
+    
+    inf_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    
+    return {'id': inf_id, 'classificacao': classificacao, **dados}
 
 
 def get_influenciador(influenciador_id: int) -> Optional[Dict]:
     """Busca influenciador por ID"""
-    for inf in st.session_state.influenciadores:
-        if inf['id'] == influenciador_id:
-            return inf
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM influenciadores WHERE id = ?', (influenciador_id,))
+    row = cursor.fetchone()
+    conn.close()
+    
+    if row:
+        inf = dict(row)
+        inf['means'] = json.loads(inf['means']) if inf['means'] else {}
+        inf['hashtags'] = json.loads(inf['hashtags']) if inf['hashtags'] else []
+        return inf
     return None
 
 
 def get_influenciador_por_profile_id(profile_id: str) -> Optional[Dict]:
     """Busca influenciador por profile_id da API"""
-    for inf in st.session_state.influenciadores:
-        if inf.get('profile_id') == profile_id:
-            return inf
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM influenciadores WHERE profile_id = ?', (profile_id,))
+    row = cursor.fetchone()
+    conn.close()
+    
+    if row:
+        inf = dict(row)
+        inf['means'] = json.loads(inf['means']) if inf['means'] else {}
+        inf['hashtags'] = json.loads(inf['hashtags']) if inf['hashtags'] else []
+        return inf
     return None
 
 
 def atualizar_influenciador(influenciador_id: int, dados: Dict) -> bool:
     """Atualiza dados de um influenciador"""
-    for i, inf in enumerate(st.session_state.influenciadores):
-        if inf['id'] == influenciador_id:
-            for key, value in dados.items():
-                if key != 'id':
-                    st.session_state.influenciadores[i][key] = value
-            st.session_state.influenciadores[i]['updated_at'] = datetime.now().isoformat()
-            st.session_state.influenciadores[i]['classificacao'] = classificar_influenciador(
-                dados.get('seguidores', inf.get('seguidores', 0))
-            )
-            return True
-    return False
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    classificacao = classificar_influenciador(dados.get('seguidores', 0))
+    
+    cursor.execute('''
+        UPDATE influenciadores SET
+            profile_id=?, nome=?, usuario=?, network=?, seguidores=?, foto=?, bio=?,
+            engagement_rate=?, air_score=?, reach_rate=?, means=?, hashtags=?,
+            classificacao=?, total_posts=?, total_likes=?, total_views=?, total_comments=?,
+            updated_at=?
+        WHERE id=?
+    ''', (
+        dados.get('profile_id', ''),
+        dados.get('nome', ''),
+        dados.get('usuario', ''),
+        dados.get('network', 'instagram'),
+        dados.get('seguidores', 0),
+        dados.get('foto', ''),
+        dados.get('bio', ''),
+        dados.get('engagement_rate', 0),
+        dados.get('air_score', 0),
+        dados.get('reach_rate', 0),
+        json.dumps(dados.get('means', {})),
+        json.dumps(dados.get('hashtags', [])),
+        classificacao,
+        dados.get('total_posts', 0),
+        dados.get('total_likes', 0),
+        dados.get('total_views', 0),
+        dados.get('total_comments', 0),
+        datetime.now().isoformat(),
+        influenciador_id
+    ))
+    
+    conn.commit()
+    conn.close()
+    return True
 
 
 def get_influenciadores() -> List[Dict]:
     """Retorna todos os influenciadores"""
-    return st.session_state.influenciadores
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM influenciadores ORDER BY nome')
+    rows = cursor.fetchall()
+    conn.close()
+    
+    result = []
+    for row in rows:
+        inf = dict(row)
+        inf['means'] = json.loads(inf['means']) if inf['means'] else {}
+        inf['hashtags'] = json.loads(inf['hashtags']) if inf['hashtags'] else []
+        result.append(inf)
+    
+    return result
 
 
 def excluir_influenciador(influenciador_id: int) -> bool:
     """Exclui um influenciador"""
-    st.session_state.influenciadores = [i for i in st.session_state.influenciadores if i['id'] != influenciador_id]
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('DELETE FROM influenciadores WHERE id = ?', (influenciador_id,))
+    
+    conn.commit()
+    conn.close()
     return True
-
-
-def calcular_classificacao(seguidores: int) -> str:
-    """Alias para classificar_influenciador"""
-    return classificar_influenciador(seguidores)
 
 
 # ========================================
@@ -192,73 +379,176 @@ def calcular_classificacao(seguidores: int) -> str:
 
 def criar_campanha(dados: Dict) -> Dict:
     """Cria nova campanha"""
-    campanha = {
-        'id': len(st.session_state.campanhas) + 1,
-        'nome': dados['nome'],
-        'cliente_id': dados['cliente_id'],
-        'cliente_nome': dados.get('cliente_nome', ''),
-        'objetivo': dados.get('objetivo', ''),
-        'data_inicio': dados['data_inicio'],
-        'data_fim': dados['data_fim'],
-        'tipo_dados': dados.get('tipo_dados', 'estatico'),
-        'is_aon': dados.get('is_aon', False),
-        'status': dados.get('status', 'ativa'),
-        'metricas_selecionadas': dados.get('metricas_selecionadas', {
-            'views': True, 'alcance': True, 'interacoes': True, 'impressoes': True,
-            'curtidas': True, 'comentarios': True, 'compartilhamentos': True, 'saves': True,
-            'clique_link': False, 'cupom_conversoes': False
-        }),
-        'insights_config': dados.get('insights_config', {
-            'mostrar_engajamento': True, 'mostrar_alcance': True, 'mostrar_conversao': True,
-            'mostrar_saves': True, 'mostrar_comparativo_formato': True, 'mostrar_top_influenciadores': True,
-            'insights_personalizados': []
-        }),
-        'categorias_comentarios': dados.get('categorias_comentarios', [
-            'Elogio ao Produto', 'Intencao de Compra', 'Conexao Emocional', 'Duvida', 'Critica', 'Geral'
-        ]),
-        'notas': '',
-        'influenciadores': [],  # Lista de {influenciador_id, snapshot_dados, posts}
-        'created_at': datetime.now().isoformat()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    metricas_default = {
+        'views': True, 'alcance': True, 'interacoes': True, 'impressoes': True,
+        'curtidas': True, 'comentarios': True, 'compartilhamentos': True, 'saves': True,
+        'clique_link': False, 'cupom_conversoes': False
     }
-    st.session_state.campanhas.append(campanha)
-    return campanha
+    
+    insights_default = {
+        'mostrar_engajamento': True, 'mostrar_alcance': True, 'mostrar_conversao': True,
+        'mostrar_saves': True, 'mostrar_comparativo_formato': True, 'mostrar_top_influenciadores': True,
+        'insights_personalizados': []
+    }
+    
+    categorias_default = ['Elogio ao Produto', 'Intencao de Compra', 'Conexao Emocional', 'Duvida', 'Critica', 'Geral']
+    
+    cursor.execute('''
+        INSERT INTO campanhas (
+            nome, cliente_id, cliente_nome, objetivo, data_inicio, data_fim,
+            tipo_dados, is_aon, status, metricas_selecionadas, insights_config,
+            categorias_comentarios, notas, influenciadores, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        dados['nome'],
+        dados['cliente_id'],
+        dados.get('cliente_nome', ''),
+        dados.get('objetivo', ''),
+        dados['data_inicio'],
+        dados['data_fim'],
+        dados.get('tipo_dados', 'estatico'),
+        1 if dados.get('is_aon', False) else 0,
+        dados.get('status', 'ativa'),
+        json.dumps(dados.get('metricas_selecionadas', metricas_default)),
+        json.dumps(dados.get('insights_config', insights_default)),
+        json.dumps(dados.get('categorias_comentarios', categorias_default)),
+        '',
+        json.dumps([]),
+        datetime.now().isoformat()
+    ))
+    
+    camp_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    
+    return {'id': camp_id, **dados, 'influenciadores': []}
 
 
 def get_campanha(campanha_id: int) -> Optional[Dict]:
     """Busca campanha por ID"""
-    for camp in st.session_state.campanhas:
-        if camp['id'] == campanha_id:
-            return camp
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM campanhas WHERE id = ?', (campanha_id,))
+    row = cursor.fetchone()
+    conn.close()
+    
+    if row:
+        camp = dict(row)
+        camp['is_aon'] = bool(camp['is_aon'])
+        camp['metricas_selecionadas'] = json.loads(camp['metricas_selecionadas']) if camp['metricas_selecionadas'] else {}
+        camp['insights_config'] = json.loads(camp['insights_config']) if camp['insights_config'] else {}
+        camp['categorias_comentarios'] = json.loads(camp['categorias_comentarios']) if camp['categorias_comentarios'] else []
+        camp['influenciadores'] = json.loads(camp['influenciadores']) if camp['influenciadores'] else []
+        return camp
     return None
 
 
 def atualizar_campanha(campanha_id: int, dados: Dict) -> bool:
     """Atualiza dados de uma campanha"""
-    for i, camp in enumerate(st.session_state.campanhas):
-        if camp['id'] == campanha_id:
-            for key, value in dados.items():
-                if key != 'id':
-                    st.session_state.campanhas[i][key] = value
-            return True
-    return False
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Buscar campanha atual para mesclar dados
+    camp_atual = get_campanha(campanha_id)
+    if not camp_atual:
+        conn.close()
+        return False
+    
+    # Mesclar dados
+    for key, value in dados.items():
+        camp_atual[key] = value
+    
+    cursor.execute('''
+        UPDATE campanhas SET
+            nome=?, cliente_id=?, cliente_nome=?, objetivo=?, data_inicio=?, data_fim=?,
+            tipo_dados=?, is_aon=?, status=?, metricas_selecionadas=?, insights_config=?,
+            categorias_comentarios=?, notas=?, influenciadores=?
+        WHERE id=?
+    ''', (
+        camp_atual['nome'],
+        camp_atual['cliente_id'],
+        camp_atual.get('cliente_nome', ''),
+        camp_atual.get('objetivo', ''),
+        camp_atual['data_inicio'],
+        camp_atual['data_fim'],
+        camp_atual.get('tipo_dados', 'estatico'),
+        1 if camp_atual.get('is_aon', False) else 0,
+        camp_atual.get('status', 'ativa'),
+        json.dumps(camp_atual.get('metricas_selecionadas', {})),
+        json.dumps(camp_atual.get('insights_config', {})),
+        json.dumps(camp_atual.get('categorias_comentarios', [])),
+        camp_atual.get('notas', ''),
+        json.dumps(camp_atual.get('influenciadores', [])),
+        campanha_id
+    ))
+    
+    conn.commit()
+    conn.close()
+    return True
 
 
 def get_campanhas() -> List[Dict]:
     """Retorna todas as campanhas"""
-    return st.session_state.campanhas
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM campanhas ORDER BY id DESC')
+    rows = cursor.fetchall()
+    conn.close()
+    
+    result = []
+    for row in rows:
+        camp = dict(row)
+        camp['is_aon'] = bool(camp['is_aon'])
+        camp['metricas_selecionadas'] = json.loads(camp['metricas_selecionadas']) if camp['metricas_selecionadas'] else {}
+        camp['insights_config'] = json.loads(camp['insights_config']) if camp['insights_config'] else {}
+        camp['categorias_comentarios'] = json.loads(camp['categorias_comentarios']) if camp['categorias_comentarios'] else []
+        camp['influenciadores'] = json.loads(camp['influenciadores']) if camp['influenciadores'] else []
+        result.append(camp)
+    
+    return result
 
 
 def excluir_campanha(campanha_id: int) -> bool:
     """Exclui uma campanha"""
-    st.session_state.campanhas = [c for c in st.session_state.campanhas if c['id'] != campanha_id]
-    if st.session_state.campanha_atual_id == campanha_id:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('DELETE FROM campanhas WHERE id = ?', (campanha_id,))
+    
+    conn.commit()
+    conn.close()
+    
+    if st.session_state.get('campanha_atual_id') == campanha_id:
         st.session_state.campanha_atual_id = None
+    
     return True
 
 
 def get_campanhas_por_cliente(cliente_id: int) -> List[Dict]:
     """Retorna campanhas de um cliente"""
-    return [c for c in st.session_state.campanhas if c['cliente_id'] == cliente_id]
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM campanhas WHERE cliente_id = ? ORDER BY id DESC', (cliente_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    
+    result = []
+    for row in rows:
+        camp = dict(row)
+        camp['is_aon'] = bool(camp['is_aon'])
+        camp['metricas_selecionadas'] = json.loads(camp['metricas_selecionadas']) if camp['metricas_selecionadas'] else {}
+        camp['insights_config'] = json.loads(camp['insights_config']) if camp['insights_config'] else {}
+        camp['categorias_comentarios'] = json.loads(camp['categorias_comentarios']) if camp['categorias_comentarios'] else []
+        camp['influenciadores'] = json.loads(camp['influenciadores']) if camp['influenciadores'] else []
+        result.append(camp)
+    
+    return result
 
 
 # ========================================
@@ -266,11 +556,13 @@ def get_campanhas_por_cliente(cliente_id: int) -> List[Dict]:
 # ========================================
 
 def adicionar_influenciador_campanha(campanha_id: int, influenciador_id: int) -> bool:
-    """Adiciona influenciador a uma campanha com snapshot dos dados"""
+    """Adiciona influenciador a uma campanha"""
     campanha = get_campanha(campanha_id)
-    influenciador = get_influenciador(influenciador_id)
+    if not campanha:
+        return False
     
-    if not campanha or not influenciador:
+    influenciador = get_influenciador(influenciador_id)
+    if not influenciador:
         return False
     
     # Verificar se ja existe
@@ -278,21 +570,21 @@ def adicionar_influenciador_campanha(campanha_id: int, influenciador_id: int) ->
         if inf['influenciador_id'] == influenciador_id:
             return False
     
-    # Criar snapshot dos dados (para campanhas estaticas)
+    # Criar snapshot
     snapshot = {
-        'seguidores': influenciador['seguidores'],
-        'engagement_rate': influenciador['engagement_rate'],
-        'air_score': influenciador['air_score'],
-        'classificacao': influenciador['classificacao']
+        'seguidores': influenciador.get('seguidores', 0),
+        'engagement_rate': influenciador.get('engagement_rate', 0),
+        'air_score': influenciador.get('air_score', 0),
+        'classificacao': influenciador.get('classificacao', '')
     }
     
     campanha['influenciadores'].append({
-        'id': len(campanha['influenciadores']) + 1,
         'influenciador_id': influenciador_id,
         'snapshot_dados': snapshot,
         'posts': []
     })
     
+    atualizar_campanha(campanha_id, {'influenciadores': campanha['influenciadores']})
     return True
 
 
@@ -306,6 +598,8 @@ def remover_influenciador_campanha(campanha_id: int, influenciador_id: int) -> b
         inf for inf in campanha['influenciadores'] 
         if inf['influenciador_id'] != influenciador_id
     ]
+    
+    atualizar_campanha(campanha_id, {'influenciadores': campanha['influenciadores']})
     return True
 
 
@@ -317,17 +611,13 @@ def get_influenciadores_campanha(campanha_id: int) -> List[Dict]:
     
     resultado = []
     for camp_inf in campanha['influenciadores']:
-        inf = get_influenciador(camp_inf['influenciador_id'])
-        if inf:
-            # Usar dados do snapshot para campanhas estaticas
-            if campanha['tipo_dados'] == 'estatico':
-                dados = {**inf, **camp_inf['snapshot_dados']}
-            else:
-                dados = inf.copy()
-            
-            dados['campanha_influenciador_id'] = camp_inf['id']
-            dados['posts'] = camp_inf['posts']
-            resultado.append(dados)
+        influenciador = get_influenciador(camp_inf['influenciador_id'])
+        if influenciador:
+            resultado.append({
+                **influenciador,
+                'snapshot_dados': camp_inf['snapshot_dados'],
+                'posts': camp_inf['posts']
+            })
     
     return resultado
 
@@ -366,6 +656,7 @@ def adicionar_post(campanha_id: int, influenciador_id: int, dados: Dict) -> bool
                 'comentarios': []
             }
             inf['posts'].append(post)
+            atualizar_campanha(campanha_id, {'influenciadores': campanha['influenciadores']})
             return True
     return False
 
@@ -383,6 +674,7 @@ def atualizar_post(campanha_id: int, influenciador_id: int, post_id: int, dados:
                     for key, value in dados.items():
                         if key != 'id':
                             inf['posts'][i][key] = value
+                    atualizar_campanha(campanha_id, {'influenciadores': campanha['influenciadores']})
                     return True
     return False
 
@@ -396,6 +688,7 @@ def remover_post(campanha_id: int, influenciador_id: int, post_id: int) -> bool:
     for inf in campanha['influenciadores']:
         if inf['influenciador_id'] == influenciador_id:
             inf['posts'] = [p for p in inf['posts'] if p['id'] != post_id]
+            atualizar_campanha(campanha_id, {'influenciadores': campanha['influenciadores']})
             return True
     return False
 
@@ -424,6 +717,7 @@ def adicionar_comentario(campanha_id: int, influenciador_id: int, post_id: int, 
                         'aderente_campanha': dados.get('aderente_campanha', False)
                     }
                     post['comentarios'].append(comentario)
+                    atualizar_campanha(campanha_id, {'influenciadores': campanha['influenciadores']})
                     return True
     return False
 
@@ -435,7 +729,7 @@ def adicionar_comentario(campanha_id: int, influenciador_id: int, post_id: int, 
 def calcular_metricas_campanha(campanha: Dict) -> Dict:
     """Calcula todas as metricas de uma campanha"""
     totais = {
-        'total_influenciadores': len(campanha['influenciadores']),
+        'total_influenciadores': len(campanha.get('influenciadores', [])),
         'total_posts': 0,
         'total_views': 0,
         'total_alcance': 0,
@@ -455,15 +749,15 @@ def calcular_metricas_campanha(campanha: Dict) -> Dict:
         'custo_por_engajamento': 0
     }
     
-    for camp_inf in campanha['influenciadores']:
+    for camp_inf in campanha.get('influenciadores', []):
         inf = get_influenciador(camp_inf['influenciador_id'])
         if inf:
-            if campanha['tipo_dados'] == 'estatico':
-                totais['total_seguidores'] += camp_inf['snapshot_dados'].get('seguidores', 0)
+            if campanha.get('tipo_dados') == 'estatico':
+                totais['total_seguidores'] += camp_inf.get('snapshot_dados', {}).get('seguidores', 0)
             else:
                 totais['total_seguidores'] += inf.get('seguidores', 0)
         
-        for post in camp_inf['posts']:
+        for post in camp_inf.get('posts', []):
             totais['total_posts'] += 1
             totais['total_views'] += post.get('views', 0)
             totais['total_alcance'] += post.get('alcance', 0)
@@ -521,7 +815,7 @@ def calcular_metricas_multiplas_campanhas(campanhas_list: List[Dict]) -> Dict:
             if key.startswith('total_') and key != 'total_campanhas' and key != 'total_influenciadores':
                 totais[key] += metricas.get(key, 0)
         
-        for inf in camp['influenciadores']:
+        for inf in camp.get('influenciadores', []):
             influenciadores_unicos.add(inf['influenciador_id'])
     
     totais['total_influenciadores'] = len(influenciadores_unicos)
