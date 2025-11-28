@@ -42,6 +42,7 @@ with col1:
     """, unsafe_allow_html=True)
 
 with col2:
+    st.markdown('<div class="nav-btn-container">', unsafe_allow_html=True)
     cols = st.columns(6)
     pages = ['Dashboard', 'Clientes', 'Influenciadores', 'Campanhas', 'Relatorios', 'Config']
     
@@ -53,6 +54,7 @@ with col2:
                 else:
                     st.session_state.current_page = page
                 st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
 st.markdown('<div style="margin-bottom: 1.5rem;"></div>', unsafe_allow_html=True)
 

@@ -170,7 +170,19 @@ def render_big_numbers(campanhas_list, metricas, cores):
     col_score, col_metrics = st.columns([1, 5])
     
     with col_score:
-        # AIR Score grande ocupando 2 linhas
+        # AIR Score grande ocupando 2 linhas - SOMENTE AIR SCORE
+        # Calcular AIR Score medio dos influenciadores
+        todos_influs = []
+        for camp in campanhas_list:
+            for inf_camp in camp.get('influenciadores', []):
+                inf = data_manager.get_influenciador(inf_camp['influenciador_id'])
+                if inf:
+                    todos_influs.append(inf)
+        
+        air_score_medio = 0
+        if todos_influs:
+            air_score_medio = sum(i.get('air_score', 0) for i in todos_influs) / len(todos_influs)
+        
         st.markdown(f"""
         <div style="
             background: linear-gradient(135deg, {primary_color}, {secondary_color});
@@ -184,10 +196,8 @@ def render_big_numbers(campanhas_list, metricas, cores):
             flex-direction: column;
             justify-content: center;
         ">
-            <div style="font-size: 3rem; font-weight: 700;">{metricas['engajamento_efetivo']}%</div>
-            <div style="font-size: 0.9rem; opacity: 0.9; margin-top: 0.5rem;">TAXA DE ENGAJAMENTO</div>
-            <div style="font-size: 1.5rem; font-weight: 600; margin-top: 1rem;">{metricas['taxa_alcance']}%</div>
-            <div style="font-size: 0.8rem; opacity: 0.9;">Taxa Alcance</div>
+            <div style="font-size: 3.5rem; font-weight: 700;">{air_score_medio:.1f}</div>
+            <div style="font-size: 1rem; opacity: 0.9; margin-top: 0.5rem;">AIR SCORE</div>
         </div>
         """, unsafe_allow_html=True)
     
@@ -245,7 +255,7 @@ def render_big_numbers(campanhas_list, metricas, cores):
         
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # Segunda linha de cards (todas com estilo igual)
+        # Segunda linha de cards
         col1, col2, col3, col4, col5, col6 = st.columns(6)
         
         with col1:
@@ -283,17 +293,16 @@ def render_big_numbers(campanhas_list, metricas, cores):
         with col5:
             st.markdown(f"""
             <div class="card-metric">
-                <div class="card-metric-value">{funcoes_auxiliares.formatar_numero(metricas.get('total_cliques_link', 0))}</div>
-                <div class="card-metric-label">Cliques Link</div>
+                <div class="card-metric-value">{metricas['engajamento_efetivo']}%</div>
+                <div class="card-metric-label">Taxa Eng.</div>
             </div>
             """, unsafe_allow_html=True)
         
         with col6:
-            custo_formatado = f"R${metricas.get('total_custo', 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
             st.markdown(f"""
             <div class="card-metric">
-                <div class="card-metric-value" style="font-size: 1rem;">{custo_formatado}</div>
-                <div class="card-metric-label">Custo Total</div>
+                <div class="card-metric-value">{metricas['taxa_alcance']}%</div>
+                <div class="card-metric-label">Taxa Alcance</div>
             </div>
             """, unsafe_allow_html=True)
     
