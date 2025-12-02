@@ -394,6 +394,9 @@ def extrair_post_id_do_link(link: str) -> str:
     """
     import re
     
+    if not link:
+        return ''
+    
     # Remover parametros de query
     link_limpo = link.split('?')[0]
     
@@ -422,6 +425,7 @@ def buscar_post_por_link(profile_id: str, link: str, max_dias: int = 365) -> dic
     post_id_buscado = extrair_post_id_do_link(link)
     
     if not post_id_buscado:
+        st.warning(f"Nao foi possivel extrair ID do link: {link}")
         return None
     
     data_fim = datetime.now()
@@ -440,8 +444,9 @@ def buscar_post_por_link(profile_id: str, link: str, max_dias: int = 365) -> dic
         )
         
         if resultado.get('success'):
-            items = resultado.get('data', {}).get('items', [])
-            total_pages = resultado.get('data', {}).get('pages', 1)
+            data = resultado.get('data', {})
+            items = data.get('items', [])
+            total_pages = data.get('pages', 1)
             
             # Buscar em todas as paginas deste periodo
             for page in range(total_pages):
@@ -457,15 +462,25 @@ def buscar_post_por_link(profile_id: str, link: str, max_dias: int = 365) -> dic
                     items = resultado.get('data', {}).get('items', [])
                 
                 for post in items:
-                    # Comparar pelo permalink da API
-                    permalink = post.get('permalink', '')
+                    # Tentar varias formas de pegar o link do post
+                    permalink = post.get('permalink', '') or post.get('link', '') or post.get('url', '')
+                    
+                    # Se nao tem permalink, tentar construir a partir do shortcode
+                    if not permalink:
+                        shortcode = post.get('shortcode', '') or post.get('code', '')
+                        if shortcode:
+                            permalink = f"https://www.instagram.com/p/{shortcode}/"
                     
                     # Extrair o ID do permalink da API
                     post_id_api = extrair_post_id_do_link(permalink)
                     
-                    # Comparar os IDs extraidos
-                    if post_id_buscado and post_id_api:
-                        if post_id_buscado == post_id_api:
+                    # Tambem tentar comparar diretamente com shortcode
+                    shortcode = post.get('shortcode', '') or post.get('code', '')
+                    
+                    # Comparar os IDs extraidos ou shortcode
+                    if post_id_buscado:
+                        if (post_id_api and post_id_buscado == post_id_api) or \
+                           (shortcode and post_id_buscado == shortcode):
                             return post
         
         # Avancar para o periodo anterior

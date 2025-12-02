@@ -13,14 +13,20 @@ import os
 DATABASE_URL = os.getenv('DATABASE_URL', '')
 
 # Se tiver secrets do Streamlit, usar
-if hasattr(st, 'secrets') and 'DATABASE_URL' in st.secrets:
-    DATABASE_URL = st.secrets['DATABASE_URL']
+try:
+    if hasattr(st, 'secrets') and 'DATABASE_URL' in st.secrets:
+        DATABASE_URL = st.secrets['DATABASE_URL']
+except:
+    pass
 
 # Caminho do banco SQLite (fallback)
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'air_relatorios.db')
 
 # Flag para indicar se estamos usando PostgreSQL
 USING_POSTGRES = 'postgresql' in DATABASE_URL.lower() or 'postgres' in DATABASE_URL.lower()
+
+# Cache de conexao para evitar abrir/fechar a cada operacao
+_connection_cache = {}
 
 
 def parse_data_flexivel(data_str: str) -> datetime:
@@ -48,13 +54,24 @@ def parse_data_flexivel(data_str: str) -> datetime:
 
 def get_connection():
     """Retorna conexao com banco de dados (PostgreSQL ou SQLite)"""
+    global _connection_cache
     
     if USING_POSTGRES:
         try:
             import psycopg2
             from psycopg2.extras import RealDictCursor
             
+            # Reutilizar conexao se valida
+            if 'pg' in _connection_cache:
+                try:
+                    _connection_cache['pg'].cursor().execute('SELECT 1')
+                    return _connection_cache['pg']
+                except:
+                    pass
+            
             conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+            conn.autocommit = False
+            _connection_cache['pg'] = conn
             return conn
         except ImportError:
             st.error("psycopg2 nao instalado. Adicione 'psycopg2-binary' ao requirements.txt")
@@ -63,7 +80,7 @@ def get_connection():
             st.error(f"Erro ao conectar ao PostgreSQL: {e}")
             raise
     else:
-        # SQLite local
+        # SQLite local - usar nova conexao a cada vez (thread-safe)
         os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
         conn = sqlite3.connect(DB_PATH, check_same_thread=False)
         conn.row_factory = sqlite3.Row
@@ -142,10 +159,11 @@ def execute_insert(query: str, params: tuple = ()):
                 last_id = result[0]
         else:
             last_id = None
+        # NAO fechar conexao PostgreSQL (reutilizar)
     else:
         last_id = cursor.lastrowid
+        conn.close()
     
-    conn.close()
     return last_id
 
 
@@ -153,7 +171,8 @@ def execute_select(query: str, params: tuple = ()):
     """Executa SELECT e retorna todas as linhas"""
     cursor, conn = execute_sql(query, params)
     rows = cursor.fetchall()
-    conn.close()
+    if not USING_POSTGRES:
+        conn.close()
     return rows
 
 
@@ -161,7 +180,8 @@ def execute_select_one(query: str, params: tuple = ()):
     """Executa SELECT e retorna uma linha"""
     cursor, conn = execute_sql(query, params)
     row = cursor.fetchone()
-    conn.close()
+    if not USING_POSTGRES:
+        conn.close()
     return row
 
 
@@ -169,7 +189,8 @@ def execute_update(query: str, params: tuple = ()):
     """Executa UPDATE/DELETE"""
     cursor, conn = execute_sql(query, params)
     conn.commit()
-    conn.close()
+    if not USING_POSTGRES:
+        conn.close()
     return True
 
 
@@ -323,7 +344,7 @@ def salvar_faixas_classificacao(faixas: Dict) -> bool:
             ON CONFLICT (chave) DO UPDATE SET valor = EXCLUDED.valor
         ''', ('faixas_classificacao', json.dumps(faixas)))
         conn.commit()
-        conn.close()
+        # NAO fechar conexao PostgreSQL
     else:
         cursor, conn = execute_sql('''
             INSERT OR REPLACE INTO configuracoes (chave, valor)
