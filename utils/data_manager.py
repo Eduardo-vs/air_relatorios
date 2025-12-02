@@ -25,9 +25,6 @@ DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'air_
 # Flag para indicar se estamos usando PostgreSQL
 USING_POSTGRES = 'postgresql' in DATABASE_URL.lower() or 'postgres' in DATABASE_URL.lower()
 
-# Cache de conexao para evitar abrir/fechar a cada operacao
-_connection_cache = {}
-
 
 def parse_data_flexivel(data_str: str) -> datetime:
     """Parseia data em varios formatos possiveis"""
@@ -52,35 +49,24 @@ def parse_data_flexivel(data_str: str) -> datetime:
     return datetime.now()
 
 
+@st.cache_resource
+def get_pg_connection():
+    """Retorna conexao PostgreSQL (cached pelo Streamlit)"""
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+    return conn
+
+
 def get_connection():
-    """Retorna conexao com banco de dados (PostgreSQL ou SQLite)"""
-    global _connection_cache
-    
+    """Retorna conexao com banco de dados"""
     if USING_POSTGRES:
         try:
-            import psycopg2
-            from psycopg2.extras import RealDictCursor
-            
-            # Reutilizar conexao se valida
-            if 'pg' in _connection_cache:
-                try:
-                    _connection_cache['pg'].cursor().execute('SELECT 1')
-                    return _connection_cache['pg']
-                except:
-                    pass
-            
-            conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
-            conn.autocommit = False
-            _connection_cache['pg'] = conn
-            return conn
-        except ImportError:
-            st.error("psycopg2 nao instalado. Adicione 'psycopg2-binary' ao requirements.txt")
-            raise
+            return get_pg_connection()
         except Exception as e:
-            st.error(f"Erro ao conectar ao PostgreSQL: {e}")
+            st.error(f"Erro PostgreSQL: {e}")
             raise
     else:
-        # SQLite local - usar nova conexao a cada vez (thread-safe)
         os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
         conn = sqlite3.connect(DB_PATH, check_same_thread=False)
         conn.row_factory = sqlite3.Row
@@ -127,14 +113,10 @@ def execute_query(query: str, params: tuple = (), fetch: bool = False):
 
 
 def execute_sql(query: str, params: tuple = ()):
-    """
-    Executa SQL adaptando placeholders para o banco em uso.
-    Retorna (cursor, connection) para operacoes que precisam de mais controle.
-    """
+    """Executa SQL adaptando placeholders"""
     conn = get_connection()
     cursor = conn.cursor()
     
-    # Converter ? para %s se PostgreSQL
     if USING_POSTGRES:
         query = query.replace('?', '%s')
     
@@ -148,18 +130,12 @@ def execute_insert(query: str, params: tuple = ()):
     conn.commit()
     
     if USING_POSTGRES:
-        # PostgreSQL precisa de RETURNING ou lastval()
         cursor.execute("SELECT lastval()")
         result = cursor.fetchone()
-        # RealDictCursor retorna dict, nao tuple
         if result:
-            if isinstance(result, dict):
-                last_id = result.get('lastval')
-            else:
-                last_id = result[0]
+            last_id = result.get('lastval') if isinstance(result, dict) else result[0]
         else:
             last_id = None
-        # NAO fechar conexao PostgreSQL (reutilizar)
     else:
         last_id = cursor.lastrowid
         conn.close()
