@@ -18,23 +18,33 @@ def render():
         return
     
     # Header
-    col1, col2, col3 = st.columns([3, 1, 1])
+    col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
     with col1:
         aon_badge = "[AON]" if campanha.get('is_aon') else ""
         st.markdown(f'<p class="main-header">Central: {campanha["nome"]} {aon_badge}</p>', unsafe_allow_html=True)
         st.markdown(f'<p class="subtitle">{campanha.get("cliente_nome", "")} | {funcoes_auxiliares.formatar_data_br(campanha["data_inicio"])} - {funcoes_auxiliares.formatar_data_br(campanha["data_fim"])}</p>', unsafe_allow_html=True)
     with col2:
-        # Exportar CSV
+        # Exportar CSV normal
         influenciadores_data = data_manager.get_influenciadores_campanha(campanha['id'])
         csv_data = funcoes_auxiliares.exportar_campanha_csv(campanha, influenciadores_data)
         st.download_button(
-            "Exportar CSV",
+            "CSV Campanha",
             data=csv_data,
             file_name=f"{campanha['nome']}_dados.csv",
             mime="text/csv",
             use_container_width=True
         )
     with col3:
+        # Exportar CSV Balizadores
+        csv_balizadores = funcoes_auxiliares.exportar_csv_balizadores(campanha, influenciadores_data)
+        st.download_button(
+            "CSV Balizadores",
+            data=csv_balizadores,
+            file_name=f"{campanha['nome']}_balizadores.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+    with col4:
         if st.button("Ver Relatorio", type="primary", use_container_width=True):
             st.session_state.modo_relatorio = 'campanha'
             st.session_state.current_page = 'Relatorios'
@@ -82,7 +92,7 @@ def render_influenciadores_posts(campanha):
     
     for inf in influenciadores:
         with st.expander(f"{inf['nome']} (@{inf['usuario']}) - {inf['classificacao']} - {len(inf['posts'])} posts"):
-            col1, col2, col3 = st.columns([1, 2, 2])
+            col1, col2, col3, col4 = st.columns([1, 2, 2, 1.5])
             
             with col1:
                 if inf.get('foto'):
@@ -96,8 +106,28 @@ def render_influenciadores_posts(campanha):
             with col3:
                 st.write(f"**Rede:** {inf['network'].title()}")
                 st.write(f"**Classificacao:** {inf['classificacao']}")
+                if inf.get('nicho'):
+                    st.write(f"**Nicho:** {inf['nicho']}")
                 if campanha['tipo_dados'] == 'estatico':
                     st.caption("Dados congelados (campanha estatica)")
+            
+            with col4:
+                # CUSTO POR INFLUENCIADOR NA CAMPANHA
+                custo_atual = inf.get('custo_campanha', 0)
+                novo_custo = st.number_input(
+                    "Custo (R$)",
+                    min_value=0.0,
+                    value=float(custo_atual),
+                    step=100.0,
+                    key=f"custo_inf_{inf['id']}"
+                )
+                if novo_custo != custo_atual:
+                    if st.button("Salvar Custo", key=f"salvar_custo_{inf['id']}"):
+                        data_manager.atualizar_custo_influenciador_campanha(
+                            campanha['id'], inf['id'], novo_custo
+                        )
+                        st.success("Custo salvo!")
+                        st.rerun()
             
             st.markdown("---")
             st.markdown("**Posts:**")
@@ -168,14 +198,15 @@ def render_form_post_api(campanha, inf):
     st.markdown("---")
     st.markdown("#### Buscar Posts na API")
     
-    # Chaves unicas para este influenciador
     inf_id = inf['id']
     
-    # Inicializar estados se nao existirem
+    # Inicializar estados
     if f'api_posts_sel_{inf_id}' not in st.session_state:
         st.session_state[f'api_posts_sel_{inf_id}'] = []
     if f'api_result_{inf_id}' not in st.session_state:
         st.session_state[f'api_result_{inf_id}'] = None
+    if f'busca_tipo_{inf_id}' not in st.session_state:
+        st.session_state[f'busca_tipo_{inf_id}'] = 'filtros'
     if f'api_filters_{inf_id}' not in st.session_state:
         st.session_state[f'api_filters_{inf_id}'] = {
             'profile_id': inf.get('profile_id'),
@@ -185,10 +216,34 @@ def render_form_post_api(campanha, inf):
             'text': ''
         }
     
-    # Pegar filtros do session state
+    # SLIDE PARA ALTERNAR TIPO DE BUSCA
+    st.markdown("**Tipo de Busca:**")
+    tipo_busca = st.radio(
+        "Selecione o modo de busca:",
+        ["Por Filtros (data, tipo, texto)", "Por Link do Post"],
+        horizontal=True,
+        key=f"tipo_busca_radio_{inf_id}",
+        index=0 if st.session_state[f'busca_tipo_{inf_id}'] == 'filtros' else 1
+    )
+    
+    st.session_state[f'busca_tipo_{inf_id}'] = 'filtros' if 'Filtros' in tipo_busca else 'link'
+    
+    st.markdown("---")
+    
+    if st.session_state[f'busca_tipo_{inf_id}'] == 'filtros':
+        # BUSCA POR FILTROS (modo original)
+        render_busca_por_filtros(campanha, inf)
+    else:
+        # BUSCA POR LINK
+        render_busca_por_link(campanha, inf)
+
+
+def render_busca_por_filtros(campanha, inf):
+    """Busca de posts por filtros de data, tipo e texto"""
+    
+    inf_id = inf['id']
     filters = st.session_state[f'api_filters_{inf_id}']
     
-    # Filtros
     st.markdown("**Filtros:**")
     col1, col2, col3, col4 = st.columns(4)
     
@@ -234,7 +289,6 @@ def render_form_post_api(campanha, inf):
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Buscar Posts", use_container_width=True, key=f"buscar_{inf_id}"):
-            # Atualizar filtros no session state
             st.session_state[f'api_filters_{inf_id}'] = {
                 'profile_id': inf.get('profile_id'),
                 'start_date': start_date.strftime('%Y-%m-%d'),
@@ -271,26 +325,144 @@ def render_form_post_api(campanha, inf):
             st.session_state[f'api_posts_sel_{inf_id}'] = []
             st.rerun()
     
-    # Resultados e Selecionados lado a lado
+    # Exibir resultados
+    render_resultados_api(campanha, inf, buscar_pagina)
+
+
+def render_busca_por_link(campanha, inf):
+    """Busca de post por link (permalink)"""
+    
+    inf_id = inf['id']
+    
+    st.markdown("**Cole o link do post:**")
+    link_post = st.text_input(
+        "Link do Post",
+        placeholder="https://www.instagram.com/p/ABC123...",
+        key=f"link_post_{inf_id}"
+    )
+    
+    # Validar link
+    link_valido = False
+    if link_post:
+        if 'instagram.com' in link_post or 'tiktok.com' in link_post or 'youtube.com' in link_post:
+            link_valido = True
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        buscar_disabled = not link_valido
+        if st.button("Buscar Post", use_container_width=True, key=f"buscar_link_{inf_id}", disabled=buscar_disabled):
+            with st.spinner("Buscando post... (pode levar alguns segundos)"):
+                profile_id = inf.get('profile_id')
+                if profile_id:
+                    # Buscar de 30 em 30 dias ate encontrar
+                    resultado = buscar_post_por_link(profile_id, link_post)
+                    
+                    if resultado:
+                        st.session_state[f'api_result_{inf_id}'] = {'items': [resultado], 'count': 1, 'pages': 1}
+                        st.success("Post encontrado!")
+                        st.rerun()
+                    else:
+                        st.error("Post nao encontrado. Verifique o link ou tente busca por filtros.")
+                else:
+                    st.error("Influenciador sem profile_id")
+    
+    with col2:
+        if st.button("Cancelar", use_container_width=True, key=f"cancel_link_{inf_id}"):
+            st.session_state.show_api_post_inf = None
+            st.session_state[f'api_result_{inf_id}'] = None
+            st.session_state[f'api_posts_sel_{inf_id}'] = []
+            st.rerun()
+    
+    if not link_valido and link_post:
+        st.warning("Insira um link valido do Instagram, TikTok ou YouTube")
+    
+    # Exibir resultado se encontrado
+    result = st.session_state.get(f'api_result_{inf_id}')
+    if result and result.get('items'):
+        render_resultados_api(campanha, inf, lambda p: result)
+
+
+def buscar_post_por_link(profile_id: str, link: str, max_dias: int = 365) -> dict:
+    """
+    Busca post por link fazendo requisicoes de 30 em 30 dias
+    ate encontrar o post com o permalink correspondente
+    """
+    
+    data_fim = datetime.now()
+    dias_buscados = 0
+    
+    while dias_buscados < max_dias:
+        data_inicio = data_fim - timedelta(days=30)
+        
+        resultado = api_client.buscar_posts(
+            profile_id=profile_id,
+            start_date=data_inicio.strftime('%Y-%m-%d'),
+            end_date=data_fim.strftime('%Y-%m-%d'),
+            post_types=None,
+            text=None,
+            page=0
+        )
+        
+        if resultado.get('success'):
+            items = resultado.get('data', {}).get('items', [])
+            total_pages = resultado.get('data', {}).get('pages', 1)
+            
+            # Buscar em todas as paginas deste periodo
+            for page in range(total_pages):
+                if page > 0:
+                    resultado = api_client.buscar_posts(
+                        profile_id=profile_id,
+                        start_date=data_inicio.strftime('%Y-%m-%d'),
+                        end_date=data_fim.strftime('%Y-%m-%d'),
+                        post_types=None,
+                        text=None,
+                        page=page
+                    )
+                    items = resultado.get('data', {}).get('items', [])
+                
+                for post in items:
+                    permalink = post.get('permalink', '')
+                    if permalink and link in permalink:
+                        return post
+                    # Tambem checar se o link esta no post_id
+                    post_id = post.get('post_id', '')
+                    if post_id and post_id in link:
+                        return post
+        
+        # Avancar para o periodo anterior
+        data_fim = data_inicio
+        dias_buscados += 30
+    
+    return None
+
+
+def render_resultados_api(campanha, inf, buscar_pagina_func):
+    """Renderiza resultados da API"""
+    
+    inf_id = inf['id']
     result = st.session_state[f'api_result_{inf_id}']
     
-    if result:
-        col_posts, col_selecionados = st.columns([3, 2])
+    if not result:
+        return
+    
+    col_posts, col_selecionados = st.columns([3, 2])
+    
+    with col_posts:
+        st.markdown("**Posts Encontrados:**")
         
-        with col_posts:
-            st.markdown("**Posts Encontrados:**")
-            
-            items = result.get('items', [])
-            total_pages = result.get('pages', 1)
-            current_page = result.get('current_page', 0)
-            
-            # Paginacao no topo
+        items = result.get('items', [])
+        total_pages = result.get('pages', 1)
+        current_page = result.get('current_page', 0)
+        
+        # Paginacao
+        if total_pages > 1:
             col_prev, col_info, col_next = st.columns([1, 2, 1])
             with col_prev:
                 if current_page > 0:
                     if st.button("< Anterior", key=f"prev_{inf_id}", use_container_width=True):
                         with st.spinner("Carregando..."):
-                            resultado = buscar_pagina(current_page - 1)
+                            resultado = buscar_pagina_func(current_page - 1)
                             if resultado.get('success'):
                                 st.session_state[f'api_result_{inf_id}'] = resultado.get('data', {})
                                 st.rerun()
@@ -300,89 +472,88 @@ def render_form_post_api(campanha, inf):
                 if current_page < total_pages - 1:
                     if st.button("Proximo >", key=f"next_{inf_id}", use_container_width=True):
                         with st.spinner("Carregando..."):
-                            resultado = buscar_pagina(current_page + 1)
+                            resultado = buscar_pagina_func(current_page + 1)
                             if resultado.get('success'):
                                 st.session_state[f'api_result_{inf_id}'] = resultado.get('data', {})
                                 st.rerun()
+        
+        # Container com scroll
+        posts_container = st.container(height=400)
+        
+        with posts_container:
+            posts_selecionados = st.session_state[f'api_posts_sel_{inf_id}']
+            ids_selecionados = [p.get('post_id') for p in posts_selecionados]
             
-            # Container com scroll para posts
-            posts_container = st.container(height=400)
-            
-            with posts_container:
-                posts_selecionados = st.session_state[f'api_posts_sel_{inf_id}']
-                ids_selecionados = [p.get('post_id') for p in posts_selecionados]
+            for post in items:
+                post_id = post.get('post_id')
+                is_selected = post_id in ids_selecionados
                 
-                for post in items:
-                    post_id = post.get('post_id')
-                    is_selected = post_id in ids_selecionados
-                    
-                    col_a, col_b, col_c = st.columns([1, 3, 1])
+                col_a, col_b, col_c = st.columns([1, 3, 1])
+                
+                with col_a:
+                    if post.get('thumbnail'):
+                        st.image(post['thumbnail'], width=60)
+                
+                with col_b:
+                    legenda = post.get('caption', '')[:80] + '...' if len(post.get('caption', '')) > 80 else post.get('caption', '')
+                    st.write(f"**{post.get('type', '')}** - {post.get('posted_at', '')[:10]}")
+                    st.caption(legenda if legenda else "(sem legenda)")
+                    st.caption(f"Views: {post.get('counters', {}).get('views', 0):,} | Likes: {post.get('counters', {}).get('likes', 0):,}")
+                
+                with col_c:
+                    if is_selected:
+                        st.success("Selecionado")
+                    else:
+                        if st.button("+ Add", key=f"sel_{inf_id}_{post_id}"):
+                            st.session_state[f'api_posts_sel_{inf_id}'].append(post)
+                            st.rerun()
+                
+                st.divider()
+    
+    with col_selecionados:
+        st.markdown("**Posts Selecionados:**")
+        
+        posts_selecionados = st.session_state[f'api_posts_sel_{inf_id}']
+        
+        sel_container = st.container(height=400)
+        
+        with sel_container:
+            if posts_selecionados:
+                for idx, post in enumerate(posts_selecionados):
+                    col_a, col_b, col_c = st.columns([1, 2, 1])
                     
                     with col_a:
                         if post.get('thumbnail'):
-                            st.image(post['thumbnail'], width=60)
+                            st.image(post['thumbnail'], width=40)
                     
                     with col_b:
-                        legenda = post.get('caption', '')[:80] + '...' if len(post.get('caption', '')) > 80 else post.get('caption', '')
-                        st.write(f"**{post.get('type', '')}** - {post.get('posted_at', '')[:10]}")
+                        legenda = post.get('caption', '')[:40] + '...' if len(post.get('caption', '')) > 40 else post.get('caption', '')
+                        st.caption(f"{post.get('type', '')} - {post.get('posted_at', '')[:10]}")
                         st.caption(legenda if legenda else "(sem legenda)")
-                        st.caption(f"Views: {post.get('counters', {}).get('views', 0):,} | Likes: {post.get('counters', {}).get('likes', 0):,}")
                     
                     with col_c:
-                        if is_selected:
-                            st.success("Selecionado")
-                        else:
-                            if st.button("+ Add", key=f"sel_{inf_id}_{post_id}"):
-                                st.session_state[f'api_posts_sel_{inf_id}'].append(post)
-                                st.rerun()
+                        if st.button("X", key=f"rem_{inf_id}_{idx}"):
+                            st.session_state[f'api_posts_sel_{inf_id}'].pop(idx)
+                            st.rerun()
                     
                     st.divider()
+            else:
+                st.info("Selecione posts na lista ao lado")
         
-        with col_selecionados:
-            st.markdown("**Posts Selecionados:**")
-            
-            posts_selecionados = st.session_state[f'api_posts_sel_{inf_id}']
-            
-            # Container com scroll para selecionados
-            sel_container = st.container(height=400)
-            
-            with sel_container:
-                if posts_selecionados:
-                    for idx, post in enumerate(posts_selecionados):
-                        col_a, col_b, col_c = st.columns([1, 2, 1])
-                        
-                        with col_a:
-                            if post.get('thumbnail'):
-                                st.image(post['thumbnail'], width=40)
-                        
-                        with col_b:
-                            legenda = post.get('caption', '')[:40] + '...' if len(post.get('caption', '')) > 40 else post.get('caption', '')
-                            st.caption(f"{post.get('type', '')} - {post.get('posted_at', '')[:10]}")
-                            st.caption(legenda if legenda else "(sem legenda)")
-                        
-                        with col_c:
-                            if st.button("X", key=f"rem_{inf_id}_{idx}"):
-                                st.session_state[f'api_posts_sel_{inf_id}'].pop(idx)
-                                st.rerun()
-                        
-                        st.divider()
-                else:
-                    st.info("Selecione posts na lista ao lado")
-            
-            # Botao de adicionar
-            if posts_selecionados:
-                st.markdown(f"**{len(posts_selecionados)} posts selecionados**")
-                if st.button("Adicionar Posts a Campanha", type="primary", use_container_width=True, key=f"add_all_{inf_id}"):
-                    count = len(posts_selecionados)
-                    for post in posts_selecionados:
-                        post_processado = api_client.processar_post_api(post)
-                        data_manager.adicionar_post(campanha['id'], inf['id'], post_processado)
-                    
-                    st.session_state.show_api_post_inf = None
-                    st.session_state[f'api_result_{inf_id}'] = None
-                    st.session_state[f'api_posts_sel_{inf_id}'] = []
-                    st.success(f"{count} posts adicionados!")
-                    st.rerun()
+        # Botao de adicionar
+        if posts_selecionados:
+            st.markdown(f"**{len(posts_selecionados)} posts selecionados**")
+            if st.button("Adicionar Posts a Campanha", type="primary", use_container_width=True, key=f"add_all_{inf_id}"):
+                count = len(posts_selecionados)
+                for post in posts_selecionados:
+                    post_processado = api_client.processar_post_api(post)
+                    data_manager.adicionar_post(campanha['id'], inf['id'], post_processado)
+                
+                st.session_state.show_api_post_inf = None
+                st.session_state[f'api_result_{inf_id}'] = None
+                st.session_state[f'api_posts_sel_{inf_id}'] = []
+                st.success(f"{count} posts adicionados!")
+                st.rerun()
 
 
 def render_form_post_manual(campanha, inf):
@@ -398,292 +569,344 @@ def render_form_post_manual(campanha, inf):
         
         with col1:
             formato = st.selectbox("Formato *", ["Reels", "Stories", "Carrossel", "Feed", "TikTok", "YouTube"])
-            plataforma = st.selectbox("Plataforma *", [inf['network'].title()])
-            data_pub = st.date_input("Data Publicacao *", value=datetime.now())
-            link_post = st.text_input("Link do Post", placeholder="https://...")
+            plataforma = st.selectbox("Plataforma", ["Instagram", "TikTok", "YouTube"])
         
         with col2:
+            data_pub = st.date_input("Data Publicacao *")
+            link_post = st.text_input("Link do Post")
+        
+        with col3:
             views = st.number_input("Views", min_value=0, value=0)
             alcance = st.number_input("Alcance", min_value=0, value=0)
-            interacoes = st.number_input("Interacoes", min_value=0, value=0)
-            impressoes = st.number_input("Impressoes", min_value=0, value=0)
         
-        with col3:
-            curtidas = st.number_input("Curtidas", min_value=0, value=0)
-            comentarios = st.number_input("Comentarios", min_value=0, value=0)
-            compartilhamentos = st.number_input("Compartilhamentos", min_value=0, value=0)
-            saves = st.number_input("Saves", min_value=0, value=0)
-        
-        # Metricas de Stories
-        if formato == "Stories":
-            st.markdown("**Metricas de Stories:**")
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                clique_link = st.number_input("Cliques no Link", min_value=0, value=0)
-            with col2:
-                taps_forward = st.number_input("Taps Forward", min_value=0, value=0)
-            with col3:
-                taps_back = st.number_input("Taps Back", min_value=0, value=0)
-            with col4:
-                exits = st.number_input("Exits", min_value=0, value=0)
-        else:
-            clique_link = 0
-        
-        # Cupom e custo
         col1, col2, col3 = st.columns(3)
         with col1:
-            cupom_codigo = st.text_input("Codigo do Cupom")
+            interacoes = st.number_input("Interacoes", min_value=0, value=0)
+            impressoes = st.number_input("Impressoes", min_value=0, value=0)
         with col2:
-            cupom_conversoes = st.number_input("Conversoes", min_value=0, value=0)
+            curtidas = st.number_input("Curtidas", min_value=0, value=0)
+            comentarios_qtd = st.number_input("Comentarios", min_value=0, value=0)
         with col3:
-            custo = st.number_input("Custo (R$)", min_value=0.0, value=0.0, step=0.01)
+            compartilhamentos = st.number_input("Compartilhamentos", min_value=0, value=0)
+            saves = st.number_input("Salvamentos", min_value=0, value=0)
         
+        # Metricas opcionais
         col1, col2 = st.columns(2)
         with col1:
-            if st.form_submit_button("Salvar Post", use_container_width=True):
-                data_manager.adicionar_post(campanha['id'], inf['id'], {
-                    'formato': formato,
-                    'plataforma': plataforma,
-                    'data_publicacao': data_pub.strftime('%d/%m/%Y'),
-                    'link_post': link_post,
-                    'views': views,
-                    'alcance': alcance,
-                    'interacoes': interacoes,
-                    'impressoes': impressoes,
-                    'curtidas': curtidas,
-                    'comentarios_qtd': comentarios,
-                    'compartilhamentos': compartilhamentos,
-                    'saves': saves,
-                    'clique_link': clique_link,
-                    'cupom_codigo': cupom_codigo,
-                    'cupom_conversoes': cupom_conversoes,
-                    'custo': custo,
-                    'imagens': []
-                })
-                st.session_state.show_manual_post_inf = None
-                st.success("Post adicionado!")
-                st.rerun()
-        
+            clique_link = st.number_input("Cliques no Link", min_value=0, value=0) if metricas_config.get('clique_link') else 0
         with col2:
-            if st.form_submit_button("Cancelar", use_container_width=True):
-                st.session_state.show_manual_post_inf = None
-                st.rerun()
+            cupom_conversoes = st.number_input("Conversoes Cupom", min_value=0, value=0) if metricas_config.get('cupom_conversoes') else 0
+        
+        col1, col2 = st.columns(2)
+        submitted = col1.form_submit_button("Adicionar Post", use_container_width=True, type="primary")
+        cancel = col2.form_submit_button("Cancelar", use_container_width=True)
+        
+        if submitted:
+            post_data = {
+                'formato': formato,
+                'plataforma': plataforma,
+                'data_publicacao': data_pub.strftime('%d/%m/%Y'),
+                'link_post': link_post,
+                'views': views,
+                'alcance': alcance,
+                'interacoes': interacoes,
+                'impressoes': impressoes,
+                'curtidas': curtidas,
+                'comentarios_qtd': comentarios_qtd,
+                'compartilhamentos': compartilhamentos,
+                'saves': saves,
+                'clique_link': clique_link,
+                'cupom_conversoes': cupom_conversoes,
+                'imagens': []
+            }
+            
+            data_manager.adicionar_post(campanha['id'], inf['id'], post_data)
+            st.session_state.show_manual_post_inf = None
+            st.success("Post adicionado!")
+            st.rerun()
+        
+        if cancel:
+            st.session_state.show_manual_post_inf = None
+            st.rerun()
 
 
 def render_modal_add_influenciador(campanha):
     """Modal para adicionar influenciador a campanha"""
     
-    with st.container():
-        st.markdown("### Adicionar Influenciadores")
-        
-        influenciadores_disponiveis = data_manager.get_influenciadores()
-        
-        if not influenciadores_disponiveis:
-            st.warning("Cadastre influenciadores na base primeiro")
-            if st.button("Ir para Influenciadores"):
-                st.session_state.current_page = 'Influenciadores'
-                st.rerun()
-        else:
-            ids_na_campanha = [i['influenciador_id'] for i in campanha['influenciadores']]
-            disponiveis = [i for i in influenciadores_disponiveis if i['id'] not in ids_na_campanha]
+    st.markdown("---")
+    st.markdown("#### Adicionar Influenciador")
+    
+    # Influenciadores ja na campanha
+    inf_na_campanha = [inf['id'] for inf in data_manager.get_influenciadores_campanha(campanha['id'])]
+    
+    # Buscar da base
+    todos_inf = data_manager.get_influenciadores()
+    disponiveis = [inf for inf in todos_inf if inf['id'] not in inf_na_campanha]
+    
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        if disponiveis:
+            opcoes = {f"{inf['nome']} (@{inf['usuario']}) - {inf['classificacao']}": inf['id'] for inf in disponiveis}
+            selecionado = st.selectbox("Selecione:", list(opcoes.keys()))
             
-            if not disponiveis:
-                st.info("Todos os influenciadores da base ja estao na campanha")
-            else:
-                opcoes = {f"{i['nome']} (@{i['usuario']}) - {i['classificacao']}": i['id'] for i in disponiveis}
-                
-                # Multiselect para escolher varios
-                selecionados = st.multiselect(
-                    "Selecione os influenciadores:",
-                    list(opcoes.keys()),
-                    help="Voce pode selecionar varios de uma vez"
-                )
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("Adicionar Selecionados", type="primary", use_container_width=True):
-                        if selecionados:
-                            for sel in selecionados:
-                                inf_id = opcoes[sel]
-                                data_manager.adicionar_influenciador_campanha(campanha['id'], inf_id)
-                            st.session_state.show_add_inf_to_campaign = False
-                            st.success(f"{len(selecionados)} influenciadores adicionados!")
-                            st.rerun()
-                        else:
-                            st.warning("Selecione pelo menos um influenciador")
-                with col2:
-                    if st.button("Cancelar", use_container_width=True):
-                        st.session_state.show_add_inf_to_campaign = False
-                        st.rerun()
-        
-        st.markdown("---")
+            if selecionado:
+                inf_id = opcoes[selecionado]
+                if st.button("Adicionar a Campanha", type="primary"):
+                    data_manager.adicionar_influenciador_campanha(campanha['id'], inf_id)
+                    st.session_state.show_add_inf_to_campaign = False
+                    st.success("Influenciador adicionado!")
+                    st.rerun()
+        else:
+            st.info("Todos os influenciadores ja estao na campanha ou nao ha influenciadores cadastrados.")
+    
+    with col2:
+        if st.button("Cancelar"):
+            st.session_state.show_add_inf_to_campaign = False
+            st.rerun()
+    
+    st.markdown("---")
+    st.markdown("**Ou buscar novo influenciador na API:**")
+    
+    usuario = st.text_input("Usuario (sem @)", placeholder="ex: cristiano")
+    
+    if st.button("Buscar na API"):
+        if usuario:
+            with st.spinner("Buscando..."):
+                resultado = api_client.buscar_perfil(usuario)
+                if resultado.get('success'):
+                    dados_api = resultado.get('data', {})
+                    
+                    # Criar influenciador
+                    inf_dados = api_client.processar_perfil_api(dados_api)
+                    novo_inf = data_manager.criar_influenciador(inf_dados)
+                    
+                    # Adicionar a campanha
+                    data_manager.adicionar_influenciador_campanha(campanha['id'], novo_inf['id'])
+                    
+                    st.session_state.show_add_inf_to_campaign = False
+                    st.success(f"Influenciador {inf_dados['nome']} adicionado!")
+                    st.rerun()
+                else:
+                    st.error(f"Erro: {resultado.get('error', 'Perfil nao encontrado')}")
+        else:
+            st.warning("Digite o usuario")
 
 
 def render_configuracoes_campanha(campanha):
     """Configuracoes gerais da campanha"""
     
-    st.subheader("Configuracoes da Campanha")
+    st.subheader("Configuracoes")
     
     with st.form("form_config_campanha"):
         col1, col2 = st.columns(2)
         
         with col1:
-            nome = st.text_input("Nome da Campanha", value=campanha['nome'])
-            objetivo = st.text_area("Objetivo", value=campanha.get('objetivo', ''), height=100)
-            data_inicio = st.text_input("Data Inicio", value=campanha['data_inicio'], disabled=True)
+            nome = st.text_input("Nome da Campanha *", value=campanha['nome'])
+            objetivo = st.text_area("Objetivo", value=campanha.get('objetivo', ''))
+            is_aon = st.checkbox("Campanha AON", value=campanha.get('is_aon', False))
         
         with col2:
+            data_inicio = st.date_input(
+                "Data Inicio",
+                value=datetime.strptime(campanha['data_inicio'], '%Y-%m-%d') if campanha.get('data_inicio') else datetime.now()
+            )
+            data_fim = st.date_input(
+                "Data Fim",
+                value=datetime.strptime(campanha['data_fim'], '%Y-%m-%d') if campanha.get('data_fim') else datetime.now()
+            )
             tipo_dados = st.selectbox(
                 "Tipo de Dados",
                 ["estatico", "dinamico"],
-                index=0 if campanha.get('tipo_dados') == 'estatico' else 1,
-                help="Estatico: usa dados do momento da adicao. Dinamico: atualiza via API"
+                index=0 if campanha.get('tipo_dados') == 'estatico' else 1
             )
-            is_aon = st.checkbox("Campanha AON", value=campanha.get('is_aon', False))
-            data_fim = st.text_input("Data Fim", value=campanha['data_fim'], disabled=True)
-            status = st.selectbox("Status", ["ativa", "pausada", "finalizada"],
-                                 index=["ativa", "pausada", "finalizada"].index(campanha.get('status', 'ativa')))
         
         st.markdown("---")
-        st.markdown("**Metricas a Coletar**")
+        st.markdown("**Estimativas da Campanha:**")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            estimativa_alcance = st.number_input(
+                "Estimativa de Alcance",
+                min_value=0,
+                value=campanha.get('estimativa_alcance', 0)
+            )
+        with col2:
+            estimativa_impressoes = st.number_input(
+                "Estimativa de Impressoes/Views",
+                min_value=0,
+                value=campanha.get('estimativa_impressoes', 0)
+            )
+        with col3:
+            investimento_total = st.number_input(
+                "Investimento Total (R$)",
+                min_value=0.0,
+                value=float(campanha.get('investimento_total', 0)),
+                step=1000.0
+            )
+        
+        st.markdown("---")
+        st.markdown("**Metricas a Coletar:**")
         
         metricas = campanha.get('metricas_selecionadas', {})
         
         col1, col2, col3, col4 = st.columns(4)
-        
         with col1:
-            views = st.checkbox("Views", value=metricas.get('views', True))
-            alcance = st.checkbox("Alcance", value=metricas.get('alcance', True))
+            m_views = st.checkbox("Views", value=metricas.get('views', True))
+            m_alcance = st.checkbox("Alcance", value=metricas.get('alcance', True))
         with col2:
-            interacoes = st.checkbox("Interacoes", value=metricas.get('interacoes', True))
-            impressoes = st.checkbox("Impressoes", value=metricas.get('impressoes', True))
+            m_interacoes = st.checkbox("Interacoes", value=metricas.get('interacoes', True))
+            m_impressoes = st.checkbox("Impressoes", value=metricas.get('impressoes', True))
         with col3:
-            curtidas = st.checkbox("Curtidas", value=metricas.get('curtidas', True))
-            comentarios_check = st.checkbox("Comentarios", value=metricas.get('comentarios', True))
+            m_curtidas = st.checkbox("Curtidas", value=metricas.get('curtidas', True))
+            m_comentarios = st.checkbox("Comentarios", value=metricas.get('comentarios', True))
         with col4:
-            compartilhamentos = st.checkbox("Compartilhamentos", value=metricas.get('compartilhamentos', True))
-            saves = st.checkbox("Saves", value=metricas.get('saves', True))
+            m_compartilhamentos = st.checkbox("Compartilhamentos", value=metricas.get('compartilhamentos', True))
+            m_saves = st.checkbox("Salvamentos", value=metricas.get('saves', True))
         
         col1, col2 = st.columns(2)
         with col1:
-            clique_link = st.checkbox("Cliques Link (Stories)", value=metricas.get('clique_link', False))
+            m_clique_link = st.checkbox("Cliques no Link", value=metricas.get('clique_link', False))
         with col2:
-            cupom_conversoes = st.checkbox("Conversoes Cupom", value=metricas.get('cupom_conversoes', False))
+            m_cupom = st.checkbox("Conversoes por Cupom", value=metricas.get('cupom_conversoes', False))
         
-        st.markdown("---")
+        submitted = st.form_submit_button("Salvar Configuracoes", type="primary", use_container_width=True)
         
-        notas = st.text_area("Notas e Observacoes", value=campanha.get('notas', ''), height=150,
-                            placeholder="Adicione notas, insights manuais, observacoes importantes...")
-        
-        if st.form_submit_button("Salvar Configuracoes", use_container_width=True):
+        if submitted:
+            novas_metricas = {
+                'views': m_views,
+                'alcance': m_alcance,
+                'interacoes': m_interacoes,
+                'impressoes': m_impressoes,
+                'curtidas': m_curtidas,
+                'comentarios': m_comentarios,
+                'compartilhamentos': m_compartilhamentos,
+                'saves': m_saves,
+                'clique_link': m_clique_link,
+                'cupom_conversoes': m_cupom
+            }
+            
             data_manager.atualizar_campanha(campanha['id'], {
                 'nome': nome,
                 'objetivo': objetivo,
+                'data_inicio': data_inicio.strftime('%Y-%m-%d'),
+                'data_fim': data_fim.strftime('%Y-%m-%d'),
                 'tipo_dados': tipo_dados,
                 'is_aon': is_aon,
-                'status': status,
-                'notas': notas,
-                'metricas_selecionadas': {
-                    'views': views, 'alcance': alcance, 'interacoes': interacoes,
-                    'impressoes': impressoes, 'curtidas': curtidas, 'comentarios': comentarios_check,
-                    'compartilhamentos': compartilhamentos, 'saves': saves,
-                    'clique_link': clique_link, 'cupom_conversoes': cupom_conversoes
-                }
+                'metricas_selecionadas': novas_metricas,
+                'estimativa_alcance': estimativa_alcance,
+                'estimativa_impressoes': estimativa_impressoes,
+                'investimento_total': investimento_total
             })
+            
             st.success("Configuracoes salvas!")
             st.rerun()
 
 
 def render_configurar_insights(campanha):
-    """Configura quais insights aparecem no relatorio"""
+    """Configuracao de insights do relatorio"""
     
-    st.subheader("Configurar Insights do Relatorio")
-    st.caption("Selecione quais insights automaticos devem aparecer no relatorio")
+    st.subheader("Configurar Insights")
     
     insights = campanha.get('insights_config', {})
     
     with st.form("form_insights"):
+        st.markdown("**Secoes do Relatorio:**")
+        
         col1, col2 = st.columns(2)
-        
         with col1:
-            st.markdown("**Insights Automaticos**")
-            mostrar_engajamento = st.checkbox("Analise de Engajamento", value=insights.get('mostrar_engajamento', True))
-            mostrar_alcance = st.checkbox("Analise de Alcance", value=insights.get('mostrar_alcance', True))
-            mostrar_conversao = st.checkbox("Analise de Conversao", value=insights.get('mostrar_conversao', True))
-            mostrar_saves = st.checkbox("Analise de Saves", value=insights.get('mostrar_saves', True))
-        
+            mostrar_eng = st.checkbox("Mostrar Engajamento", value=insights.get('mostrar_engajamento', True))
+            mostrar_alc = st.checkbox("Mostrar Alcance", value=insights.get('mostrar_alcance', True))
+            mostrar_conv = st.checkbox("Mostrar Conversao", value=insights.get('mostrar_conversao', True))
         with col2:
-            st.markdown("**Secoes do Relatorio**")
-            mostrar_comparativo_formato = st.checkbox("Comparativo por Formato", value=insights.get('mostrar_comparativo_formato', True))
-            mostrar_top_influenciadores = st.checkbox("Top Influenciadores", value=insights.get('mostrar_top_influenciadores', True))
+            mostrar_saves = st.checkbox("Mostrar Saves", value=insights.get('mostrar_saves', True))
+            mostrar_formato = st.checkbox("Comparativo por Formato", value=insights.get('mostrar_comparativo_formato', True))
+            mostrar_top = st.checkbox("Top Influenciadores", value=insights.get('mostrar_top_influenciadores', True))
         
         st.markdown("---")
-        st.markdown("**Insights Personalizados**")
-        st.caption("Adicione insights manuais que devem aparecer no relatorio")
+        st.markdown("**Insights Personalizados:**")
         
-        insights_personalizados = insights.get('insights_personalizados', [])
+        insights_pers = insights.get('insights_personalizados', [])
         
-        for idx, insight in enumerate(insights_personalizados):
-            st.text_input(f"Insight {idx+1}", value=insight, key=f"insight_{idx}", disabled=True)
+        insights_influenciadores = st.text_area(
+            "Insights sobre Influenciadores:",
+            value=insights.get('insights_influenciadores', ''),
+            height=100,
+            placeholder="Escreva insights sobre performance dos influenciadores..."
+        )
         
-        novo_insight = st.text_input("Novo Insight", placeholder="Digite um insight personalizado...")
+        insights_campanha = st.text_area(
+            "Insights sobre a Campanha:",
+            value=insights.get('insights_campanha', ''),
+            height=100,
+            placeholder="Escreva insights gerais sobre a campanha..."
+        )
         
-        if st.form_submit_button("Salvar Configuracao de Insights", use_container_width=True):
-            novos_personalizados = insights_personalizados.copy()
-            if novo_insight:
-                novos_personalizados.append(novo_insight)
+        notas = st.text_area(
+            "Notas Gerais:",
+            value=campanha.get('notas', ''),
+            height=100,
+            placeholder="Notas e observacoes..."
+        )
+        
+        if st.form_submit_button("Salvar Insights", type="primary", use_container_width=True):
+            novos_insights = {
+                'mostrar_engajamento': mostrar_eng,
+                'mostrar_alcance': mostrar_alc,
+                'mostrar_conversao': mostrar_conv,
+                'mostrar_saves': mostrar_saves,
+                'mostrar_comparativo_formato': mostrar_formato,
+                'mostrar_top_influenciadores': mostrar_top,
+                'insights_personalizados': insights_pers,
+                'insights_influenciadores': insights_influenciadores,
+                'insights_campanha': insights_campanha
+            }
             
             data_manager.atualizar_campanha(campanha['id'], {
-                'insights_config': {
-                    'mostrar_engajamento': mostrar_engajamento,
-                    'mostrar_alcance': mostrar_alcance,
-                    'mostrar_conversao': mostrar_conversao,
-                    'mostrar_saves': mostrar_saves,
-                    'mostrar_comparativo_formato': mostrar_comparativo_formato,
-                    'mostrar_top_influenciadores': mostrar_top_influenciadores,
-                    'insights_personalizados': novos_personalizados
-                }
+                'insights_config': novos_insights,
+                'notas': notas
             })
-            st.success("Configuracao de insights salva!")
+            
+            st.success("Insights salvos!")
             st.rerun()
 
 
 def render_categorias_comentarios(campanha):
-    """Configura categorias para classificacao de comentarios pela IA"""
+    """Configurar categorias para classificacao de comentarios"""
     
-    st.subheader("Categorias para Classificacao de Comentarios")
+    st.subheader("Categorias de Comentarios")
     st.caption("Configure as categorias que a IA usara para classificar os comentarios")
     
     categorias = campanha.get('categorias_comentarios', [
-        'Elogio ao Produto', 'Intencao de Compra', 'Conexao Emocional', 'Duvida', 'Critica', 'Geral'
+        'Elogio ao Produto',
+        'Intencao de Compra',
+        'Conexao Emocional',
+        'Duvida',
+        'Critica',
+        'Geral'
     ])
     
-    st.markdown("**Categorias Atuais:**")
-    
-    for idx, cat in enumerate(categorias):
-        col1, col2 = st.columns([4, 1])
-        with col1:
-            st.write(f"{idx+1}. {cat}")
-        with col2:
-            if st.button("X", key=f"rem_cat_{idx}", help="Remover categoria"):
-                categorias.pop(idx)
-                data_manager.atualizar_campanha(campanha['id'], {'categorias_comentarios': categorias})
-                st.rerun()
-    
-    st.markdown("---")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        nova_categoria = st.text_input("Nova Categoria", placeholder="Ex: Perguntas sobre Preco")
-    with col2:
-        st.write("")
-        st.write("")
-        if st.button("Adicionar", use_container_width=True):
-            if nova_categoria and nova_categoria not in categorias:
-                categorias.append(nova_categoria)
-                data_manager.atualizar_campanha(campanha['id'], {'categorias_comentarios': categorias})
-                st.success("Categoria adicionada!")
-                st.rerun()
-    
-    st.markdown("---")
-    st.info("A IA classificara automaticamente os comentarios nas categorias definidas acima, alem de determinar se sao positivos, neutros ou negativos.")
+    with st.form("form_categorias"):
+        st.markdown("**Categorias atuais:**")
+        
+        novas_categorias = []
+        for i, cat in enumerate(categorias):
+            col1, col2 = st.columns([4, 1])
+            with col1:
+                nova_cat = st.text_input(f"Categoria {i+1}", value=cat, key=f"cat_{i}")
+                if nova_cat:
+                    novas_categorias.append(nova_cat)
+        
+        st.markdown("---")
+        nova_categoria = st.text_input("Adicionar nova categoria:", placeholder="Ex: Mencao a Concorrente")
+        
+        if st.form_submit_button("Salvar Categorias", type="primary", use_container_width=True):
+            if nova_categoria and nova_categoria not in novas_categorias:
+                novas_categorias.append(nova_categoria)
+            
+            data_manager.atualizar_campanha(campanha['id'], {
+                'categorias_comentarios': novas_categorias
+            })
+            
+            st.success("Categorias salvas!")
+            st.rerun()

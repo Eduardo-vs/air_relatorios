@@ -173,6 +173,129 @@ def exportar_campanha_csv(campanha: dict, influenciadores_data: list) -> str:
     return output.getvalue()
 
 
+def exportar_csv_balizadores(campanha: dict, influenciadores_data: list) -> str:
+    """
+    Exporta CSV de balizadores - agregado por influenciador
+    Estrutura separada por plataforma: Instagram, TikTok, YouTube
+    """
+    import csv
+    import io
+    
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=';')
+    
+    # Header com todas as colunas por plataforma
+    writer.writerow([
+        # Dados gerais
+        'Influenciador', 'Usuario', 'Nicho', 'Classificacao',
+        # Instagram
+        'IG_Base Seguidores', 
+        'IG_Feed_Impressoes', 'IG_Feed_Alcance',
+        'IG_Reels_Impressoes', 'IG_Reels_Alcance',
+        'IG_Stories_Impressoes', 'IG_Stories_Alcance',
+        'IG_Interacoes_Total', 'IG_Engaj_Efetivo',
+        # TikTok
+        'TT_Base Seguidores', 'TT_Visualizacoes', 'TT_Alcance',
+        'TT_Engaj_Total', 'TT_Engaj_Efetivo',
+        # YouTube
+        'YT_Base Inscritos', 'YT_Visualizacoes', 'YT_Alcance',
+        # Custo
+        'Custo_Campanha'
+    ])
+    
+    # Processar cada influenciador
+    for inf_data in influenciadores_data:
+        nome = inf_data.get('nome', '')
+        usuario = inf_data.get('usuario', '')
+        nicho = inf_data.get('nicho', '')
+        classificacao = inf_data.get('classificacao', '')
+        seguidores = inf_data.get('seguidores', 0)
+        custo_campanha = inf_data.get('custo_campanha', 0)
+        network = inf_data.get('network', 'instagram').lower()
+        
+        # Agregar metricas por formato
+        ig_feed_impressoes = 0
+        ig_feed_alcance = 0
+        ig_reels_impressoes = 0
+        ig_reels_alcance = 0
+        ig_stories_impressoes = 0
+        ig_stories_alcance = 0
+        ig_interacoes_total = 0
+        ig_views_total = 0
+        
+        tt_seguidores = 0
+        tt_views = 0
+        tt_alcance = 0
+        tt_interacoes = 0
+        
+        yt_inscritos = 0
+        yt_views = 0
+        yt_alcance = 0
+        
+        for post in inf_data.get('posts', []):
+            formato = post.get('formato', '').lower()
+            plataforma = post.get('plataforma', '').lower()
+            
+            views = post.get('views', 0)
+            alcance = post.get('alcance', 0)
+            interacoes = post.get('interacoes', 0)
+            impressoes = post.get('impressoes', 0)
+            
+            if 'instagram' in plataforma or network == 'instagram':
+                if 'feed' in formato or 'carrossel' in formato:
+                    ig_feed_impressoes += impressoes
+                    ig_feed_alcance += alcance
+                elif 'reels' in formato or 'reel' in formato:
+                    ig_reels_impressoes += impressoes
+                    ig_reels_alcance += alcance
+                elif 'stories' in formato or 'story' in formato:
+                    ig_stories_impressoes += impressoes
+                    ig_stories_alcance += alcance
+                
+                ig_interacoes_total += interacoes
+                ig_views_total += views
+            
+            elif 'tiktok' in plataforma or network == 'tiktok':
+                tt_seguidores = seguidores
+                tt_views += views
+                tt_alcance += alcance
+                tt_interacoes += interacoes
+            
+            elif 'youtube' in plataforma or network == 'youtube':
+                yt_inscritos = seguidores
+                yt_views += views
+                yt_alcance += alcance
+        
+        # Calcular taxas
+        ig_engaj_efetivo = round((ig_interacoes_total / ig_views_total * 100), 2) if ig_views_total > 0 else 0
+        tt_engaj_total = round((tt_interacoes / seguidores * 100), 2) if seguidores > 0 else 0
+        tt_engaj_efetivo = round((tt_interacoes / tt_alcance * 100), 2) if tt_alcance > 0 else 0
+        
+        # Determinar base de seguidores por plataforma
+        ig_seguidores = seguidores if network == 'instagram' else 0
+        tt_seguidores = seguidores if network == 'tiktok' else tt_seguidores
+        yt_inscritos = seguidores if network == 'youtube' else yt_inscritos
+        
+        writer.writerow([
+            nome, usuario, nicho, classificacao,
+            # Instagram
+            ig_seguidores,
+            ig_feed_impressoes, ig_feed_alcance,
+            ig_reels_impressoes, ig_reels_alcance,
+            ig_stories_impressoes, ig_stories_alcance,
+            ig_interacoes_total, ig_engaj_efetivo,
+            # TikTok
+            tt_seguidores, tt_views, tt_alcance,
+            tt_engaj_total, tt_engaj_efetivo,
+            # YouTube
+            yt_inscritos, yt_views, yt_alcance,
+            # Custo
+            custo_campanha
+        ])
+    
+    return output.getvalue()
+
+
 # ========================================
 # CSS GLOBAL
 # ========================================

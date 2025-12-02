@@ -1,5 +1,5 @@
 """
-AIR Relatorios v4.2
+AIR Relatorios v5.0
 Sistema Completo de Analise de Campanhas
 """
 
@@ -23,6 +23,9 @@ st.set_page_config(
 
 # Inicializacao
 data_manager.inicializar_session_state()
+
+# Inicializar banco de dados (SQLite local)
+data_manager.init_db()
 
 primary_color = st.session_state.primary_color
 secondary_color = st.session_state.secondary_color
@@ -76,7 +79,7 @@ with st.sidebar:
                 except:
                     pass
         
-        sel = st.selectbox("", opcoes, index=current_idx, label_visibility="collapsed")
+        sel = st.selectbox("Campanha", opcoes, index=current_idx, label_visibility="collapsed")
         
         if sel != "Selecione...":
             camp = next((c for c in campanhas_list if c['nome'] == sel), None)
@@ -132,7 +135,7 @@ with st.sidebar:
         st.rerun()
     
     st.markdown("---")
-    st.caption("v4.2 - Com banco de dados")
+    st.caption("v5.0")
 
 # Roteamento
 if st.session_state.current_page == 'Dashboard':
@@ -154,6 +157,6 @@ elif st.session_state.current_page == 'Configuracoes':
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #9ca3af; padding: 1rem 0; font-size: 0.85rem;'>
-    <strong>air</strong> | Respiramos influencia | v4.2
+    <strong>air</strong> | Respiramos influencia | v5.0
 </div>
 """, unsafe_allow_html=True)
