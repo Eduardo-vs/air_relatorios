@@ -134,7 +134,14 @@ def execute_insert(query: str, params: tuple = ()):
         # PostgreSQL precisa de RETURNING ou lastval()
         cursor.execute("SELECT lastval()")
         result = cursor.fetchone()
-        last_id = result[0] if result else None
+        # RealDictCursor retorna dict, nao tuple
+        if result:
+            if isinstance(result, dict):
+                last_id = result.get('lastval')
+            else:
+                last_id = result[0]
+        else:
+            last_id = None
     else:
         last_id = cursor.lastrowid
     
