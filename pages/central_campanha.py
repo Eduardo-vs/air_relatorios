@@ -702,33 +702,6 @@ def render_modal_add_influenciador(campanha):
         if st.button("Cancelar"):
             st.session_state.show_add_inf_to_campaign = False
             st.rerun()
-    
-    st.markdown("---")
-    st.markdown("**Ou buscar novo influenciador na API:**")
-    
-    usuario = st.text_input("Usuario (sem @)", placeholder="ex: cristiano")
-    
-    if st.button("Buscar na API"):
-        if usuario:
-            with st.spinner("Buscando..."):
-                resultado = api_client.buscar_perfil(usuario)
-                if resultado.get('success'):
-                    dados_api = resultado.get('data', {})
-                    
-                    # Criar influenciador
-                    inf_dados = api_client.processar_perfil_api(dados_api)
-                    novo_inf = data_manager.criar_influenciador(inf_dados)
-                    
-                    # Adicionar a campanha
-                    data_manager.adicionar_influenciador_campanha(campanha['id'], novo_inf['id'])
-                    
-                    st.session_state.show_add_inf_to_campaign = False
-                    st.success(f"Influenciador {inf_dados['nome']} adicionado!")
-                    st.rerun()
-                else:
-                    st.error(f"Erro: {resultado.get('error', 'Perfil nao encontrado')}")
-        else:
-            st.warning("Digite o usuario")
 
 
 def render_configuracoes_campanha(campanha):

@@ -170,11 +170,13 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
     
     # Calcular AIR Score medio
     todos_influs = []
+    todos_influs_camp = []  # Para manter relacao inf -> posts
     for camp in campanhas_list:
         for inf_camp in camp.get('influenciadores', []):
             inf = data_manager.get_influenciador(inf_camp.get('influenciador_id'))
             if inf:
                 todos_influs.append(inf)
+                todos_influs_camp.append({'inf': inf, 'posts': inf_camp.get('posts', [])})
     
     air_score_medio = 0
     if todos_influs:
@@ -186,51 +188,61 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
         for inf_camp in camp.get('influenciadores', []):
             todos_posts.extend(inf_camp.get('posts', []))
     
-    # ========== LINHA 1 ==========
+    # ========== LINHA 1 - CARDS BONITOS ==========
     st.markdown("### Metricas Principais")
     
+    def render_card(titulo, valor, cor_fundo="#f9fafb"):
+        return f"""
+        <div style="background: {cor_fundo}; border: 1px solid #e5e7eb; border-radius: 12px; 
+                    padding: 1rem; text-align: center; height: 90px;">
+            <div style="font-size: 0.75rem; color: #6b7280; margin-bottom: 0.3rem;">{titulo}</div>
+            <div style="font-size: 1.3rem; font-weight: 700; color: #1f2937;">{valor}</div>
+        </div>
+        """
+    
     col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(8)
     
     with col1:
-        st.metric("Q. Influs", metricas['total_influenciadores'])
+        st.markdown(render_card("Q. INFLUS", metricas['total_influenciadores']), unsafe_allow_html=True)
     with col2:
-        st.metric("T. Seguidores", funcoes_auxiliares.formatar_numero(metricas['total_seguidores']))
+        st.markdown(render_card("T. SEGUIDORES", funcoes_auxiliares.formatar_numero(metricas['total_seguidores'])), unsafe_allow_html=True)
     with col3:
-        st.metric("T. Impressoes/Views", funcoes_auxiliares.formatar_numero(realizado_imp))
+        st.markdown(render_card("T. IMPR/VIEWS", funcoes_auxiliares.formatar_numero(realizado_imp)), unsafe_allow_html=True)
     with col4:
-        st.metric("T. Alcance", funcoes_auxiliares.formatar_numero(realizado_alcance))
+        st.markdown(render_card("T. ALCANCE", funcoes_auxiliares.formatar_numero(realizado_alcance)), unsafe_allow_html=True)
     with col5:
-        st.metric("Tx. Alcance", f"{taxa_alcance:.2f}%")
+        st.markdown(render_card("TX. ALCANCE", f"{taxa_alcance:.2f}%"), unsafe_allow_html=True)
     with col6:
-        st.metric("T. Interacoes", funcoes_auxiliares.formatar_numero(metricas['total_interacoes']))
+        st.markdown(render_card("T. INTERACOES", funcoes_auxiliares.formatar_numero(metricas['total_interacoes'])), unsafe_allow_html=True)
     with col7:
-        st.metric("T. Likes", funcoes_auxiliares.formatar_numero(metricas['total_curtidas']))
+        st.markdown(render_card("T. LIKES", funcoes_auxiliares.formatar_numero(metricas['total_curtidas'])), unsafe_allow_html=True)
     with col8:
-        st.metric("T. Salvos", funcoes_auxiliares.formatar_numero(metricas['total_saves']))
+        st.markdown(render_card("T. SALVOS", funcoes_auxiliares.formatar_numero(metricas['total_saves'])), unsafe_allow_html=True)
     
-    st.markdown("---")
+    st.markdown("<div style='margin: 1rem 0;'></div>", unsafe_allow_html=True)
     
-    # ========== LINHA 2 ==========
+    # ========== LINHA 2 - CARDS BONITOS ==========
     col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(8)
     
+    cor_pct_imp = "#dcfce7" if pct_dif_imp >= 0 else "#fee2e2"
+    cor_pct_alc = "#dcfce7" if pct_dif_alcance >= 0 else "#fee2e2"
+    
     with col1:
-        st.metric("Q. Conteudo", metricas['total_posts'])
+        st.markdown(render_card("Q. CONTEUDO", metricas['total_posts']), unsafe_allow_html=True)
     with col2:
-        st.metric("Tx. Eng. Total", f"{taxa_eng_total:.2f}%", help="interacoes/seguidores")
+        st.markdown(render_card("TX. ENG. TOTAL", f"{taxa_eng_total:.2f}%"), unsafe_allow_html=True)
     with col3:
-        cor_dif = "normal" if pct_dif_imp >= 0 else "inverse"
-        st.metric("Est. Impressoes", f"{pct_dif_imp:+.1f}%", help="% diferenca estima vs realidade")
+        st.markdown(render_card("EST. IMPR. %", f"{pct_dif_imp:+.1f}%", cor_pct_imp), unsafe_allow_html=True)
     with col4:
-        cor_dif2 = "normal" if pct_dif_alcance >= 0 else "inverse"
-        st.metric("Est. Alcance", f"{pct_dif_alcance:+.1f}%", help="% diferenca estima vs realidade")
+        st.markdown(render_card("EST. ALC. %", f"{pct_dif_alcance:+.1f}%", cor_pct_alc), unsafe_allow_html=True)
     with col5:
-        st.metric("Engaj. Efetivo", f"{engaj_efetivo:.2f}%", help="interacoes/alcance")
+        st.markdown(render_card("ENGAJ. EFETIVO", f"{engaj_efetivo:.2f}%"), unsafe_allow_html=True)
     with col6:
-        st.metric("AIR Score", f"{air_score_medio:.2f}")
+        st.markdown(render_card("AIR SCORE", f"{air_score_medio:.2f}"), unsafe_allow_html=True)
     with col7:
-        st.metric("T. Comentarios", funcoes_auxiliares.formatar_numero(metricas['total_comentarios']))
+        st.markdown(render_card("T. COMENTARIOS", funcoes_auxiliares.formatar_numero(metricas['total_comentarios'])), unsafe_allow_html=True)
     with col8:
-        st.metric("T. Compartilhados", funcoes_auxiliares.formatar_numero(metricas['total_compartilhamentos']))
+        st.markdown(render_card("T. COMPARTILH.", funcoes_auxiliares.formatar_numero(metricas['total_compartilhamentos'])), unsafe_allow_html=True)
     
     st.markdown("---")
     
@@ -253,9 +265,9 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
     
     col_grafico1, col_grafico2 = st.columns(2)
     
-    # ========== GRAFICO DE BARRAS ==========
+    # ========== GRAFICO DE BARRAS EMPILHADAS ==========
     with col_grafico1:
-        st.markdown("**KPI por Formato**")
+        st.markdown("**KPI por Formato (por Classificacao)**")
         
         kpi_barra = st.selectbox(
             "KPI:",
@@ -263,53 +275,73 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
             key="kpi_barra_pag1"
         )
         
-        # Agregar dados por formato
-        dados_formato = {}
-        for formato in formatos_campanha:
-            dados_formato[formato] = 0
+        # Agregar dados por formato E por classificacao
+        dados_grafico = []
         
-        for post in todos_posts:
-            formato = post.get('formato', post.get('type', 'Outro')).capitalize()
-            if formato not in dados_formato:
-                dados_formato[formato] = 0
+        for inf_data in todos_influs_camp:
+            inf = inf_data['inf']
+            classif = inf.get('classificacao', 'Desconhecido')
             
-            if kpi_barra == "Impressoes":
-                dados_formato[formato] += post.get('impressoes', 0) or 0
-            elif kpi_barra == "Alcance":
-                dados_formato[formato] += post.get('alcance', 0) or 0
-            elif kpi_barra == "Interacoes":
-                dados_formato[formato] += post.get('interacoes', 0) or 0
-            elif kpi_barra == "Views":
-                dados_formato[formato] += post.get('views', 0) or 0
-            elif kpi_barra == "Likes":
-                dados_formato[formato] += post.get('curtidas', 0) or 0
-            elif kpi_barra == "Comentarios":
-                comentarios = post.get('comentarios', 0)
-                if isinstance(comentarios, list):
-                    dados_formato[formato] += len(comentarios)
-                else:
-                    dados_formato[formato] += comentarios or 0
-            elif kpi_barra == "Saves":
-                dados_formato[formato] += post.get('saves', 0) or 0
+            for post in inf_data['posts']:
+                formato = post.get('formato', post.get('type', 'Outro')).capitalize()
+                
+                valor = 0
+                if kpi_barra == "Impressoes":
+                    valor = post.get('impressoes', 0) or 0
+                elif kpi_barra == "Alcance":
+                    valor = post.get('alcance', 0) or 0
+                elif kpi_barra == "Interacoes":
+                    valor = post.get('interacoes', 0) or 0
+                elif kpi_barra == "Views":
+                    valor = post.get('views', 0) or 0
+                elif kpi_barra == "Likes":
+                    valor = post.get('curtidas', 0) or 0
+                elif kpi_barra == "Comentarios":
+                    comentarios = post.get('comentarios', 0)
+                    if isinstance(comentarios, list):
+                        valor = len(comentarios)
+                    else:
+                        valor = comentarios or 0
+                elif kpi_barra == "Saves":
+                    valor = post.get('saves', 0) or 0
+                
+                dados_grafico.append({
+                    'Formato': formato,
+                    'Classificacao': classif,
+                    'Valor': valor
+                })
         
-        if dados_formato:
-            df_barras = pd.DataFrame({
-                'Formato': list(dados_formato.keys()),
-                'Valor': list(dados_formato.values())
-            })
+        if dados_grafico:
+            df_barras = pd.DataFrame(dados_grafico)
+            df_agg = df_barras.groupby(['Formato', 'Classificacao'])['Valor'].sum().reset_index()
+            
+            # Cores para classificacoes
+            cores_classif = {
+                'Nano': '#22c55e',
+                'Micro': '#3b82f6', 
+                'Inter 1': '#8b5cf6',
+                'Inter 2': '#a855f7',
+                'Macro': '#f97316',
+                'Mega 1': '#ef4444',
+                'Mega 2': '#dc2626',
+                'Super Mega': '#991b1b',
+                'Desconhecido': '#9ca3af'
+            }
             
             fig_barras = px.bar(
-                df_barras,
+                df_agg,
                 x='Formato',
                 y='Valor',
-                color='Formato',
-                color_discrete_sequence=cores
+                color='Classificacao',
+                color_discrete_map=cores_classif,
+                barmode='stack'
             )
             fig_barras.update_layout(
-                showlegend=False,
                 height=350,
                 xaxis_title="",
-                yaxis_title=kpi_barra
+                yaxis_title=kpi_barra,
+                legend_title="Classificacao",
+                legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5)
             )
             st.plotly_chart(fig_barras, use_container_width=True)
         else:
@@ -328,22 +360,18 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
         # Agregar dados por classificacao
         dados_classif = {c: 0 for c in classificacoes}
         
-        for camp in campanhas_list:
-            for inf_camp in camp.get('influenciadores', []):
-                inf = data_manager.get_influenciador(inf_camp.get('influenciador_id'))
-                if not inf:
+        for inf_data in todos_influs_camp:
+            inf = inf_data['inf']
+            classif = inf.get('classificacao', 'Desconhecido')
+            
+            for post in inf_data['posts']:
+                formato_post = post.get('formato', post.get('type', '')).capitalize()
+                
+                if filtro_formato_radar != "Todos" and formato_post != filtro_formato_radar:
                     continue
                 
-                classif = inf.get('classificacao', 'Desconhecido')
-                
-                for post in inf_camp.get('posts', []):
-                    formato_post = post.get('formato', post.get('type', '')).capitalize()
-                    
-                    if filtro_formato_radar != "Todos" and formato_post != filtro_formato_radar:
-                        continue
-                    
-                    # Contar interacoes por classificacao
-                    dados_classif[classif] += post.get('interacoes', 0) or 0
+                # Contar interacoes por classificacao
+                dados_classif[classif] += post.get('interacoes', 0) or 0
         
         if any(v > 0 for v in dados_classif.values()):
             categorias = list(dados_classif.keys())

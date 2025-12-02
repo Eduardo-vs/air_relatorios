@@ -1,5 +1,5 @@
 """
-Data Manager - Gerenciamento de dados com SQLite local
+Data Manager - Gerenciamento de dados com SQLite local ou PostgreSQL
 """
 
 import streamlit as st
@@ -9,8 +9,18 @@ import json
 import sqlite3
 import os
 
-# Caminho do banco de dados
+# Verificar se tem DATABASE_URL para PostgreSQL
+DATABASE_URL = os.getenv('DATABASE_URL', '')
+
+# Se tiver secrets do Streamlit, usar
+if hasattr(st, 'secrets') and 'DATABASE_URL' in st.secrets:
+    DATABASE_URL = st.secrets['DATABASE_URL']
+
+# Caminho do banco SQLite (fallback)
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'air_relatorios.db')
+
+# Flag para indicar se estamos usando PostgreSQL
+USING_POSTGRES = 'postgresql' in DATABASE_URL.lower() or 'postgres' in DATABASE_URL.lower()
 
 
 def parse_data_flexivel(data_str: str) -> datetime:
@@ -37,11 +47,66 @@ def parse_data_flexivel(data_str: str) -> datetime:
 
 
 def get_connection():
-    """Retorna conexao SQLite"""
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
+    """Retorna conexao com banco de dados (PostgreSQL ou SQLite)"""
+    
+    if USING_POSTGRES:
+        try:
+            import psycopg2
+            from psycopg2.extras import RealDictCursor
+            
+            conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+            return conn
+        except ImportError:
+            st.error("psycopg2 nao instalado. Adicione 'psycopg2-binary' ao requirements.txt")
+            raise
+        except Exception as e:
+            st.error(f"Erro ao conectar ao PostgreSQL: {e}")
+            raise
+    else:
+        # SQLite local
+        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+
+def execute_query(query: str, params: tuple = (), fetch: bool = False):
+    """Executa query adaptando para PostgreSQL ou SQLite"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # Adaptar query para PostgreSQL (usa %s ao inves de ?)
+    if USING_POSTGRES:
+        query = query.replace('?', '%s')
+        query = query.replace('INTEGER PRIMARY KEY AUTOINCREMENT', 'SERIAL PRIMARY KEY')
+    
+    try:
+        cursor.execute(query, params)
+        
+        if fetch:
+            result = cursor.fetchall()
+            conn.close()
+            return result
+        else:
+            conn.commit()
+            
+            # Pegar ultimo ID inserido
+            if 'INSERT' in query.upper():
+                if USING_POSTGRES:
+                    cursor.execute("SELECT lastval()")
+                    last_id = cursor.fetchone()
+                    conn.close()
+                    return last_id[0] if last_id else None
+                else:
+                    last_id = cursor.lastrowid
+                    conn.close()
+                    return last_id
+            
+            conn.close()
+            return True
+    except Exception as e:
+        conn.close()
+        raise e
 
 
 def init_db():
@@ -49,77 +114,89 @@ def init_db():
     conn = get_connection()
     cursor = conn.cursor()
     
+    # Definir tipo de primary key baseado no banco
+    if USING_POSTGRES:
+        pk_type = "SERIAL PRIMARY KEY"
+        int_type = "INTEGER"
+        text_type = "TEXT"
+        real_type = "REAL"
+    else:
+        pk_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
+        int_type = "INTEGER"
+        text_type = "TEXT"
+        real_type = "REAL"
+    
     # Tabela de clientes
-    cursor.execute('''
+    cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS clientes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            cnpj TEXT,
-            contato TEXT,
-            email TEXT,
-            classificacao_cliente TEXT DEFAULT 'padrao',
-            created_at TEXT
+            id {pk_type},
+            nome {text_type} NOT NULL,
+            cnpj {text_type},
+            contato {text_type},
+            email {text_type},
+            classificacao_cliente {text_type} DEFAULT 'padrao',
+            created_at {text_type}
         )
     ''')
     
     # Tabela de influenciadores
-    cursor.execute('''
+    cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS influenciadores (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            profile_id TEXT,
-            nome TEXT NOT NULL,
-            usuario TEXT NOT NULL,
-            network TEXT,
-            seguidores INTEGER DEFAULT 0,
-            foto TEXT,
-            bio TEXT,
-            engagement_rate REAL DEFAULT 0,
-            air_score REAL DEFAULT 0,
-            reach_rate REAL DEFAULT 0,
-            means TEXT,
-            hashtags TEXT,
-            classificacao TEXT,
-            nicho TEXT,
-            total_posts INTEGER DEFAULT 0,
-            total_likes INTEGER DEFAULT 0,
-            total_views INTEGER DEFAULT 0,
-            total_comments INTEGER DEFAULT 0,
-            created_at TEXT,
-            updated_at TEXT
+            id {pk_type},
+            profile_id {text_type},
+            nome {text_type} NOT NULL,
+            usuario {text_type} NOT NULL,
+            network {text_type},
+            seguidores {int_type} DEFAULT 0,
+            foto {text_type},
+            bio {text_type},
+            engagement_rate {real_type} DEFAULT 0,
+            air_score {real_type} DEFAULT 0,
+            reach_rate {real_type} DEFAULT 0,
+            means {text_type},
+            hashtags {text_type},
+            classificacao {text_type},
+            nicho {text_type},
+            total_posts {int_type} DEFAULT 0,
+            total_likes {int_type} DEFAULT 0,
+            total_views {int_type} DEFAULT 0,
+            total_comments {int_type} DEFAULT 0,
+            created_at {text_type},
+            updated_at {text_type}
         )
     ''')
     
     # Tabela de campanhas
-    cursor.execute('''
+    cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS campanhas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            cliente_id INTEGER,
-            cliente_nome TEXT,
-            objetivo TEXT,
-            data_inicio TEXT,
-            data_fim TEXT,
-            tipo_dados TEXT DEFAULT 'estatico',
-            is_aon INTEGER DEFAULT 0,
-            status TEXT DEFAULT 'ativa',
-            metricas_selecionadas TEXT,
-            insights_config TEXT,
-            categorias_comentarios TEXT,
-            notas TEXT,
-            influenciadores TEXT,
-            estimativa_alcance INTEGER DEFAULT 0,
-            estimativa_impressoes INTEGER DEFAULT 0,
-            investimento_total REAL DEFAULT 0,
-            created_at TEXT
+            id {pk_type},
+            nome {text_type} NOT NULL,
+            cliente_id {int_type},
+            cliente_nome {text_type},
+            objetivo {text_type},
+            data_inicio {text_type},
+            data_fim {text_type},
+            tipo_dados {text_type} DEFAULT 'estatico',
+            is_aon {int_type} DEFAULT 0,
+            status {text_type} DEFAULT 'ativa',
+            metricas_selecionadas {text_type},
+            insights_config {text_type},
+            categorias_comentarios {text_type},
+            notas {text_type},
+            influenciadores {text_type},
+            estimativa_alcance {int_type} DEFAULT 0,
+            estimativa_impressoes {int_type} DEFAULT 0,
+            investimento_total {real_type} DEFAULT 0,
+            created_at {text_type}
         )
     ''')
     
     # Tabela de configuracoes
-    cursor.execute('''
+    cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS configuracoes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            chave TEXT UNIQUE NOT NULL,
-            valor TEXT
+            id {pk_type},
+            chave {text_type} UNIQUE NOT NULL,
+            valor {text_type}
         )
     ''')
     
