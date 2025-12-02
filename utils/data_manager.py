@@ -8,6 +8,7 @@ from typing import List, Dict, Optional
 import json
 import sqlite3
 import os
+import time
 
 # Verificar se tem DATABASE_URL para PostgreSQL
 DATABASE_URL = os.getenv('DATABASE_URL', '')
@@ -45,22 +46,88 @@ def parse_data_flexivel(data_str: str) -> datetime:
         except ValueError:
             continue
     
-    # Se nenhum formato funcionar, retorna data atual
     return datetime.now()
 
 
 def get_connection():
-    """Retorna conexao com banco de dados - sempre cria nova"""
+    """Retorna conexao com banco de dados"""
     if USING_POSTGRES:
-        import psycopg2
-        from psycopg2.extras import RealDictCursor
-        conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
-        return conn
+        # Usar session_state para manter conexao durante a sessao
+        if 'db_conn' not in st.session_state or st.session_state.db_conn is None:
+            import psycopg2
+            from psycopg2.extras import RealDictCursor
+            st.session_state.db_conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+        
+        # Verificar se conexao ainda esta valida
+        try:
+            st.session_state.db_conn.cursor().execute('SELECT 1')
+            return st.session_state.db_conn
+        except:
+            # Reconectar
+            import psycopg2
+            from psycopg2.extras import RealDictCursor
+            st.session_state.db_conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+            return st.session_state.db_conn
     else:
         os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
         conn = sqlite3.connect(DB_PATH, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         return conn
+
+
+def diagnostico_db():
+    """Mostra diagnostico de conexao com banco"""
+    st.subheader("🔍 Diagnostico de Banco de Dados")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.write(f"**Tipo:** {'PostgreSQL' if USING_POSTGRES else 'SQLite'}")
+        if USING_POSTGRES:
+            try:
+                host = DATABASE_URL.split('@')[1].split('/')[0]
+                st.write(f"**Host:** {host}")
+            except:
+                st.write("**Host:** (não identificado)")
+    
+    with col2:
+        if st.button("🧪 Testar Conexao"):
+            tempos = []
+            
+            for i in range(5):
+                start = time.time()
+                try:
+                    if USING_POSTGRES:
+                        import psycopg2
+                        from psycopg2.extras import RealDictCursor
+                        conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT 1")
+                        cursor.fetchone()
+                        conn.close()
+                    else:
+                        conn = get_connection()
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT 1")
+                        cursor.fetchone()
+                        conn.close()
+                    
+                    elapsed = time.time() - start
+                    tempos.append(elapsed)
+                    st.write(f"Teste {i+1}: {elapsed:.3f}s ✅")
+                except Exception as e:
+                    st.write(f"Teste {i+1}: ERRO - {e}")
+            
+            if tempos:
+                media = sum(tempos) / len(tempos)
+                st.success(f"**Media: {media:.3f}s** | Min: {min(tempos):.3f}s | Max: {max(tempos):.3f}s")
+                
+                if media > 0.5:
+                    st.warning("⚠️ Conexao lenta! Considere usar Supabase ou outro provedor.")
+                elif media > 0.2:
+                    st.info("ℹ️ Conexao moderada.")
+                else:
+                    st.success("✅ Conexao rapida!")
 
 
 def execute_query(query: str, params: tuple = (), fetch: bool = False):
@@ -126,10 +193,11 @@ def execute_insert(query: str, params: tuple = ()):
             last_id = result.get('lastval') if isinstance(result, dict) else result[0]
         else:
             last_id = None
+        # Nao fechar - conexao fica em session_state
     else:
         last_id = cursor.lastrowid
+        conn.close()
     
-    conn.close()
     return last_id
 
 
@@ -137,7 +205,8 @@ def execute_select(query: str, params: tuple = ()):
     """Executa SELECT e retorna todas as linhas"""
     cursor, conn = execute_sql(query, params)
     rows = cursor.fetchall()
-    conn.close()
+    if not USING_POSTGRES:
+        conn.close()
     return rows
 
 
@@ -145,7 +214,8 @@ def execute_select_one(query: str, params: tuple = ()):
     """Executa SELECT e retorna uma linha"""
     cursor, conn = execute_sql(query, params)
     row = cursor.fetchone()
-    conn.close()
+    if not USING_POSTGRES:
+        conn.close()
     return row
 
 
@@ -153,7 +223,8 @@ def execute_update(query: str, params: tuple = ()):
     """Executa UPDATE/DELETE"""
     cursor, conn = execute_sql(query, params)
     conn.commit()
-    conn.close()
+    if not USING_POSTGRES:
+        conn.close()
     return True
 
 
@@ -306,7 +377,7 @@ def salvar_faixas_classificacao(faixas: Dict) -> bool:
             ON CONFLICT (chave) DO UPDATE SET valor = EXCLUDED.valor
         ''', ('faixas_classificacao', json.dumps(faixas)))
         conn.commit()
-        conn.close()
+        # Nao fechar - conexao fica em session_state
     else:
         cursor, conn = execute_sql('''
             INSERT OR REPLACE INTO configuracoes (chave, valor)

@@ -253,6 +253,11 @@ def render_faixas_classificacao():
 
 def render_sistema():
     """Estatisticas e backup do sistema"""
+    
+    # Diagnostico de banco de dados
+    data_manager.diagnostico_db()
+    
+    st.markdown("---")
     st.subheader("Estatisticas do Sistema")
     
     col1, col2, col3 = st.columns(3)
