@@ -109,6 +109,63 @@ def execute_query(query: str, params: tuple = (), fetch: bool = False):
         raise e
 
 
+def execute_sql(query: str, params: tuple = ()):
+    """
+    Executa SQL adaptando placeholders para o banco em uso.
+    Retorna (cursor, connection) para operacoes que precisam de mais controle.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # Converter ? para %s se PostgreSQL
+    if USING_POSTGRES:
+        query = query.replace('?', '%s')
+    
+    cursor.execute(query, params)
+    return cursor, conn
+
+
+def execute_insert(query: str, params: tuple = ()):
+    """Executa INSERT e retorna o ID inserido"""
+    cursor, conn = execute_sql(query, params)
+    conn.commit()
+    
+    if USING_POSTGRES:
+        # PostgreSQL precisa de RETURNING ou lastval()
+        cursor.execute("SELECT lastval()")
+        result = cursor.fetchone()
+        last_id = result[0] if result else None
+    else:
+        last_id = cursor.lastrowid
+    
+    conn.close()
+    return last_id
+
+
+def execute_select(query: str, params: tuple = ()):
+    """Executa SELECT e retorna todas as linhas"""
+    cursor, conn = execute_sql(query, params)
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+
+def execute_select_one(query: str, params: tuple = ()):
+    """Executa SELECT e retorna uma linha"""
+    cursor, conn = execute_sql(query, params)
+    row = cursor.fetchone()
+    conn.close()
+    return row
+
+
+def execute_update(query: str, params: tuple = ()):
+    """Executa UPDATE/DELETE"""
+    cursor, conn = execute_sql(query, params)
+    conn.commit()
+    conn.close()
+    return True
+
+
 def init_db():
     """Inicializa as tabelas do banco de dados"""
     conn = get_connection()
@@ -228,13 +285,9 @@ def inicializar_session_state():
 
 def get_faixas_classificacao() -> Dict:
     """Retorna faixas de classificacao de influenciadores"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT valor FROM configuracoes WHERE chave = 'faixas_classificacao'")
-    row = cursor.fetchone()
-    conn.close()
+    row = execute_select_one("SELECT valor FROM configuracoes WHERE chave = 'faixas_classificacao'")
     
-    if row and row['valor']:
+    if row and row.get('valor'):
         try:
             return json.loads(row['valor'])
         except:
@@ -255,14 +308,22 @@ def get_faixas_classificacao() -> Dict:
 
 def salvar_faixas_classificacao(faixas: Dict) -> bool:
     """Salva faixas de classificacao"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT OR REPLACE INTO configuracoes (chave, valor)
-        VALUES ('faixas_classificacao', ?)
-    ''', (json.dumps(faixas),))
-    conn.commit()
-    conn.close()
+    # PostgreSQL nao tem INSERT OR REPLACE, precisamos usar UPSERT
+    if USING_POSTGRES:
+        cursor, conn = execute_sql('''
+            INSERT INTO configuracoes (chave, valor)
+            VALUES (?, ?)
+            ON CONFLICT (chave) DO UPDATE SET valor = EXCLUDED.valor
+        ''', ('faixas_classificacao', json.dumps(faixas)))
+        conn.commit()
+        conn.close()
+    else:
+        cursor, conn = execute_sql('''
+            INSERT OR REPLACE INTO configuracoes (chave, valor)
+            VALUES ('faixas_classificacao', ?)
+        ''', (json.dumps(faixas),))
+        conn.commit()
+        conn.close()
     return True
 
 
@@ -299,10 +360,7 @@ def calcular_classificacao(seguidores: int) -> str:
 
 def criar_cliente(dados: Dict) -> Dict:
     """Cria novo cliente"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute('''
+    cliente_id = execute_insert('''
         INSERT INTO clientes (nome, cnpj, contato, email, classificacao_cliente, created_at)
         VALUES (?, ?, ?, ?, ?, ?)
     ''', (
@@ -314,20 +372,12 @@ def criar_cliente(dados: Dict) -> Dict:
         datetime.now().isoformat()
     ))
     
-    cliente_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-    
     return {'id': cliente_id, **dados}
 
 
 def get_cliente(cliente_id: int) -> Optional[Dict]:
     """Busca cliente por ID"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM clientes WHERE id = ?", (cliente_id,))
-    row = cursor.fetchone()
-    conn.close()
+    row = execute_select_one("SELECT * FROM clientes WHERE id = ?", (cliente_id,))
     
     if row:
         return dict(row)
@@ -336,21 +386,13 @@ def get_cliente(cliente_id: int) -> Optional[Dict]:
 
 def get_clientes() -> List[Dict]:
     """Retorna todos os clientes"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM clientes ORDER BY nome")
-    rows = cursor.fetchall()
-    conn.close()
-    
+    rows = execute_select("SELECT * FROM clientes ORDER BY nome")
     return [dict(row) for row in rows]
 
 
 def atualizar_cliente(cliente_id: int, dados: Dict) -> bool:
     """Atualiza dados de um cliente"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute('''
+    execute_update('''
         UPDATE clientes SET nome = ?, cnpj = ?, contato = ?, email = ?, classificacao_cliente = ?
         WHERE id = ?
     ''', (
@@ -361,19 +403,12 @@ def atualizar_cliente(cliente_id: int, dados: Dict) -> bool:
         dados.get('classificacao_cliente', 'padrao'),
         cliente_id
     ))
-    
-    conn.commit()
-    conn.close()
     return True
 
 
 def excluir_cliente(cliente_id: int) -> bool:
     """Exclui um cliente"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM clientes WHERE id = ?", (cliente_id,))
-    conn.commit()
-    conn.close()
+    execute_update("DELETE FROM clientes WHERE id = ?", (cliente_id,))
     return True
 
 
@@ -383,16 +418,13 @@ def excluir_cliente(cliente_id: int) -> bool:
 
 def criar_influenciador(dados: Dict) -> Dict:
     """Cria influenciador na base"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    
     classificacao = classificar_influenciador(dados.get('seguidores', 0))
     now = datetime.now().isoformat()
     
     means_json = json.dumps(dados.get('means', {})) if dados.get('means') else '{}'
     hashtags_json = json.dumps(dados.get('hashtags', [])) if dados.get('hashtags') else '[]'
     
-    cursor.execute('''
+    inf_id = execute_insert('''
         INSERT INTO influenciadores (
             profile_id, nome, usuario, network, seguidores, foto, bio,
             engagement_rate, air_score, reach_rate, means, hashtags,
@@ -422,20 +454,12 @@ def criar_influenciador(dados: Dict) -> Dict:
         now
     ))
     
-    inf_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-    
     return {'id': inf_id, 'classificacao': classificacao, **dados}
 
 
 def get_influenciador(inf_id: int) -> Optional[Dict]:
     """Busca influenciador por ID"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM influenciadores WHERE id = ?", (inf_id,))
-    row = cursor.fetchone()
-    conn.close()
+    row = execute_select_one("SELECT * FROM influenciadores WHERE id = ?", (inf_id,))
     
     if row:
         inf = dict(row)
@@ -455,13 +479,8 @@ def get_influenciador(inf_id: int) -> Optional[Dict]:
 
 def get_influenciador_por_usuario(usuario: str) -> Optional[Dict]:
     """Busca influenciador por username"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    
     usuario_limpo = usuario.replace('@', '').strip().lower()
-    cursor.execute("SELECT * FROM influenciadores WHERE LOWER(usuario) = ?", (usuario_limpo,))
-    row = cursor.fetchone()
-    conn.close()
+    row = execute_select_one("SELECT * FROM influenciadores WHERE LOWER(usuario) = ?", (usuario_limpo,))
     
     if row:
         inf = dict(row)
@@ -481,11 +500,7 @@ def get_influenciador_por_usuario(usuario: str) -> Optional[Dict]:
 
 def get_influenciadores() -> List[Dict]:
     """Retorna todos os influenciadores"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM influenciadores ORDER BY nome")
-    rows = cursor.fetchall()
-    conn.close()
+    rows = execute_select("SELECT * FROM influenciadores ORDER BY nome")
     
     influenciadores = []
     for row in rows:
@@ -507,16 +522,13 @@ def get_influenciadores() -> List[Dict]:
 
 def atualizar_influenciador(inf_id: int, dados: Dict) -> bool:
     """Atualiza dados de um influenciador"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    
     classificacao = classificar_influenciador(dados.get('seguidores', 0))
     now = datetime.now().isoformat()
     
     means_json = json.dumps(dados.get('means', {})) if dados.get('means') else '{}'
     hashtags_json = json.dumps(dados.get('hashtags', [])) if dados.get('hashtags') else '[]'
     
-    cursor.execute('''
+    execute_update('''
         UPDATE influenciadores SET
             profile_id = ?, nome = ?, usuario = ?, network = ?, seguidores = ?,
             foto = ?, bio = ?, engagement_rate = ?, air_score = ?, reach_rate = ?,
@@ -546,19 +558,12 @@ def atualizar_influenciador(inf_id: int, dados: Dict) -> bool:
         now,
         inf_id
     ))
-    
-    conn.commit()
-    conn.close()
     return True
 
 
 def excluir_influenciador(inf_id: int) -> bool:
     """Exclui um influenciador"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM influenciadores WHERE id = ?", (inf_id,))
-    conn.commit()
-    conn.close()
+    execute_update("DELETE FROM influenciadores WHERE id = ?", (inf_id,))
     return True
 
 
@@ -568,9 +573,6 @@ def excluir_influenciador(inf_id: int) -> bool:
 
 def criar_campanha(dados: Dict) -> Dict:
     """Cria nova campanha"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    
     now = datetime.now().isoformat()
     
     metricas_json = json.dumps(dados.get('metricas_selecionadas', []))
@@ -578,7 +580,7 @@ def criar_campanha(dados: Dict) -> Dict:
     categorias_json = json.dumps(dados.get('categorias_comentarios', []))
     influenciadores_json = json.dumps(dados.get('influenciadores', []))
     
-    cursor.execute('''
+    camp_id = execute_insert('''
         INSERT INTO campanhas (
             nome, cliente_id, cliente_nome, objetivo, data_inicio, data_fim,
             tipo_dados, is_aon, status, metricas_selecionadas, insights_config,
@@ -606,10 +608,6 @@ def criar_campanha(dados: Dict) -> Dict:
         now
     ))
     
-    camp_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-    
     return {'id': camp_id, **dados}
 
 
@@ -617,12 +615,8 @@ def get_campanha(camp_id: int) -> Optional[Dict]:
     """Busca campanha por ID"""
     if not camp_id:
         return None
-        
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM campanhas WHERE id = ?", (camp_id,))
-    row = cursor.fetchone()
-    conn.close()
+    
+    row = execute_select_one("SELECT * FROM campanhas WHERE id = ?", (camp_id,))
     
     if row:
         camp = dict(row)
@@ -640,11 +634,7 @@ def get_campanha(camp_id: int) -> Optional[Dict]:
 
 def get_campanhas() -> List[Dict]:
     """Retorna todas as campanhas"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM campanhas ORDER BY created_at DESC")
-    rows = cursor.fetchall()
-    conn.close()
+    rows = execute_select("SELECT * FROM campanhas ORDER BY created_at DESC")
     
     campanhas = []
     for row in rows:
@@ -663,11 +653,7 @@ def get_campanhas() -> List[Dict]:
 
 def get_campanhas_por_cliente(cliente_id: int) -> List[Dict]:
     """Retorna campanhas de um cliente"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM campanhas WHERE cliente_id = ? ORDER BY created_at DESC", (cliente_id,))
-    rows = cursor.fetchall()
-    conn.close()
+    rows = execute_select("SELECT * FROM campanhas WHERE cliente_id = ? ORDER BY created_at DESC", (cliente_id,))
     
     campanhas = []
     for row in rows:
@@ -685,9 +671,6 @@ def get_campanhas_por_cliente(cliente_id: int) -> List[Dict]:
 
 def atualizar_campanha(camp_id: int, dados: Dict) -> bool:
     """Atualiza dados de uma campanha"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    
     # Buscar campanha atual para merge
     campanha_atual = get_campanha(camp_id)
     if not campanha_atual:
@@ -702,7 +685,7 @@ def atualizar_campanha(camp_id: int, dados: Dict) -> bool:
     categorias_json = json.dumps(campanha_atual.get('categorias_comentarios', []))
     influenciadores_json = json.dumps(campanha_atual.get('influenciadores', []))
     
-    cursor.execute('''
+    execute_update('''
         UPDATE campanhas SET
             nome = ?, cliente_id = ?, cliente_nome = ?, objetivo = ?,
             data_inicio = ?, data_fim = ?, tipo_dados = ?, is_aon = ?,
@@ -730,19 +713,12 @@ def atualizar_campanha(camp_id: int, dados: Dict) -> bool:
         campanha_atual.get('investimento_total', 0),
         camp_id
     ))
-    
-    conn.commit()
-    conn.close()
     return True
 
 
 def excluir_campanha(camp_id: int) -> bool:
     """Exclui uma campanha"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM campanhas WHERE id = ?", (camp_id,))
-    conn.commit()
-    conn.close()
+    execute_update("DELETE FROM campanhas WHERE id = ?", (camp_id,))
     return True
 
 
