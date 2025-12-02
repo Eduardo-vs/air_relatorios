@@ -144,12 +144,10 @@ def render_relatorio(campanhas_list, cliente=None):
 
 
 def render_pag1_big_numbers(campanhas_list, metricas, cores):
-    """Pagina 1 - Big Numbers reformulado"""
+    """Pagina 1 - Big Numbers conforme layout especificado"""
     
     primary_color = st.session_state.get('primary_color', '#7c3aed')
     secondary_color = st.session_state.get('secondary_color', '#fb923c')
-    
-    st.subheader("Metricas Gerais")
     
     # Pegar estimativas da campanha
     estimativa_alcance = 0
@@ -157,6 +155,18 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
     if len(campanhas_list) == 1:
         estimativa_alcance = campanhas_list[0].get('estimativa_alcance', 0)
         estimativa_impressoes = campanhas_list[0].get('estimativa_impressoes', 0)
+    
+    # Calcular diferencas de estimativa
+    realizado_alcance = metricas['total_alcance']
+    realizado_imp = metricas['total_impressoes'] + metricas['total_views']
+    
+    pct_dif_alcance = ((realizado_alcance - estimativa_alcance) / estimativa_alcance * 100) if estimativa_alcance > 0 else 0
+    pct_dif_imp = ((realizado_imp - estimativa_impressoes) / estimativa_impressoes * 100) if estimativa_impressoes > 0 else 0
+    
+    # Calcular taxas
+    taxa_eng_total = (metricas['total_interacoes'] / metricas['total_seguidores'] * 100) if metricas['total_seguidores'] > 0 else 0
+    taxa_alcance = metricas['taxa_alcance']
+    engaj_efetivo = metricas['engajamento_efetivo']
     
     # Calcular AIR Score medio
     todos_influs = []
@@ -170,181 +180,196 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
     if todos_influs:
         air_score_medio = sum(i.get('air_score', 0) for i in todos_influs) / len(todos_influs)
     
-    # Layout: AIR Score | Estimativas | Metricas principais
-    col_score, col_est1, col_est2, col_metrics = st.columns([1.2, 1.5, 1.5, 3])
+    # Coletar todos os posts para metricas
+    todos_posts = []
+    for camp in campanhas_list:
+        for inf_camp in camp.get('influenciadores', []):
+            todos_posts.extend(inf_camp.get('posts', []))
     
-    with col_score:
-        st.markdown(f"""
-        <div style="
-            background: linear-gradient(135deg, {primary_color}, {secondary_color});
-            color: white;
-            padding: 1.5rem;
-            border-radius: 16px;
-            text-align: center;
-            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
-            height: 180px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        ">
-            <div style="font-size: 3rem; font-weight: 700;">{air_score_medio:.2f}</div>
-            <div style="font-size: 0.9rem; opacity: 0.9; margin-top: 0.5rem;">AIR SCORE</div>
-        </div>
-        """, unsafe_allow_html=True)
+    # ========== LINHA 1 ==========
+    st.markdown("### Metricas Principais")
     
-    with col_est1:
-        realizado_alcance = metricas['total_alcance']
-        pct_alcance = (realizado_alcance / estimativa_alcance * 100) if estimativa_alcance > 0 else 0
-        cor_pct = "#10b981" if pct_alcance >= 100 else ("#f59e0b" if pct_alcance >= 70 else "#ef4444")
-        
-        st.markdown(f"""
-        <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1rem; text-align: center; height: 180px;">
-            <div style="font-size: 0.75rem; color: #6b7280; margin-bottom: 0.5rem;">ALCANCE</div>
-            <div style="font-size: 1.8rem; font-weight: 700; color: {primary_color};">{funcoes_auxiliares.formatar_numero(realizado_alcance)}</div>
-            <div style="font-size: 0.7rem; color: #9ca3af; margin: 0.5rem 0;">Meta: {funcoes_auxiliares.formatar_numero(estimativa_alcance)}</div>
-            <div style="font-size: 1.5rem; font-weight: 600; color: {cor_pct};">{pct_alcance:.0f}%</div>
-            <div style="font-size: 0.65rem; color: #9ca3af;">da estimativa</div>
-        </div>
-        """, unsafe_allow_html=True)
+    col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(8)
     
-    with col_est2:
-        realizado_imp = metricas['total_impressoes'] + metricas['total_views']
-        pct_imp = (realizado_imp / estimativa_impressoes * 100) if estimativa_impressoes > 0 else 0
-        cor_pct2 = "#10b981" if pct_imp >= 100 else ("#f59e0b" if pct_imp >= 70 else "#ef4444")
-        
-        st.markdown(f"""
-        <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1rem; text-align: center; height: 180px;">
-            <div style="font-size: 0.75rem; color: #6b7280; margin-bottom: 0.5rem;">IMPRESSOES + VIEWS</div>
-            <div style="font-size: 1.8rem; font-weight: 700; color: {primary_color};">{funcoes_auxiliares.formatar_numero(realizado_imp)}</div>
-            <div style="font-size: 0.7rem; color: #9ca3af; margin: 0.5rem 0;">Meta: {funcoes_auxiliares.formatar_numero(estimativa_impressoes)}</div>
-            <div style="font-size: 1.5rem; font-weight: 600; color: {cor_pct2};">{pct_imp:.0f}%</div>
-            <div style="font-size: 0.65rem; color: #9ca3af;">da estimativa</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col_metrics:
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Influenciadores", metricas['total_influenciadores'])
-            st.metric("Seguidores", funcoes_auxiliares.formatar_numero(metricas['total_seguidores']))
-        with col2:
-            st.metric("Posts", metricas['total_posts'])
-            st.metric("Interacoes", funcoes_auxiliares.formatar_numero(metricas['total_interacoes']))
-        with col3:
-            st.metric("Views", funcoes_auxiliares.formatar_numero(metricas['total_views']))
-            st.metric("Impressoes", funcoes_auxiliares.formatar_numero(metricas['total_impressoes']))
+    with col1:
+        st.metric("Q. Influs", metricas['total_influenciadores'])
+    with col2:
+        st.metric("T. Seguidores", funcoes_auxiliares.formatar_numero(metricas['total_seguidores']))
+    with col3:
+        st.metric("T. Impressoes/Views", funcoes_auxiliares.formatar_numero(realizado_imp))
+    with col4:
+        st.metric("T. Alcance", funcoes_auxiliares.formatar_numero(realizado_alcance))
+    with col5:
+        st.metric("Tx. Alcance", f"{taxa_alcance:.2f}%")
+    with col6:
+        st.metric("T. Interacoes", funcoes_auxiliares.formatar_numero(metricas['total_interacoes']))
+    with col7:
+        st.metric("T. Likes", funcoes_auxiliares.formatar_numero(metricas['total_curtidas']))
+    with col8:
+        st.metric("T. Salvos", funcoes_auxiliares.formatar_numero(metricas['total_saves']))
     
     st.markdown("---")
     
-    # TAXAS
-    st.subheader("Taxas de Performance")
-    
-    col1, col2 = st.columns([1, 3])
+    # ========== LINHA 2 ==========
+    col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(8)
     
     with col1:
-        filtro_taxa = st.selectbox("Selecione a taxa:", ["Todas", "Engajamento Efetivo", "Engajamento Geral", "Taxa de Alcance"], key="filtro_taxa_pag1")
-    
-    taxa_eng_efetivo = metricas['engajamento_efetivo']
-    taxa_eng_geral = (metricas['total_interacoes'] / metricas['total_seguidores'] * 100) if metricas['total_seguidores'] > 0 else 0
-    taxa_alcance = metricas['taxa_alcance']
-    
+        st.metric("Q. Conteudo", metricas['total_posts'])
     with col2:
-        if filtro_taxa == "Todas":
-            col_a, col_b, col_c = st.columns(3)
-            with col_a:
-                st.metric("Eng. Efetivo", f"{taxa_eng_efetivo:.2f}%")
-            with col_b:
-                st.metric("Eng. Geral", f"{taxa_eng_geral:.2f}%")
-            with col_c:
-                st.metric("Taxa Alcance", f"{taxa_alcance:.2f}%")
-        elif filtro_taxa == "Engajamento Efetivo":
-            st.metric("Engajamento Efetivo", f"{taxa_eng_efetivo:.2f}%")
-        elif filtro_taxa == "Engajamento Geral":
-            st.metric("Engajamento Geral", f"{taxa_eng_geral:.2f}%")
-        else:
-            st.metric("Taxa de Alcance", f"{taxa_alcance:.2f}%")
+        st.metric("Tx. Eng. Total", f"{taxa_eng_total:.2f}%", help="interacoes/seguidores")
+    with col3:
+        cor_dif = "normal" if pct_dif_imp >= 0 else "inverse"
+        st.metric("Est. Impressoes", f"{pct_dif_imp:+.1f}%", help="% diferenca estima vs realidade")
+    with col4:
+        cor_dif2 = "normal" if pct_dif_alcance >= 0 else "inverse"
+        st.metric("Est. Alcance", f"{pct_dif_alcance:+.1f}%", help="% diferenca estima vs realidade")
+    with col5:
+        st.metric("Engaj. Efetivo", f"{engaj_efetivo:.2f}%", help="interacoes/alcance")
+    with col6:
+        st.metric("AIR Score", f"{air_score_medio:.2f}")
+    with col7:
+        st.metric("T. Comentarios", funcoes_auxiliares.formatar_numero(metricas['total_comentarios']))
+    with col8:
+        st.metric("T. Compartilhados", funcoes_auxiliares.formatar_numero(metricas['total_compartilhamentos']))
     
     st.markdown("---")
     
-    # GRAFICOS
-    st.subheader("Analise por Tier e Formato")
+    # ========== GRAFICOS ==========
+    st.markdown("### Graficos")
     
-    col1, col2, col3 = st.columns(3)
+    # Coletar formatos unicos da campanha
+    formatos_campanha = set()
+    for post in todos_posts:
+        formato = post.get('formato', post.get('type', 'Outro'))
+        if formato:
+            formatos_campanha.add(formato.capitalize())
+    formatos_campanha = sorted(list(formatos_campanha)) if formatos_campanha else ['Reels', 'Feed', 'Stories']
     
-    with col1:
-        kpi_selecionado = st.selectbox("KPI:", ["Seguidores", "Impressoes", "Alcance", "Interacoes", "Views"], key="kpi_pag1")
+    # Coletar classificacoes unicas
+    classificacoes = set()
+    for inf in todos_influs:
+        classificacoes.add(inf.get('classificacao', 'Desconhecido'))
+    classificacoes = sorted(list(classificacoes)) if classificacoes else ['Nano', 'Micro', 'Inter 1', 'Inter 2', 'Macro', 'Mega 1', 'Mega 2', 'Super Mega']
     
-    with col2:
-        filtro_formato = st.selectbox("Formato:", ["Todos", "Reels", "Feed", "Stories", "TikTok", "YouTube", "Carrossel"], key="formato_pag1")
+    col_grafico1, col_grafico2 = st.columns(2)
     
-    dados_tier = coletar_dados_por_tier(campanhas_list, kpi_selecionado.lower(), filtro_formato)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("**Distribuicao por Tier (%)**")
-        if dados_tier:
-            df = pd.DataFrame(dados_tier)
-            df_agg = df.groupby('tier')['valor'].sum().reset_index()
-            total = df_agg['valor'].sum()
-            df_agg['percentual'] = (df_agg['valor'] / total * 100).round(1) if total > 0 else 0
-            
-            ordem_tier = ['Nano', 'Micro', 'Mid', 'Macro', 'Mega']
-            df_agg['ordem'] = df_agg['tier'].apply(lambda x: ordem_tier.index(x) if x in ordem_tier else 99)
-            df_agg = df_agg.sort_values('ordem')
-            
-            fig = go.Figure()
-            cores_tier = {'Nano': cores[0], 'Micro': cores[1], 'Mid': cores[2], 'Macro': cores[3], 'Mega': cores[4]}
-            
-            for _, row in df_agg.iterrows():
-                fig.add_trace(go.Bar(
-                    y=[kpi_selecionado],
-                    x=[row['percentual']],
-                    name=f"{row['tier']} ({row['percentual']:.1f}%)",
-                    orientation='h',
-                    marker_color=cores_tier.get(row['tier'], cores[5]),
-                    text=f"{row['tier']}: {row['percentual']:.1f}%",
-                    textposition='inside'
-                ))
-            
-            fig.update_layout(barmode='stack', height=200, showlegend=True, legend=dict(orientation='h', yanchor='bottom', y=1.02), xaxis=dict(title='Percentual (%)', range=[0, 100]), yaxis=dict(visible=False))
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Sem dados")
-    
-    with col2:
-        st.markdown("**Performance por Formato (Taxas)**")
-        dados_radar = coletar_dados_radar_formato(campanhas_list)
+    # ========== GRAFICO DE BARRAS ==========
+    with col_grafico1:
+        st.markdown("**KPI por Formato**")
         
-        if dados_radar:
-            df_radar = pd.DataFrame(dados_radar)
+        kpi_barra = st.selectbox(
+            "KPI:",
+            ["Impressoes", "Alcance", "Interacoes", "Views", "Likes", "Comentarios", "Saves"],
+            key="kpi_barra_pag1"
+        )
+        
+        # Agregar dados por formato
+        dados_formato = {}
+        for formato in formatos_campanha:
+            dados_formato[formato] = 0
+        
+        for post in todos_posts:
+            formato = post.get('formato', post.get('type', 'Outro')).capitalize()
+            if formato not in dados_formato:
+                dados_formato[formato] = 0
             
-            fig = go.Figure()
-            fig.add_trace(go.Scatterpolar(
-                r=df_radar['taxa_alcance'].tolist() + [df_radar['taxa_alcance'].iloc[0]],
-                theta=df_radar['formato'].tolist() + [df_radar['formato'].iloc[0]],
-                fill='toself', name='Taxa Alcance',
-                fillcolor='rgba(124, 58, 237, 0.2)', line=dict(color=cores[0], width=2)
+            if kpi_barra == "Impressoes":
+                dados_formato[formato] += post.get('impressoes', 0) or 0
+            elif kpi_barra == "Alcance":
+                dados_formato[formato] += post.get('alcance', 0) or 0
+            elif kpi_barra == "Interacoes":
+                dados_formato[formato] += post.get('interacoes', 0) or 0
+            elif kpi_barra == "Views":
+                dados_formato[formato] += post.get('views', 0) or 0
+            elif kpi_barra == "Likes":
+                dados_formato[formato] += post.get('curtidas', 0) or 0
+            elif kpi_barra == "Comentarios":
+                comentarios = post.get('comentarios', 0)
+                if isinstance(comentarios, list):
+                    dados_formato[formato] += len(comentarios)
+                else:
+                    dados_formato[formato] += comentarios or 0
+            elif kpi_barra == "Saves":
+                dados_formato[formato] += post.get('saves', 0) or 0
+        
+        if dados_formato:
+            df_barras = pd.DataFrame({
+                'Formato': list(dados_formato.keys()),
+                'Valor': list(dados_formato.values())
+            })
+            
+            fig_barras = px.bar(
+                df_barras,
+                x='Formato',
+                y='Valor',
+                color='Formato',
+                color_discrete_sequence=cores
+            )
+            fig_barras.update_layout(
+                showlegend=False,
+                height=350,
+                xaxis_title="",
+                yaxis_title=kpi_barra
+            )
+            st.plotly_chart(fig_barras, use_container_width=True)
+        else:
+            st.info("Sem dados para exibir")
+    
+    # ========== GRAFICO DE RADAR ==========
+    with col_grafico2:
+        st.markdown("**Distribuicao por Classificacao**")
+        
+        filtro_formato_radar = st.selectbox(
+            "Formato:",
+            ["Todos"] + formatos_campanha,
+            key="formato_radar_pag1"
+        )
+        
+        # Agregar dados por classificacao
+        dados_classif = {c: 0 for c in classificacoes}
+        
+        for camp in campanhas_list:
+            for inf_camp in camp.get('influenciadores', []):
+                inf = data_manager.get_influenciador(inf_camp.get('influenciador_id'))
+                if not inf:
+                    continue
+                
+                classif = inf.get('classificacao', 'Desconhecido')
+                
+                for post in inf_camp.get('posts', []):
+                    formato_post = post.get('formato', post.get('type', '')).capitalize()
+                    
+                    if filtro_formato_radar != "Todos" and formato_post != filtro_formato_radar:
+                        continue
+                    
+                    # Contar interacoes por classificacao
+                    dados_classif[classif] += post.get('interacoes', 0) or 0
+        
+        if any(v > 0 for v in dados_classif.values()):
+            categorias = list(dados_classif.keys())
+            valores = list(dados_classif.values())
+            
+            fig_radar = go.Figure()
+            
+            fig_radar.add_trace(go.Scatterpolar(
+                r=valores + [valores[0]],
+                theta=categorias + [categorias[0]],
+                fill='toself',
+                fillcolor=f'rgba(124, 58, 237, 0.3)',
+                line=dict(color=primary_color, width=2),
+                name='Interacoes'
             ))
-            fig.add_trace(go.Scatterpolar(
-                r=df_radar['taxa_eng'].tolist() + [df_radar['taxa_eng'].iloc[0]],
-                theta=df_radar['formato'].tolist() + [df_radar['formato'].iloc[0]],
-                fill='toself', name='Eng. Efetivo',
-                fillcolor='rgba(249, 115, 22, 0.2)', line=dict(color=cores[1], width=2)
-            ))
-            fig.update_layout(polar=dict(radialaxis=dict(visible=True)), height=350, showlegend=True)
-            st.plotly_chart(fig, use_container_width=True)
+            
+            fig_radar.update_layout(
+                polar=dict(
+                    radialaxis=dict(visible=True)
+                ),
+                showlegend=False,
+                height=350
+            )
+            st.plotly_chart(fig_radar, use_container_width=True)
         else:
-            st.info("Sem dados")
-    
-    st.markdown("---")
-    st.subheader("Notas")
-    
-    if len(campanhas_list) == 1:
-        notas = st.text_area("Notas:", value=campanhas_list[0].get('notas', ''), height=100, placeholder="Insights...")
-        if st.button("Salvar Notas", key="salvar_notas_pag1"):
-            data_manager.atualizar_campanha(campanhas_list[0]['id'], {'notas': notas})
-            st.success("Notas salvas!")
+            st.info("Sem dados para exibir")
 
 
 def render_pag2_analise_geral(campanhas_list, metricas, cores):

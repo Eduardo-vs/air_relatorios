@@ -418,8 +418,11 @@ def buscar_post_por_link(profile_id: str, link: str, max_dias: int = 365) -> dic
     ate encontrar o post com o permalink correspondente
     """
     
-    # Extrair ID do post do link
+    # Extrair ID do post do link fornecido pelo usuario
     post_id_buscado = extrair_post_id_do_link(link)
+    
+    if not post_id_buscado:
+        return None
     
     data_fim = datetime.now()
     dias_buscados = 0
@@ -454,19 +457,16 @@ def buscar_post_por_link(profile_id: str, link: str, max_dias: int = 365) -> dic
                     items = resultado.get('data', {}).get('items', [])
                 
                 for post in items:
+                    # Comparar pelo permalink da API
                     permalink = post.get('permalink', '')
-                    post_id = post.get('post_id', '')
                     
-                    # Comparar pelo ID extraido
-                    if post_id_buscado:
-                        if post_id_buscado in permalink or post_id_buscado in post_id:
+                    # Extrair o ID do permalink da API
+                    post_id_api = extrair_post_id_do_link(permalink)
+                    
+                    # Comparar os IDs extraidos
+                    if post_id_buscado and post_id_api:
+                        if post_id_buscado == post_id_api:
                             return post
-                    
-                    # Fallback: comparar link direto
-                    if permalink and link in permalink:
-                        return post
-                    if post_id and post_id in link:
-                        return post
         
         # Avancar para o periodo anterior
         data_fim = data_inicio

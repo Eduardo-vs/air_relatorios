@@ -68,30 +68,64 @@ def render():
     if clientes:
         for cli in clientes:
             metricas = data_manager.calcular_metricas_por_cliente(cli['id'])
+            campanhas_cliente = data_manager.get_campanhas_por_cliente(cli['id'])
             
-            col1, col2, col3, col4, col5, col6 = st.columns([3, 1, 1, 1, 1, 1])
-            
-            with col1:
-                st.write(f"**{cli['nome']}**")
-                st.caption(cli.get('email', ''))
-            with col2:
-                st.metric("Campanhas", metricas['total_campanhas'])
-            with col3:
-                st.metric("Influs", metricas['total_influenciadores'])
-            with col4:
-                st.metric("Views", funcoes_auxiliares.formatar_numero(metricas['total_views']))
-            with col5:
-                if st.button("Editar", key=f"edit_cli_{cli['id']}"):
-                    st.session_state.edit_cliente_id = cli['id']
-                    st.session_state.show_new_cliente = False
-                    st.rerun()
-            with col6:
-                if st.button("Relatorio", key=f"rel_cli_{cli['id']}"):
-                    st.session_state.modo_relatorio = 'cliente'
-                    st.session_state.relatorio_cliente_id = cli['id']
-                    st.session_state.current_page = 'Relatorios'
-                    st.rerun()
-            
-            st.markdown("---")
+            with st.expander(f"**{cli['nome']}** - {metricas['total_campanhas']} campanhas", expanded=False):
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.caption(cli.get('email', ''))
+                    st.metric("Campanhas", metricas['total_campanhas'])
+                with col2:
+                    st.metric("Influenciadores", metricas['total_influenciadores'])
+                    st.metric("Posts", metricas['total_posts'])
+                with col3:
+                    st.metric("Views", funcoes_auxiliares.formatar_numero(metricas['total_views']))
+                    st.metric("Alcance", funcoes_auxiliares.formatar_numero(metricas['total_alcance']))
+                with col4:
+                    st.metric("Interacoes", funcoes_auxiliares.formatar_numero(metricas['total_interacoes']))
+                    st.metric("Eng. Efetivo", f"{metricas['engajamento_efetivo']:.2f}%")
+                
+                st.markdown("---")
+                
+                # Selecao de campanhas para relatorio
+                if campanhas_cliente:
+                    st.markdown("**Gerar Relatorio**")
+                    
+                    # Opcoes de campanhas
+                    opcoes_camp = {c['nome']: c['id'] for c in campanhas_cliente}
+                    
+                    campanhas_selecionadas = st.multiselect(
+                        "Selecione as campanhas:",
+                        options=list(opcoes_camp.keys()),
+                        default=list(opcoes_camp.keys()),
+                        key=f"camp_sel_{cli['id']}"
+                    )
+                    
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        if st.button("Ver Relatorio", key=f"rel_cli_{cli['id']}", use_container_width=True):
+                            if campanhas_selecionadas:
+                                st.session_state.modo_relatorio = 'cliente'
+                                st.session_state.relatorio_cliente_id = cli['id']
+                                st.session_state.relatorio_campanhas_ids = [opcoes_camp[nome] for nome in campanhas_selecionadas]
+                                st.session_state.current_page = 'Relatorios'
+                                st.rerun()
+                            else:
+                                st.warning("Selecione pelo menos uma campanha")
+                    
+                    with col2:
+                        if st.button("Editar Cliente", key=f"edit_cli_{cli['id']}", use_container_width=True):
+                            st.session_state.edit_cliente_id = cli['id']
+                            st.session_state.show_new_cliente = False
+                            st.rerun()
+                else:
+                    st.info("Nenhuma campanha cadastrada para este cliente")
+                    
+                    if st.button("Editar Cliente", key=f"edit_cli_alt_{cli['id']}"):
+                        st.session_state.edit_cliente_id = cli['id']
+                        st.session_state.show_new_cliente = False
+                        st.rerun()
     else:
         st.info("Nenhum cliente cadastrado")
