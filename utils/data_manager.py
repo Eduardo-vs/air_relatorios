@@ -13,6 +13,29 @@ import os
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'air_relatorios.db')
 
 
+def parse_data_flexivel(data_str: str) -> datetime:
+    """Parseia data em varios formatos possiveis"""
+    if not data_str:
+        return datetime.now()
+    
+    formatos = [
+        '%Y-%m-%d',      # 2025-12-02
+        '%d/%m/%Y',      # 02/12/2025
+        '%d-%m-%Y',      # 02-12-2025
+        '%Y/%m/%d',      # 2025/12/02
+        '%d.%m.%Y',      # 02.12.2025
+    ]
+    
+    for fmt in formatos:
+        try:
+            return datetime.strptime(data_str, fmt)
+        except ValueError:
+            continue
+    
+    # Se nenhum formato funcionar, retorna data atual
+    return datetime.now()
+
+
 def get_connection():
     """Retorna conexao SQLite"""
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -882,16 +905,25 @@ def calcular_metricas_campanha(campanha: Dict) -> Dict:
         total_posts += len(posts)
         
         for post in posts:
-            total_views += post.get('views', 0)
-            total_alcance += post.get('alcance', 0)
-            total_interacoes += post.get('interacoes', 0)
-            total_impressoes += post.get('impressoes', 0)
-            total_curtidas += post.get('curtidas', 0)
-            total_comentarios += post.get('comentarios', 0)
-            total_compartilhamentos += post.get('compartilhamentos', 0)
-            total_saves += post.get('saves', 0)
-            total_cliques_link += post.get('cliques_link', 0)
-            total_conversoes += post.get('conversoes', 0)
+            total_views += post.get('views', 0) or 0
+            total_alcance += post.get('alcance', 0) or 0
+            total_interacoes += post.get('interacoes', 0) or 0
+            total_impressoes += post.get('impressoes', 0) or 0
+            total_curtidas += post.get('curtidas', 0) or 0
+            # comentarios pode ser lista de objetos ou numero
+            comentarios = post.get('comentarios', 0)
+            if isinstance(comentarios, list):
+                total_comentarios += len(comentarios)
+            elif isinstance(comentarios, int):
+                total_comentarios += comentarios
+            # comentarios_qtd e o campo numerico
+            total_comentarios += post.get('comentarios_qtd', 0) or 0
+            total_compartilhamentos += post.get('compartilhamentos', 0) or 0
+            total_saves += post.get('saves', 0) or 0
+            total_cliques_link += post.get('cliques_link', 0) or 0
+            total_cliques_link += post.get('clique_link', 0) or 0
+            total_conversoes += post.get('conversoes', 0) or 0
+            total_conversoes += post.get('cupom_conversoes', 0) or 0
     
     engajamento_efetivo = 0
     taxa_alcance = 0
@@ -980,16 +1012,24 @@ def calcular_metricas_multiplas_campanhas(campanhas: List[Dict]) -> Dict:
             total_posts += len(posts)
             
             for post in posts:
-                total_views += post.get('views', 0)
-                total_alcance += post.get('alcance', 0)
-                total_interacoes += post.get('interacoes', 0)
-                total_impressoes += post.get('impressoes', 0)
-                total_curtidas += post.get('curtidas', 0)
-                total_comentarios += post.get('comentarios', 0)
-                total_compartilhamentos += post.get('compartilhamentos', 0)
-                total_saves += post.get('saves', 0)
-                total_cliques_link += post.get('cliques_link', 0)
-                total_conversoes += post.get('conversoes', 0)
+                total_views += post.get('views', 0) or 0
+                total_alcance += post.get('alcance', 0) or 0
+                total_interacoes += post.get('interacoes', 0) or 0
+                total_impressoes += post.get('impressoes', 0) or 0
+                total_curtidas += post.get('curtidas', 0) or 0
+                # comentarios pode ser lista de objetos ou numero
+                comentarios = post.get('comentarios', 0)
+                if isinstance(comentarios, list):
+                    total_comentarios += len(comentarios)
+                elif isinstance(comentarios, int):
+                    total_comentarios += comentarios
+                total_comentarios += post.get('comentarios_qtd', 0) or 0
+                total_compartilhamentos += post.get('compartilhamentos', 0) or 0
+                total_saves += post.get('saves', 0) or 0
+                total_cliques_link += post.get('cliques_link', 0) or 0
+                total_cliques_link += post.get('clique_link', 0) or 0
+                total_conversoes += post.get('conversoes', 0) or 0
+                total_conversoes += post.get('cupom_conversoes', 0) or 0
     
     total_influenciadores = len(influenciadores_ids)
     
@@ -1056,16 +1096,24 @@ def calcular_metricas_influenciador_campanha(campanha: Dict, inf_id: int) -> Dic
     total_posts = len(posts)
     
     for post in posts:
-        total_views += post.get('views', 0)
-        total_alcance += post.get('alcance', 0)
-        total_interacoes += post.get('interacoes', 0)
-        total_impressoes += post.get('impressoes', 0)
-        total_curtidas += post.get('curtidas', 0)
-        total_comentarios += post.get('comentarios', 0)
-        total_compartilhamentos += post.get('compartilhamentos', 0)
-        total_saves += post.get('saves', 0)
-        total_cliques_link += post.get('cliques_link', 0)
-        total_conversoes += post.get('conversoes', 0)
+        total_views += post.get('views', 0) or 0
+        total_alcance += post.get('alcance', 0) or 0
+        total_interacoes += post.get('interacoes', 0) or 0
+        total_impressoes += post.get('impressoes', 0) or 0
+        total_curtidas += post.get('curtidas', 0) or 0
+        # comentarios pode ser lista de objetos ou numero
+        comentarios = post.get('comentarios', 0)
+        if isinstance(comentarios, list):
+            total_comentarios += len(comentarios)
+        elif isinstance(comentarios, int):
+            total_comentarios += comentarios
+        total_comentarios += post.get('comentarios_qtd', 0) or 0
+        total_compartilhamentos += post.get('compartilhamentos', 0) or 0
+        total_saves += post.get('saves', 0) or 0
+        total_cliques_link += post.get('cliques_link', 0) or 0
+        total_cliques_link += post.get('clique_link', 0) or 0
+        total_conversoes += post.get('conversoes', 0) or 0
+        total_conversoes += post.get('cupom_conversoes', 0) or 0
     
     engajamento_efetivo = 0
     taxa_alcance = 0

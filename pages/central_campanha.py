@@ -383,11 +383,43 @@ def render_busca_por_link(campanha, inf):
         render_resultados_api(campanha, inf, lambda p: result)
 
 
+def extrair_post_id_do_link(link: str) -> str:
+    """
+    Extrai o ID do post de diferentes formatos de URL do Instagram
+    Exemplos:
+    - https://www.instagram.com/reel/DRvG5iMD5fx
+    - https://www.instagram.com/oboticario/reel/DRvG5iMD5fx/?hl=pt-br
+    - https://www.instagram.com/p/ABC123/
+    - https://www.instagram.com/user/p/ABC123/?hl=pt
+    """
+    import re
+    
+    # Remover parametros de query
+    link_limpo = link.split('?')[0]
+    
+    # Padroes para extrair o ID do post
+    padroes = [
+        r'/reel/([A-Za-z0-9_-]+)',      # /reel/DRvG5iMD5fx
+        r'/p/([A-Za-z0-9_-]+)',          # /p/ABC123
+        r'/tv/([A-Za-z0-9_-]+)',         # /tv/ABC123
+    ]
+    
+    for padrao in padroes:
+        match = re.search(padrao, link_limpo)
+        if match:
+            return match.group(1)
+    
+    return ''
+
+
 def buscar_post_por_link(profile_id: str, link: str, max_dias: int = 365) -> dict:
     """
     Busca post por link fazendo requisicoes de 30 em 30 dias
     ate encontrar o post com o permalink correspondente
     """
+    
+    # Extrair ID do post do link
+    post_id_buscado = extrair_post_id_do_link(link)
     
     data_fim = datetime.now()
     dias_buscados = 0
@@ -423,10 +455,16 @@ def buscar_post_por_link(profile_id: str, link: str, max_dias: int = 365) -> dic
                 
                 for post in items:
                     permalink = post.get('permalink', '')
+                    post_id = post.get('post_id', '')
+                    
+                    # Comparar pelo ID extraido
+                    if post_id_buscado:
+                        if post_id_buscado in permalink or post_id_buscado in post_id:
+                            return post
+                    
+                    # Fallback: comparar link direto
                     if permalink and link in permalink:
                         return post
-                    # Tambem checar se o link esta no post_id
-                    post_id = post.get('post_id', '')
                     if post_id and post_id in link:
                         return post
         
@@ -709,11 +747,11 @@ def render_configuracoes_campanha(campanha):
         with col2:
             data_inicio = st.date_input(
                 "Data Inicio",
-                value=datetime.strptime(campanha['data_inicio'], '%Y-%m-%d') if campanha.get('data_inicio') else datetime.now()
+                value=data_manager.parse_data_flexivel(campanha.get('data_inicio', '')) if campanha.get('data_inicio') else datetime.now()
             )
             data_fim = st.date_input(
                 "Data Fim",
-                value=datetime.strptime(campanha['data_fim'], '%Y-%m-%d') if campanha.get('data_fim') else datetime.now()
+                value=data_manager.parse_data_flexivel(campanha.get('data_fim', '')) if campanha.get('data_fim') else datetime.now()
             )
             tipo_dados = st.selectbox(
                 "Tipo de Dados",
