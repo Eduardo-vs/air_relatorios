@@ -140,13 +140,16 @@ def get_faixas_classificacao() -> Dict:
         except:
             pass
     
-    # Valores padrao
+    # Valores padrao conforme tabela AIR
     return {
-        'nano': {'min': 0, 'max': 10000},
-        'micro': {'min': 10000, 'max': 100000},
-        'mid': {'min': 100000, 'max': 500000},
+        'nano': {'min': 1000, 'max': 10000},
+        'micro': {'min': 10000, 'max': 50000},
+        'inter1': {'min': 50000, 'max': 250000},
+        'inter2': {'min': 250000, 'max': 500000},
         'macro': {'min': 500000, 'max': 1000000},
-        'mega': {'min': 1000000, 'max': 999999999}
+        'mega1': {'min': 1000000, 'max': 5000000},
+        'mega2': {'min': 5000000, 'max': 10000000},
+        'supermega': {'min': 10000000, 'max': 999999999}
     }
 
 
@@ -171,12 +174,18 @@ def classificar_influenciador(seguidores: int) -> str:
         return 'Nano'
     elif seguidores < faixas['micro']['max']:
         return 'Micro'
-    elif seguidores < faixas['mid']['max']:
-        return 'Mid'
+    elif seguidores < faixas['inter1']['max']:
+        return 'Inter 1'
+    elif seguidores < faixas['inter2']['max']:
+        return 'Inter 2'
     elif seguidores < faixas['macro']['max']:
         return 'Macro'
+    elif seguidores < faixas['mega1']['max']:
+        return 'Mega 1'
+    elif seguidores < faixas['mega2']['max']:
+        return 'Mega 2'
     else:
-        return 'Mega'
+        return 'Super Mega'
 
 
 def calcular_classificacao(seguidores: int) -> str:
@@ -911,6 +920,26 @@ def calcular_metricas_campanha(campanha: Dict) -> Dict:
         'engajamento_efetivo': engajamento_efetivo,
         'taxa_alcance': taxa_alcance
     }
+
+
+def calcular_metricas_por_cliente(cliente_id: int) -> Dict:
+    """Calcula metricas agregadas de todas as campanhas de um cliente"""
+    campanhas = get_campanhas_por_cliente(cliente_id)
+    
+    if not campanhas:
+        return {
+            'total_campanhas': 0,
+            'total_influenciadores': 0,
+            'total_posts': 0,
+            'total_views': 0,
+            'total_alcance': 0,
+            'total_interacoes': 0,
+            'engajamento_efetivo': 0
+        }
+    
+    metricas = calcular_metricas_multiplas_campanhas(campanhas)
+    metricas['total_campanhas'] = len(campanhas)
+    return metricas
 
 
 def calcular_metricas_multiplas_campanhas(campanhas: List[Dict]) -> Dict:

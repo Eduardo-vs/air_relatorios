@@ -47,12 +47,12 @@ with col1:
 with col2:
     st.markdown('<div class="nav-btn-container">', unsafe_allow_html=True)
     cols = st.columns(6)
-    pages = ['Dashboard', 'Clientes', 'Influenciadores', 'Campanhas', 'Relatorios', 'Config']
+    pages = ['Dashboard', 'Clientes', 'Influenciadores', 'Campanhas', 'Relatorios', 'Ajustes']
     
     for idx, page in enumerate(pages):
         with cols[idx]:
             if st.button(page, key=f"nav_{page}", use_container_width=True):
-                if page == 'Config':
+                if page == 'Ajustes':
                     st.session_state.current_page = 'Configuracoes'
                 else:
                     st.session_state.current_page = page

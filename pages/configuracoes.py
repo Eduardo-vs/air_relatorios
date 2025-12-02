@@ -1,5 +1,5 @@
 """
-Pagina: Configuracoes
+Pagina: Ajustes
 """
 
 import streamlit as st
@@ -8,10 +8,10 @@ from datetime import datetime
 from utils import funcoes_auxiliares, data_manager
 
 def render():
-    st.markdown('<p class="main-header">Configuracoes</p>', unsafe_allow_html=True)
+    st.markdown('<p class="main-header">Ajustes</p>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Personalize o sistema</p>', unsafe_allow_html=True)
     
-    tab1, tab2, tab3, tab4 = st.tabs(["Aparencia", "Classificacao de Influenciadores", "Banco de Dados", "Sistema"])
+    tab1, tab2, tab3 = st.tabs(["Aparencia", "Classificacao de Influenciadores", "Sistema"])
     
     with tab1:
         render_aparencia()
@@ -20,9 +20,6 @@ def render():
         render_faixas_classificacao()
     
     with tab3:
-        render_banco_dados()
-    
-    with tab4:
         render_sistema()
 
 
@@ -66,85 +63,123 @@ def render_faixas_classificacao():
     
     with st.form("form_faixas"):
         st.markdown("**Defina o limite maximo de seguidores para cada faixa:**")
-        st.caption("Os influenciadores serao classificados automaticamente com base nestas faixas")
         
-        col1, col2, col3 = st.columns([1, 2, 1])
+        col1, col2 = st.columns(2)
         
-        with col2:
+        with col1:
             # Nano
             st.markdown("---")
-            st.markdown("### 🟢 Nano")
+            st.markdown("**Nano**")
             nano_max = st.number_input(
-                "Limite maximo de seguidores",
+                "Limite maximo",
                 min_value=1000,
-                max_value=100000,
+                max_value=50000,
                 value=faixas.get('nano', {}).get('max', 10000),
                 step=1000,
-                key="nano_max",
-                help="Influenciadores com ate este numero de seguidores serao classificados como Nano"
+                key="nano_max"
             )
-            st.caption(f"Faixa: 0 - {nano_max:,} seguidores")
+            st.caption(f"Faixa: 1K - {nano_max:,}")
             
             # Micro
             st.markdown("---")
-            st.markdown("### 🔵 Micro")
+            st.markdown("**Micro**")
             micro_max = st.number_input(
-                "Limite maximo de seguidores",
-                min_value=nano_max + 1,
-                max_value=500000,
-                value=max(faixas.get('micro', {}).get('max', 100000), nano_max + 1),
-                step=10000,
-                key="micro_max",
-                help="Influenciadores entre Nano e este numero serao classificados como Micro"
+                "Limite maximo",
+                min_value=nano_max,
+                max_value=100000,
+                value=max(faixas.get('micro', {}).get('max', 50000), nano_max),
+                step=5000,
+                key="micro_max"
             )
-            st.caption(f"Faixa: {nano_max:,} - {micro_max:,} seguidores")
+            st.caption(f"Faixa: {nano_max:,} - {micro_max:,}")
             
-            # Mid
+            # Inter 1
             st.markdown("---")
-            st.markdown("### 🟣 Mid")
-            mid_max = st.number_input(
-                "Limite maximo de seguidores",
-                min_value=micro_max + 1,
-                max_value=2000000,
-                value=max(faixas.get('mid', {}).get('max', 500000), micro_max + 1),
-                step=50000,
-                key="mid_max",
-                help="Influenciadores entre Micro e este numero serao classificados como Mid"
+            st.markdown("**Inter 1**")
+            inter1_max = st.number_input(
+                "Limite maximo",
+                min_value=micro_max,
+                max_value=500000,
+                value=max(faixas.get('inter1', {}).get('max', 250000), micro_max),
+                step=10000,
+                key="inter1_max"
             )
-            st.caption(f"Faixa: {micro_max:,} - {mid_max:,} seguidores")
+            st.caption(f"Faixa: {micro_max:,} - {inter1_max:,}")
             
+            # Inter 2
+            st.markdown("---")
+            st.markdown("**Inter 2**")
+            inter2_max = st.number_input(
+                "Limite maximo",
+                min_value=inter1_max,
+                max_value=1000000,
+                value=max(faixas.get('inter2', {}).get('max', 500000), inter1_max),
+                step=50000,
+                key="inter2_max"
+            )
+            st.caption(f"Faixa: {inter1_max:,} - {inter2_max:,}")
+        
+        with col2:
             # Macro
             st.markdown("---")
-            st.markdown("### 🟠 Macro")
+            st.markdown("**Macro**")
             macro_max = st.number_input(
-                "Limite maximo de seguidores",
-                min_value=mid_max + 1,
-                max_value=10000000,
-                value=max(faixas.get('macro', {}).get('max', 1000000), mid_max + 1),
+                "Limite maximo",
+                min_value=inter2_max,
+                max_value=5000000,
+                value=max(faixas.get('macro', {}).get('max', 1000000), inter2_max),
                 step=100000,
-                key="macro_max",
-                help="Influenciadores entre Mid e este numero serao classificados como Macro"
+                key="macro_max"
             )
-            st.caption(f"Faixa: {mid_max:,} - {macro_max:,} seguidores")
+            st.caption(f"Faixa: {inter2_max:,} - {macro_max:,}")
             
-            # Mega
+            # Mega 1
             st.markdown("---")
-            st.markdown("### 🔴 Mega")
-            st.info(f"Influenciadores com mais de {macro_max:,} seguidores serao classificados como Mega")
+            st.markdown("**Mega 1**")
+            mega1_max = st.number_input(
+                "Limite maximo",
+                min_value=macro_max,
+                max_value=10000000,
+                value=max(faixas.get('mega1', {}).get('max', 5000000), macro_max),
+                step=500000,
+                key="mega1_max"
+            )
+            st.caption(f"Faixa: {macro_max:,} - {mega1_max:,}")
+            
+            # Mega 2
+            st.markdown("---")
+            st.markdown("**Mega 2**")
+            mega2_max = st.number_input(
+                "Limite maximo",
+                min_value=mega1_max,
+                max_value=50000000,
+                value=max(faixas.get('mega2', {}).get('max', 10000000), mega1_max),
+                step=1000000,
+                key="mega2_max"
+            )
+            st.caption(f"Faixa: {mega1_max:,} - {mega2_max:,}")
+            
+            # Super Mega
+            st.markdown("---")
+            st.markdown("**Super Mega**")
+            st.info(f"Acima de {mega2_max:,} seguidores")
         
         st.markdown("---")
         
         if st.form_submit_button("Salvar Faixas", type="primary", use_container_width=True):
             novas_faixas = {
-                'nano': {'min': 0, 'max': nano_max},
+                'nano': {'min': 1000, 'max': nano_max},
                 'micro': {'min': nano_max, 'max': micro_max},
-                'mid': {'min': micro_max, 'max': mid_max},
-                'macro': {'min': mid_max, 'max': macro_max},
-                'mega': {'min': macro_max, 'max': 999999999}
+                'inter1': {'min': micro_max, 'max': inter1_max},
+                'inter2': {'min': inter1_max, 'max': inter2_max},
+                'macro': {'min': inter2_max, 'max': macro_max},
+                'mega1': {'min': macro_max, 'max': mega1_max},
+                'mega2': {'min': mega1_max, 'max': mega2_max},
+                'supermega': {'min': mega2_max, 'max': 999999999}
             }
             
             data_manager.salvar_faixas_classificacao(novas_faixas)
-            st.success("Faixas salvas com sucesso!")
+            st.success("Faixas salvas!")
             st.rerun()
     
     # Visualizacao das faixas atuais
@@ -153,98 +188,67 @@ def render_faixas_classificacao():
     
     faixas_atuais = data_manager.get_faixas_classificacao()
     
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         st.markdown("""
-        <div style='background: #22c55e; color: white; padding: 1rem; border-radius: 8px; text-align: center;'>
+        <div style='background: #22c55e; color: white; padding: 0.8rem; border-radius: 8px; text-align: center; margin-bottom: 0.5rem;'>
             <strong>Nano</strong><br>
-            0 - {nano:,}
+            <small>1K - {max:,}</small>
         </div>
-        """.format(nano=faixas_atuais['nano']['max']), unsafe_allow_html=True)
-    
-    with col2:
+        """.format(max=faixas_atuais['nano']['max']), unsafe_allow_html=True)
+        
         st.markdown("""
-        <div style='background: #3b82f6; color: white; padding: 1rem; border-radius: 8px; text-align: center;'>
+        <div style='background: #3b82f6; color: white; padding: 0.8rem; border-radius: 8px; text-align: center;'>
             <strong>Micro</strong><br>
-            {min:,} - {max:,}
+            <small>{min:,} - {max:,}</small>
         </div>
         """.format(min=faixas_atuais['micro']['min'], max=faixas_atuais['micro']['max']), unsafe_allow_html=True)
     
+    with col2:
+        st.markdown("""
+        <div style='background: #8b5cf6; color: white; padding: 0.8rem; border-radius: 8px; text-align: center; margin-bottom: 0.5rem;'>
+            <strong>Inter 1</strong><br>
+            <small>{min:,} - {max:,}</small>
+        </div>
+        """.format(min=faixas_atuais['inter1']['min'], max=faixas_atuais['inter1']['max']), unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style='background: #a855f7; color: white; padding: 0.8rem; border-radius: 8px; text-align: center;'>
+            <strong>Inter 2</strong><br>
+            <small>{min:,} - {max:,}</small>
+        </div>
+        """.format(min=faixas_atuais['inter2']['min'], max=faixas_atuais['inter2']['max']), unsafe_allow_html=True)
+    
     with col3:
         st.markdown("""
-        <div style='background: #8b5cf6; color: white; padding: 1rem; border-radius: 8px; text-align: center;'>
-            <strong>Mid</strong><br>
-            {min:,} - {max:,}
+        <div style='background: #f97316; color: white; padding: 0.8rem; border-radius: 8px; text-align: center; margin-bottom: 0.5rem;'>
+            <strong>Macro</strong><br>
+            <small>{min:,} - {max:,}</small>
         </div>
-        """.format(min=faixas_atuais['mid']['min'], max=faixas_atuais['mid']['max']), unsafe_allow_html=True)
+        """.format(min=faixas_atuais['macro']['min'], max=faixas_atuais['macro']['max']), unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style='background: #ef4444; color: white; padding: 0.8rem; border-radius: 8px; text-align: center;'>
+            <strong>Mega 1</strong><br>
+            <small>{min:,} - {max:,}</small>
+        </div>
+        """.format(min=faixas_atuais['mega1']['min'], max=faixas_atuais['mega1']['max']), unsafe_allow_html=True)
     
     with col4:
         st.markdown("""
-        <div style='background: #f97316; color: white; padding: 1rem; border-radius: 8px; text-align: center;'>
-            <strong>Macro</strong><br>
-            {min:,} - {max:,}
+        <div style='background: #dc2626; color: white; padding: 0.8rem; border-radius: 8px; text-align: center; margin-bottom: 0.5rem;'>
+            <strong>Mega 2</strong><br>
+            <small>{min:,} - {max:,}</small>
         </div>
-        """.format(min=faixas_atuais['macro']['min'], max=faixas_atuais['macro']['max']), unsafe_allow_html=True)
-    
-    with col5:
+        """.format(min=faixas_atuais['mega2']['min'], max=faixas_atuais['mega2']['max']), unsafe_allow_html=True)
+        
         st.markdown("""
-        <div style='background: #ef4444; color: white; padding: 1rem; border-radius: 8px; text-align: center;'>
-            <strong>Mega</strong><br>
-            {min:,}+
+        <div style='background: #991b1b; color: white; padding: 0.8rem; border-radius: 8px; text-align: center;'>
+            <strong>Super Mega</strong><br>
+            <small>{min:,}+</small>
         </div>
-        """.format(min=faixas_atuais['mega']['min']), unsafe_allow_html=True)
-
-
-def render_banco_dados():
-    """Configuracao de banco de dados"""
-    st.subheader("Configuracao de Banco de Dados")
-    
-    st.markdown("""
-    ### Como funciona?
-    
-    O sistema usa **SQLite** por padrao, salvando os dados em um arquivo local.
-    Os dados sao persistidos automaticamente.
-    
-    ---
-    
-    ### Opcao alternativa: PostgreSQL (para producao em nuvem)
-    
-    **Sites gratuitos para testar PostgreSQL:**
-    
-    1. **Neon** (https://neon.tech) - 500MB gratis, mais rapido
-    2. **Supabase** (https://supabase.com) - 500MB gratis
-    3. **Railway** (https://railway.app) - $5/mes de credito gratis
-    
-    **Como configurar (exemplo Neon):**
-    
-    1. Crie uma conta em https://neon.tech
-    2. Crie um novo projeto
-    3. Copie a connection string
-    4. Configure a variavel de ambiente:
-       ```
-       DATABASE_URL=postgresql://user:pass@host/database
-       ```
-    
-    **No Streamlit Cloud:**
-    - Va em Settings > Secrets
-    - Adicione: `DATABASE_URL = "sua_connection_string"`
-    """)
-    
-    st.markdown("---")
-    st.markdown("**Status atual:**")
-    
-    import os
-    db_url = os.getenv('DATABASE_URL', '')
-    
-    if 'postgresql' in db_url.lower():
-        st.success("Conectado ao PostgreSQL")
-        st.code(db_url[:50] + "..." if len(db_url) > 50 else db_url)
-    elif 'sqlite' in db_url.lower():
-        st.info("Usando SQLite (dados persistidos localmente)")
-        st.code(db_url)
-    else:
-        st.info("Usando SQLite local (dados persistidos em data/air_relatorios.db)")
+        """.format(min=faixas_atuais['supermega']['min']), unsafe_allow_html=True)
 
 
 def render_sistema():
@@ -282,7 +286,7 @@ def render_sistema():
                 'campanhas': data_manager.get_campanhas(),
                 'faixas_classificacao': data_manager.get_faixas_classificacao(),
                 'export_date': datetime.now().isoformat(),
-                'version': '5.0'
+                'version': '5.1'
             }
             
             json_data = json.dumps(backup, indent=2, ensure_ascii=False).encode('utf-8')
@@ -301,7 +305,6 @@ def render_sistema():
                 st.info(f"Backup de {backup.get('export_date', 'data desconhecida')} - Versao {backup.get('version', '?')}")
                 
                 if st.button("Restaurar", type="primary"):
-                    # Restaurar dados
                     for cliente in backup.get('clientes', []):
                         data_manager.criar_cliente(cliente)
                     
@@ -332,7 +335,6 @@ def render_sistema():
         col1, col2 = st.columns(2)
         with col1:
             if st.button("Sim, limpar tudo", type="primary"):
-                # Limpar banco
                 conn = data_manager.get_connection()
                 cursor = conn.cursor()
                 cursor.execute("DELETE FROM campanhas")

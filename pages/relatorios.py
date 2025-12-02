@@ -187,7 +187,7 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
             flex-direction: column;
             justify-content: center;
         ">
-            <div style="font-size: 3rem; font-weight: 700;">{air_score_medio:.1f}</div>
+            <div style="font-size: 3rem; font-weight: 700;">{air_score_medio:.2f}</div>
             <div style="font-size: 0.9rem; opacity: 0.9; margin-top: 0.5rem;">AIR SCORE</div>
         </div>
         """, unsafe_allow_html=True)

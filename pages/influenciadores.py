@@ -109,7 +109,7 @@ def render():
                 st.write(funcoes_auxiliares.formatar_numero(inf.get('seguidores', 0)))
             
             with col5:
-                st.write(f"{inf.get('air_score', 0)}")
+                st.write(f"{inf.get('air_score', 0):.2f}")
             
             with col6:
                 st.write(f"{inf.get('engagement_rate', 0):.2f}%")
@@ -185,7 +185,7 @@ def render_modal_adicionar():
                             st.image(dados['foto'], width=50)
                     with col2:
                         st.write(f"**{dados['nome']}** (@{dados['usuario']})")
-                        st.caption(f"{funcoes_auxiliares.formatar_numero(dados.get('seguidores', 0))} seguidores | AIR Score: {dados.get('air_score', 0)}")
+                        st.caption(f"{funcoes_auxiliares.formatar_numero(dados.get('seguidores', 0))} seguidores | AIR Score: {dados.get('air_score', 0):.2f}")
                     with col3:
                         # Verificar se ja existe
                         existente = next((i for i in data_manager.get_influenciadores() 

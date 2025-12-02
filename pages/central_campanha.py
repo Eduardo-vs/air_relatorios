@@ -100,7 +100,7 @@ def render_influenciadores_posts(campanha):
             
             with col2:
                 st.write(f"**Seguidores:** {funcoes_auxiliares.formatar_numero(inf['seguidores'])}")
-                st.write(f"**AIR Score:** {inf['air_score']}")
+                st.write(f"**AIR Score:** {inf['air_score']:.2f}")
                 st.write(f"**Taxa Eng.:** {inf['engagement_rate']:.2f}%")
             
             with col3:
