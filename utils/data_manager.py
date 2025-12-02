@@ -49,23 +49,13 @@ def parse_data_flexivel(data_str: str) -> datetime:
     return datetime.now()
 
 
-@st.cache_resource
-def get_pg_connection():
-    """Retorna conexao PostgreSQL (cached pelo Streamlit)"""
-    import psycopg2
-    from psycopg2.extras import RealDictCursor
-    conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
-    return conn
-
-
 def get_connection():
-    """Retorna conexao com banco de dados"""
+    """Retorna conexao com banco de dados - sempre cria nova"""
     if USING_POSTGRES:
-        try:
-            return get_pg_connection()
-        except Exception as e:
-            st.error(f"Erro PostgreSQL: {e}")
-            raise
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+        conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+        return conn
     else:
         os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
         conn = sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -138,8 +128,8 @@ def execute_insert(query: str, params: tuple = ()):
             last_id = None
     else:
         last_id = cursor.lastrowid
-        conn.close()
     
+    conn.close()
     return last_id
 
 
@@ -147,8 +137,7 @@ def execute_select(query: str, params: tuple = ()):
     """Executa SELECT e retorna todas as linhas"""
     cursor, conn = execute_sql(query, params)
     rows = cursor.fetchall()
-    if not USING_POSTGRES:
-        conn.close()
+    conn.close()
     return rows
 
 
@@ -156,8 +145,7 @@ def execute_select_one(query: str, params: tuple = ()):
     """Executa SELECT e retorna uma linha"""
     cursor, conn = execute_sql(query, params)
     row = cursor.fetchone()
-    if not USING_POSTGRES:
-        conn.close()
+    conn.close()
     return row
 
 
@@ -165,8 +153,7 @@ def execute_update(query: str, params: tuple = ()):
     """Executa UPDATE/DELETE"""
     cursor, conn = execute_sql(query, params)
     conn.commit()
-    if not USING_POSTGRES:
-        conn.close()
+    conn.close()
     return True
 
 
@@ -312,7 +299,6 @@ def get_faixas_classificacao() -> Dict:
 
 def salvar_faixas_classificacao(faixas: Dict) -> bool:
     """Salva faixas de classificacao"""
-    # PostgreSQL nao tem INSERT OR REPLACE, precisamos usar UPSERT
     if USING_POSTGRES:
         cursor, conn = execute_sql('''
             INSERT INTO configuracoes (chave, valor)
@@ -320,7 +306,7 @@ def salvar_faixas_classificacao(faixas: Dict) -> bool:
             ON CONFLICT (chave) DO UPDATE SET valor = EXCLUDED.valor
         ''', ('faixas_classificacao', json.dumps(faixas)))
         conn.commit()
-        # NAO fechar conexao PostgreSQL
+        conn.close()
     else:
         cursor, conn = execute_sql('''
             INSERT OR REPLACE INTO configuracoes (chave, valor)
