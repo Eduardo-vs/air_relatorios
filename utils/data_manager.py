@@ -60,12 +60,18 @@ def get_connection():
         
         # Verificar se conexao ainda esta valida
         try:
-            st.session_state.db_conn.cursor().execute('SELECT 1')
+            cur = st.session_state.db_conn.cursor()
+            cur.execute('SELECT 1')
+            cur.fetchone()
             return st.session_state.db_conn
         except:
             # Reconectar
             import psycopg2
             from psycopg2.extras import RealDictCursor
+            try:
+                st.session_state.db_conn.close()
+            except:
+                pass
             st.session_state.db_conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
             return st.session_state.db_conn
     else:
@@ -73,6 +79,16 @@ def get_connection():
         conn = sqlite3.connect(DB_PATH, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         return conn
+
+
+def invalidar_cache():
+    """Invalida cache de dados para forcar reload"""
+    if '_cache_clientes' in st.session_state:
+        del st.session_state._cache_clientes
+    if '_cache_influenciadores' in st.session_state:
+        del st.session_state._cache_influenciadores
+    if '_cache_campanhas' in st.session_state:
+        del st.session_state._cache_campanhas
 
 
 def diagnostico_db():
@@ -91,7 +107,7 @@ def diagnostico_db():
                 st.write("**Host:** (não identificado)")
     
     with col2:
-        if st.button("🧪 Testar Conexao"):
+        if st.button("🧪 Testar Conexao Atual"):
             tempos = []
             
             for i in range(5):
@@ -106,7 +122,7 @@ def diagnostico_db():
                         cursor.fetchone()
                         conn.close()
                     else:
-                        conn = get_connection()
+                        conn = sqlite3.connect(DB_PATH)
                         cursor = conn.cursor()
                         cursor.execute("SELECT 1")
                         cursor.fetchone()
@@ -123,11 +139,53 @@ def diagnostico_db():
                 st.success(f"**Media: {media:.3f}s** | Min: {min(tempos):.3f}s | Max: {max(tempos):.3f}s")
                 
                 if media > 0.5:
-                    st.warning("⚠️ Conexao lenta! Considere usar Supabase ou outro provedor.")
+                    st.warning("⚠️ Conexao lenta! Servidor do banco esta longe do Streamlit Cloud.")
                 elif media > 0.2:
                     st.info("ℹ️ Conexao moderada.")
                 else:
                     st.success("✅ Conexao rapida!")
+    
+    # Teste de URL customizada
+    st.markdown("---")
+    st.subheader("🧪 Testar Outra URL")
+    st.caption("Use para comparar diferentes provedores/regioes")
+    
+    test_url = st.text_input("DATABASE_URL para testar:", type="password", key="test_db_url")
+    
+    if st.button("Testar URL", disabled=not test_url):
+        if test_url:
+            tempos = []
+            try:
+                host = test_url.split('@')[1].split('/')[0]
+                st.write(f"**Testando:** {host}")
+            except:
+                pass
+            
+            for i in range(3):
+                start = time.time()
+                try:
+                    import psycopg2
+                    from psycopg2.extras import RealDictCursor
+                    conn = psycopg2.connect(test_url, cursor_factory=RealDictCursor)
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT 1")
+                    cursor.fetchone()
+                    conn.close()
+                    
+                    elapsed = time.time() - start
+                    tempos.append(elapsed)
+                    st.write(f"Teste {i+1}: {elapsed:.3f}s ✅")
+                except Exception as e:
+                    st.error(f"Teste {i+1}: ERRO - {e}")
+            
+            if tempos:
+                media = sum(tempos) / len(tempos)
+                if media < 0.2:
+                    st.success(f"🚀 **Excelente! Media: {media:.3f}s** - Use esta URL!")
+                elif media < 0.5:
+                    st.success(f"✅ **Boa! Media: {media:.3f}s**")
+                else:
+                    st.warning(f"⚠️ **Lenta: Media: {media:.3f}s** - Tente outra regiao")
 
 
 def execute_query(query: str, params: tuple = (), fetch: bool = False):
@@ -421,6 +479,7 @@ def calcular_classificacao(seguidores: int) -> str:
 
 def criar_cliente(dados: Dict) -> Dict:
     """Cria novo cliente"""
+    invalidar_cache()
     cliente_id = execute_insert('''
         INSERT INTO clientes (nome, cnpj, contato, email, classificacao_cliente, created_at)
         VALUES (?, ?, ?, ?, ?, ?)
@@ -446,13 +505,20 @@ def get_cliente(cliente_id: int) -> Optional[Dict]:
 
 
 def get_clientes() -> List[Dict]:
-    """Retorna todos os clientes"""
+    """Retorna todos os clientes (com cache)"""
+    # Cache por sessao
+    if '_cache_clientes' in st.session_state:
+        return st.session_state._cache_clientes
+    
     rows = execute_select("SELECT * FROM clientes ORDER BY nome")
-    return [dict(row) for row in rows]
+    result = [dict(row) for row in rows]
+    st.session_state._cache_clientes = result
+    return result
 
 
 def atualizar_cliente(cliente_id: int, dados: Dict) -> bool:
     """Atualiza dados de um cliente"""
+    invalidar_cache()
     execute_update('''
         UPDATE clientes SET nome = ?, cnpj = ?, contato = ?, email = ?, classificacao_cliente = ?
         WHERE id = ?
@@ -469,6 +535,7 @@ def atualizar_cliente(cliente_id: int, dados: Dict) -> bool:
 
 def excluir_cliente(cliente_id: int) -> bool:
     """Exclui um cliente"""
+    invalidar_cache()
     execute_update("DELETE FROM clientes WHERE id = ?", (cliente_id,))
     return True
 
@@ -479,6 +546,7 @@ def excluir_cliente(cliente_id: int) -> bool:
 
 def criar_influenciador(dados: Dict) -> Dict:
     """Cria influenciador na base"""
+    invalidar_cache()
     classificacao = classificar_influenciador(dados.get('seguidores', 0))
     now = datetime.now().isoformat()
     
@@ -560,7 +628,11 @@ def get_influenciador_por_usuario(usuario: str) -> Optional[Dict]:
 
 
 def get_influenciadores() -> List[Dict]:
-    """Retorna todos os influenciadores"""
+    """Retorna todos os influenciadores (com cache)"""
+    # Cache por sessao
+    if '_cache_influenciadores' in st.session_state:
+        return st.session_state._cache_influenciadores
+    
     rows = execute_select("SELECT * FROM influenciadores ORDER BY nome")
     
     influenciadores = []
@@ -578,11 +650,13 @@ def get_influenciadores() -> List[Dict]:
                 inf['hashtags'] = []
         influenciadores.append(inf)
     
+    st.session_state._cache_influenciadores = influenciadores
     return influenciadores
 
 
 def atualizar_influenciador(inf_id: int, dados: Dict) -> bool:
     """Atualiza dados de um influenciador"""
+    invalidar_cache()
     classificacao = classificar_influenciador(dados.get('seguidores', 0))
     now = datetime.now().isoformat()
     
@@ -624,6 +698,7 @@ def atualizar_influenciador(inf_id: int, dados: Dict) -> bool:
 
 def excluir_influenciador(inf_id: int) -> bool:
     """Exclui um influenciador"""
+    invalidar_cache()
     execute_update("DELETE FROM influenciadores WHERE id = ?", (inf_id,))
     return True
 
@@ -634,6 +709,7 @@ def excluir_influenciador(inf_id: int) -> bool:
 
 def criar_campanha(dados: Dict) -> Dict:
     """Cria nova campanha"""
+    invalidar_cache()
     now = datetime.now().isoformat()
     
     metricas_json = json.dumps(dados.get('metricas_selecionadas', []))
@@ -694,7 +770,11 @@ def get_campanha(camp_id: int) -> Optional[Dict]:
 
 
 def get_campanhas() -> List[Dict]:
-    """Retorna todas as campanhas"""
+    """Retorna todas as campanhas (com cache)"""
+    # Cache por sessao
+    if '_cache_campanhas' in st.session_state:
+        return st.session_state._cache_campanhas
+    
     rows = execute_select("SELECT * FROM campanhas ORDER BY created_at DESC")
     
     campanhas = []
@@ -709,6 +789,7 @@ def get_campanhas() -> List[Dict]:
         camp['is_aon'] = bool(camp.get('is_aon'))
         campanhas.append(camp)
     
+    st.session_state._cache_campanhas = campanhas
     return campanhas
 
 
@@ -732,6 +813,7 @@ def get_campanhas_por_cliente(cliente_id: int) -> List[Dict]:
 
 def atualizar_campanha(camp_id: int, dados: Dict) -> bool:
     """Atualiza dados de uma campanha"""
+    invalidar_cache()
     # Buscar campanha atual para merge
     campanha_atual = get_campanha(camp_id)
     if not campanha_atual:
@@ -779,6 +861,7 @@ def atualizar_campanha(camp_id: int, dados: Dict) -> bool:
 
 def excluir_campanha(camp_id: int) -> bool:
     """Exclui uma campanha"""
+    invalidar_cache()
     execute_update("DELETE FROM campanhas WHERE id = ?", (camp_id,))
     return True
 
