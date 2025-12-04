@@ -81,21 +81,19 @@ def render_relatorio(campanhas_list, cliente=None):
     if has_aon:
         tabs = st.tabs([
             "1. Big Numbers",
-            "2. Analise Geral", 
-            "3. Visao AON",
-            "4. KPIs por Influ",
-            "5. Top Performance",
-            "6. Lista Influs",
+            "2. Visao AON",
+            "3. KPIs por Influ",
+            "4. Top Performance",
+            "5. Lista Influs",
             "Comentarios",
             "Glossario"
         ])
     else:
         tabs = st.tabs([
             "1. Big Numbers",
-            "2. Analise Geral",
-            "3. KPIs por Influ",
-            "4. Top Performance",
-            "5. Lista Influs",
+            "2. KPIs por Influ",
+            "3. Top Performance",
+            "4. Lista Influs",
             "Comentarios",
             "Glossario"
         ])
@@ -107,38 +105,33 @@ def render_relatorio(campanhas_list, cliente=None):
         render_pag1_big_numbers(campanhas_list, metricas, cores)
     tab_idx += 1
     
-    # TAB 2: ANALISE GERAL
-    with tabs[tab_idx]:
-        render_pag2_analise_geral(campanhas_list, metricas, cores)
-    tab_idx += 1
-    
-    # TAB 3: VISAO AON (se aplicavel)
+    # TAB 2: VISAO AON (se aplicavel)
     if has_aon:
         with tabs[tab_idx]:
             render_pag3_visao_aon(campanhas_list, metricas, cores, cliente)
         tab_idx += 1
     
-    # TAB 4: KPIs por Influenciador
+    # TAB 3: KPIs por Influenciador
     with tabs[tab_idx]:
         render_pag4_kpis_influenciador(campanhas_list, cores)
     tab_idx += 1
     
-    # TAB 5: Top Performance
+    # TAB 4: Top Performance
     with tabs[tab_idx]:
         render_pag5_top_performance(campanhas_list, cores)
     tab_idx += 1
     
-    # TAB 6: Lista Influenciadores
+    # TAB 5: Lista Influenciadores
     with tabs[tab_idx]:
         render_pag6_lista_influenciadores(campanhas_list, cores)
     tab_idx += 1
     
-    # TAB 7: Comentarios
+    # TAB 6: Comentarios
     with tabs[tab_idx]:
         render_comentarios(campanhas_list, cores)
     tab_idx += 1
     
-    # TAB 8: Glossario
+    # TAB 7: Glossario
     with tabs[tab_idx]:
         render_glossario()
 
@@ -521,10 +514,27 @@ def render_pag3_visao_aon(campanhas_list, metricas, cores, cliente=None):
     df_tempo['taxa_alcance'] = (df_tempo['alcance'] / df_tempo['seguidores'] * 100).round(2).fillna(0)
     
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=df_tempo['data'], y=df_tempo[campo], name=filtro_metrica, marker_color=cores[0]))
+    fig.add_trace(go.Bar(
+        x=df_tempo['data'], 
+        y=df_tempo[campo], 
+        name=filtro_metrica, 
+        marker_color=cores[0],
+        text=[funcoes_auxiliares.formatar_numero(v) for v in df_tempo[campo]],
+        textposition='outside'
+    ))
     
     taxa_campo = 'taxa_eng' if filtro_taxa == "Taxa Eng. Efetivo" else 'taxa_alcance'
-    fig.add_trace(go.Scatter(x=df_tempo['data'], y=df_tempo[taxa_campo], name=filtro_taxa, mode='lines+markers', yaxis='y2', line=dict(color=cores[1], width=3), marker=dict(size=8)))
+    fig.add_trace(go.Scatter(
+        x=df_tempo['data'], 
+        y=df_tempo[taxa_campo], 
+        name=filtro_taxa, 
+        mode='lines+markers+text',
+        text=[f"{v:.1f}%" for v in df_tempo[taxa_campo]],
+        textposition='top center',
+        yaxis='y2', 
+        line=dict(color=cores[1], width=3), 
+        marker=dict(size=8)
+    ))
     
     fig.update_layout(title=f'Evolucao de {filtro_metrica}', yaxis=dict(title=filtro_metrica), yaxis2=dict(title=filtro_taxa, overlaying='y', side='right'), height=450, legend=dict(orientation='h', yanchor='bottom', y=1.02))
     st.plotly_chart(fig, use_container_width=True)
@@ -534,7 +544,13 @@ def render_pag3_visao_aon(campanhas_list, metricas, cores, cliente=None):
     
     df_mensal = df.groupby('mes').agg({'influenciador': 'nunique', 'seguidores': lambda x: x.drop_duplicates().sum(), 'views': 'sum', 'alcance': 'sum', 'interacoes': 'sum', 'impressoes': 'sum'}).reset_index()
     df_mensal.columns = ['Mes', 'Qtd Influs', 'Seguidores', 'Views', 'Alcance', 'Interacoes', 'Impressoes']
-    st.dataframe(df_mensal, use_container_width=True, hide_index=True)
+    
+    # Formatar numeros com ponto nas centenas
+    df_mensal_fmt = df_mensal.copy()
+    for col in ['Seguidores', 'Views', 'Alcance', 'Interacoes', 'Impressoes']:
+        df_mensal_fmt[col] = df_mensal_fmt[col].apply(lambda x: f"{x:,.0f}".replace(",", "."))
+    
+    st.dataframe(df_mensal_fmt, use_container_width=True, hide_index=True)
 
 
 def render_pag4_kpis_influenciador(campanhas_list, cores):
@@ -557,25 +573,54 @@ def render_pag4_kpis_influenciador(campanhas_list, cores):
     with col1:
         kpi_barra = st.selectbox("KPI Barras:", ["Seguidores", "Impressoes", "Alcance", "Interacoes"], key="kpi_barra_pag4")
     with col2:
-        kpi_linha = st.selectbox("KPI Linha:", ["Taxa Eng. Efetivo", "Taxa Alcance", "Engajamento Total"], key="kpi_linha_pag4")
+        kpi_linha = st.selectbox("KPI Linha:", ["Taxa Eng. Efetivo", "Taxa Alcance", "Taxa Visualizacao", "Engajamento Total"], key="kpi_linha_pag4")
     
     kpi_map = {'Seguidores': 'seguidores', 'Impressoes': 'impressoes', 'Alcance': 'alcance', 'Interacoes': 'interacoes'}
     campo_barra = kpi_map.get(kpi_barra, 'seguidores')
     
-    df_sorted = df.sort_values(campo_barra, ascending=True)
+    # Calcular taxa de visualizacao
+    df['taxa_views'] = (df['views'] / df['seguidores'] * 100).round(2).fillna(0)
+    
+    df_sorted = df.sort_values(campo_barra, ascending=False)
     
     fig1 = go.Figure()
-    fig1.add_trace(go.Bar(x=df_sorted[campo_barra], y=df_sorted['nome'], orientation='h', name=kpi_barra, marker_color=cores[0], text=[funcoes_auxiliares.formatar_numero(v) for v in df_sorted[campo_barra]], textposition='outside'))
+    # Barras VERTICAIS
+    fig1.add_trace(go.Bar(
+        x=df_sorted['nome'], 
+        y=df_sorted[campo_barra], 
+        name=kpi_barra, 
+        marker_color=cores[0], 
+        text=[funcoes_auxiliares.formatar_numero(v) for v in df_sorted[campo_barra]], 
+        textposition='outside'
+    ))
     
     if kpi_linha == "Taxa Eng. Efetivo":
         y_linha = df_sorted['taxa_eng']
     elif kpi_linha == "Taxa Alcance":
         y_linha = df_sorted['taxa_alcance']
+    elif kpi_linha == "Taxa Visualizacao":
+        y_linha = df_sorted['taxa_views']
     else:
         y_linha = df_sorted['taxa_eng_geral']
     
-    fig1.add_trace(go.Scatter(x=y_linha, y=df_sorted['nome'], mode='lines+markers', name=kpi_linha, xaxis='x2', line=dict(color=cores[1], width=2), marker=dict(size=8)))
-    fig1.update_layout(xaxis=dict(title=kpi_barra, side='bottom'), xaxis2=dict(title=kpi_linha, overlaying='x', side='top'), height=max(400, len(df_sorted) * 30), legend=dict(orientation='h', yanchor='bottom', y=1.02))
+    fig1.add_trace(go.Scatter(
+        x=df_sorted['nome'], 
+        y=y_linha, 
+        mode='lines+markers+text', 
+        name=kpi_linha, 
+        text=[f"{v:.1f}%" for v in y_linha],
+        textposition='top center',
+        yaxis='y2', 
+        line=dict(color=cores[1], width=2), 
+        marker=dict(size=8)
+    ))
+    fig1.update_layout(
+        xaxis=dict(title='Influenciador', tickangle=-45), 
+        yaxis=dict(title=kpi_barra), 
+        yaxis2=dict(title=kpi_linha, overlaying='y', side='right'), 
+        height=500, 
+        legend=dict(orientation='h', yanchor='bottom', y=1.02)
+    )
     st.plotly_chart(fig1, use_container_width=True)
     
     st.markdown("### Grafico 2: Eficiencia de Gasto")
@@ -610,16 +655,56 @@ def render_pag4_kpis_influenciador(campanhas_list, cores):
     
     col1, col2 = st.columns([1, 3])
     with col1:
-        tipo_trafego = st.selectbox("Tipo:", ["Cliques Link", "Ambos"], key="trafego_pag4")
+        tipo_trafego = st.selectbox("Tipo:", ["Cliques Link", "Cliques @", "Ambos"], key="trafego_pag4")
     
     with col2:
         fig3 = go.Figure()
-        fig3.add_trace(go.Bar(x=df['cliques_link'], y=df['nome'], orientation='h', name='Cliques Link', marker_color=cores[5]))
+        
+        if tipo_trafego == "Cliques Link":
+            fig3.add_trace(go.Bar(
+                x=df['cliques_link'], 
+                y=df['nome'], 
+                orientation='h', 
+                name='Cliques Link', 
+                marker_color=cores[5],
+                text=[funcoes_auxiliares.formatar_numero(v) for v in df['cliques_link']],
+                textposition='outside'
+            ))
+        elif tipo_trafego == "Cliques @":
+            fig3.add_trace(go.Bar(
+                x=df['cliques_arroba'], 
+                y=df['nome'], 
+                orientation='h', 
+                name='Cliques @', 
+                marker_color=cores[3],
+                text=[funcoes_auxiliares.formatar_numero(v) for v in df['cliques_arroba']],
+                textposition='outside'
+            ))
+        else:
+            # Ambos
+            fig3.add_trace(go.Bar(
+                x=df['cliques_link'], 
+                y=df['nome'], 
+                orientation='h', 
+                name='Cliques Link', 
+                marker_color=cores[5],
+                text=[funcoes_auxiliares.formatar_numero(v) for v in df['cliques_link']],
+                textposition='outside'
+            ))
+            fig3.add_trace(go.Bar(
+                x=df['cliques_arroba'], 
+                y=df['nome'], 
+                orientation='h', 
+                name='Cliques @', 
+                marker_color=cores[3],
+                text=[funcoes_auxiliares.formatar_numero(v) for v in df['cliques_arroba']],
+                textposition='outside'
+            ))
         
         for i, row in df.iterrows():
             fig3.add_annotation(x=0, y=row['nome'], text=f"({funcoes_auxiliares.formatar_numero(row['seguidores'])} seg)", showarrow=False, xanchor='right', xshift=-10, font=dict(size=9, color='gray'))
         
-        fig3.update_layout(title='Trafego por Influenciador', height=max(300, len(df) * 25))
+        fig3.update_layout(title='Trafego por Influenciador', height=max(300, len(df) * 25), barmode='group')
         st.plotly_chart(fig3, use_container_width=True)
     
     st.markdown("---")
@@ -647,20 +732,7 @@ def render_pag5_top_performance(campanhas_list, cores):
     
     df = pd.DataFrame(dados_influs)
     
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        metrica_ordenar = st.selectbox("Ordenar:", ["EMV (Custo)", "Interacoes", "Taxa Eng. Efetivo", "Views", "Alcance"], key="ordenar_pag5")
-    with col2:
-        filtro_class = st.multiselect("Classificacao:", ["Nano", "Micro", "Mid", "Macro", "Mega"], key="class_pag5")
-    with col3:
-        qtd = st.slider("Quantidade:", 5, 30, 15, key="qtd_pag5")
-    
-    if filtro_class:
-        df = df[df['classificacao'].isin(filtro_class)]
-    
-    ordem_map = {"EMV (Custo)": "custo", "Interacoes": "interacoes", "Taxa Eng. Efetivo": "taxa_eng", "Views": "views", "Alcance": "alcance"}
-    df = df.sort_values(ordem_map.get(metrica_ordenar, 'interacoes'), ascending=False).head(qtd)
-    
+    # Grafico de dispersao primeiro (sem filtros)
     if len(df) > 0:
         st.markdown("### Dispersao: Engajamento vs Alcance")
         
@@ -669,9 +741,28 @@ def render_pag5_top_performance(campanhas_list, cores):
         fig.update_layout(height=500)
         st.plotly_chart(fig, use_container_width=True)
     
-    st.markdown("### Lista")
+    st.markdown("---")
     
-    for _, row in df.iterrows():
+    # Filtros acima da lista
+    st.markdown("### Lista de Top Performance")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        metrica_ordenar = st.selectbox("Ordenar:", ["EMV (Custo)", "Interacoes", "Taxa Eng. Efetivo", "Views", "Alcance"], key="ordenar_pag5")
+    with col2:
+        filtro_class = st.multiselect("Classificacao:", ["Nano", "Micro", "Mid", "Macro", "Mega"], key="class_pag5")
+    with col3:
+        qtd = st.slider("Quantidade:", 5, 30, 15, key="qtd_pag5")
+    
+    df_filtrado = df.copy()
+    
+    if filtro_class:
+        df_filtrado = df_filtrado[df_filtrado['classificacao'].isin(filtro_class)]
+    
+    ordem_map = {"EMV (Custo)": "custo", "Interacoes": "interacoes", "Taxa Eng. Efetivo": "taxa_eng", "Views": "views", "Alcance": "alcance"}
+    df_filtrado = df_filtrado.sort_values(ordem_map.get(metrica_ordenar, 'interacoes'), ascending=False).head(qtd)
+    
+    for _, row in df_filtrado.iterrows():
         col1, col2, col3, col4, col5, col6 = st.columns([0.5, 2, 1.2, 1.2, 1.2, 1.2])
         with col1:
             if row.get('foto'):
@@ -680,7 +771,7 @@ def render_pag5_top_performance(campanhas_list, cores):
             st.write(f"**{row['nome']}**")
             st.caption(f"@{row['usuario']} | {row['classificacao']}")
         with col3:
-            st.metric("EMV", f"R$ {row.get('custo', 0):,.0f}")
+            st.metric("EMV", f"R$ {row.get('custo', 0):,.0f}".replace(",", "."))
         with col4:
             st.metric("Interacoes", funcoes_auxiliares.formatar_numero(row['interacoes']))
         with col5:
@@ -699,7 +790,7 @@ def render_pag6_lista_influenciadores(campanhas_list, cores):
     with col1:
         filtro_class = st.multiselect("Classificacao:", ["Nano", "Micro", "Mid", "Macro", "Mega"], key="class_pag6")
     with col2:
-        ordenar = st.selectbox("Ordenar:", ["Views", "Alcance", "Interacoes", "Taxa Eng."], key="ord_pag6")
+        ordenar = st.selectbox("Ordenar:", ["Views", "Alcance", "Interacoes", "Taxa Eng.", "EMV"], key="ord_pag6")
     
     dados = coletar_dados_influenciadores(campanhas_list)
     
@@ -712,10 +803,22 @@ def render_pag6_lista_influenciadores(campanhas_list, cores):
     if filtro_class:
         df = df[df['classificacao'].isin(filtro_class)]
     
-    ordem_map = {"Views": "views", "Alcance": "alcance", "Interacoes": "interacoes", "Taxa Eng.": "taxa_eng"}
+    ordem_map = {"Views": "views", "Alcance": "alcance", "Interacoes": "interacoes", "Taxa Eng.": "taxa_eng", "EMV": "custo"}
     df = df.sort_values(ordem_map.get(ordenar, 'views'), ascending=False)
     
-    st.dataframe(df[['nome', 'usuario', 'classificacao', 'seguidores', 'posts', 'views', 'alcance', 'interacoes', 'taxa_eng', 'taxa_alcance']].rename(columns={'nome': 'Nome', 'usuario': 'Usuario', 'classificacao': 'Classe', 'seguidores': 'Seguidores', 'posts': 'Posts', 'views': 'Views', 'alcance': 'Alcance', 'interacoes': 'Interacoes', 'taxa_eng': 'Taxa Eng. %', 'taxa_alcance': 'Taxa Alc. %'}), use_container_width=True, hide_index=True)
+    # Preparar dataframe para exibicao com formatacao
+    df_exibir = df[['nome', 'usuario', 'classificacao', 'seguidores', 'posts', 'views', 'alcance', 'interacoes', 'custo', 'taxa_eng', 'taxa_alcance']].copy()
+    df_exibir.columns = ['Nome', 'Usuario', 'Classe', 'Seguidores', 'Posts', 'Views', 'Alcance', 'Interacoes', 'EMV (R$)', 'Taxa Eng. %', 'Taxa Alc. %']
+    
+    # Formatar numeros com ponto nas centenas
+    for col in ['Seguidores', 'Views', 'Alcance', 'Interacoes']:
+        df_exibir[col] = df_exibir[col].apply(lambda x: f"{x:,.0f}".replace(",", "."))
+    
+    df_exibir['EMV (R$)'] = df_exibir['EMV (R$)'].apply(lambda x: f"{x:,.0f}".replace(",", "."))
+    df_exibir['Taxa Eng. %'] = df_exibir['Taxa Eng. %'].apply(lambda x: f"{x:.2f}")
+    df_exibir['Taxa Alc. %'] = df_exibir['Taxa Alc. %'].apply(lambda x: f"{x:.2f}")
+    
+    st.dataframe(df_exibir, use_container_width=True, hide_index=True)
 
 
 # ========================================
@@ -812,14 +915,15 @@ def coletar_dados_influenciadores(campanhas_list):
                 continue
             inf_id = inf['id']
             if inf_id not in dados_inf:
-                dados_inf[inf_id] = {'id': inf_id, 'nome': inf['nome'], 'usuario': inf['usuario'], 'foto': inf.get('foto', ''), 'classificacao': inf.get('classificacao', 'Desconhecido'), 'seguidores': inf.get('seguidores', 0), 'views': 0, 'alcance': 0, 'interacoes': 0, 'impressoes': 0, 'custo': 0, 'cliques_link': 0, 'posts': 0}
+                dados_inf[inf_id] = {'id': inf_id, 'nome': inf['nome'], 'usuario': inf['usuario'], 'foto': inf.get('foto', ''), 'classificacao': inf.get('classificacao', 'Desconhecido'), 'seguidores': inf.get('seguidores', 0), 'views': 0, 'alcance': 0, 'interacoes': 0, 'impressoes': 0, 'custo': 0, 'cliques_link': 0, 'cliques_arroba': 0, 'posts': 0}
+            dados_inf[inf_id]['custo'] += camp_inf.get('custo', 0)  # Custo por influenciador
             for post in camp_inf.get('posts', []):
                 dados_inf[inf_id]['views'] += post.get('views', 0)
                 dados_inf[inf_id]['alcance'] += post.get('alcance', 0)
                 dados_inf[inf_id]['interacoes'] += post.get('interacoes', 0)
                 dados_inf[inf_id]['impressoes'] += post.get('impressoes', 0)
-                dados_inf[inf_id]['custo'] += post.get('custo', 0)
                 dados_inf[inf_id]['cliques_link'] += post.get('clique_link', 0)
+                dados_inf[inf_id]['cliques_arroba'] += post.get('clique_arroba', 0) or post.get('cliques_arroba', 0) or 0
                 dados_inf[inf_id]['posts'] += 1
     resultado = []
     for inf_id, d in dados_inf.items():
