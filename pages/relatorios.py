@@ -799,7 +799,7 @@ def render_pag5_top_performance(campanhas_list, cores):
     if len(df) > 0:
         st.markdown("### Dispersao: Engajamento vs Alcance")
         
-        fig = px.scatter(df, x='taxa_alcance', y='taxa_eng', size='views', color='classificacao', hover_name='nome', text='nome', labels={'taxa_alcance': 'Taxa de Alcance (%)', 'taxa_eng': 'Taxa de Engajamento (%)'}, color_discrete_sequence=cores)
+        fig = px.scatter(df, x='taxa_alcance', y='taxa_eng', size='impressoes', color='classificacao', hover_name='nome', text='nome', labels={'taxa_alcance': 'Taxa de Alcance (%)', 'taxa_eng': 'Taxa de Engajamento (%)'}, color_discrete_sequence=cores)
         fig.update_traces(textposition='top center', textfont_size=9)
         fig.update_layout(height=500)
         st.plotly_chart(fig, use_container_width=True)
