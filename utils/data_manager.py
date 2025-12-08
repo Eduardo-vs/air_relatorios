@@ -1057,6 +1057,49 @@ def excluir_post(camp_id: int, inf_id: int, post_id: int) -> bool:
     return atualizar_campanha(camp_id, campanha)
 
 
+def atualizar_post_campanha(camp_id: int, inf_id: int, post_idx: int, post_data: Dict) -> bool:
+    """Atualiza um post existente pelo indice"""
+    campanha = get_campanha(camp_id)
+    if not campanha:
+        return False
+    
+    influenciadores = campanha.get('influenciadores', [])
+    
+    for i, inf in enumerate(influenciadores):
+        if inf.get('influenciador_id') == inf_id:
+            posts = inf.get('posts', [])
+            if 0 <= post_idx < len(posts):
+                post_data['updated_at'] = datetime.now().isoformat()
+                posts[post_idx] = post_data
+                inf['posts'] = posts
+                influenciadores[i] = inf
+            break
+    
+    campanha['influenciadores'] = influenciadores
+    return atualizar_campanha(camp_id, campanha)
+
+
+def remover_post_campanha(camp_id: int, inf_id: int, post_idx: int) -> bool:
+    """Remove um post pelo indice"""
+    campanha = get_campanha(camp_id)
+    if not campanha:
+        return False
+    
+    influenciadores = campanha.get('influenciadores', [])
+    
+    for i, inf in enumerate(influenciadores):
+        if inf.get('influenciador_id') == inf_id:
+            posts = inf.get('posts', [])
+            if 0 <= post_idx < len(posts):
+                posts.pop(post_idx)
+                inf['posts'] = posts
+                influenciadores[i] = inf
+            break
+    
+    campanha['influenciadores'] = influenciadores
+    return atualizar_campanha(camp_id, campanha)
+
+
 def get_posts_influenciador(camp_id: int, inf_id: int) -> List[Dict]:
     """Retorna todos os posts de um influenciador na campanha"""
     inf_camp = get_influenciador_campanha(camp_id, inf_id)

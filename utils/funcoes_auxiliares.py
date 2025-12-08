@@ -20,6 +20,20 @@ def formatar_numero(num):
     return f"{num:,}".replace(",", ".")
 
 
+def formatar_air_score(score):
+    """Formata AIR Score - API retorna 0-1, exibir como 0-1000"""
+    if score is None:
+        return "0"
+    # Se score for menor que 10, provavelmente veio da API (0-1)
+    if score <= 1:
+        return f"{score * 1000:.0f}"
+    # Se for maior que 1 e menor que 10, pode ser bug
+    elif score < 10:
+        return f"{score * 100:.0f}"
+    # Se ja estiver em escala 0-1000
+    return f"{score:.0f}"
+
+
 def formatar_data_br(data_str):
     """Converte para dd/mm/yyyy"""
     try:

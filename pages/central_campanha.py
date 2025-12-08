@@ -152,37 +152,56 @@ def render_influenciadores_posts(campanha):
             
             # Lista de posts
             if inf['posts']:
-                for post in inf['posts']:
-                    col1, col2, col3, col4, col5 = st.columns([1.5, 1, 1, 1, 0.5])
+                for idx, post in enumerate(inf['posts']):
+                    post_key = f"post_{inf['id']}_{idx}"
                     
-                    with col1:
-                        st.write(f"**{post['formato']}** ({post['plataforma']})")
-                        st.caption(post['data_publicacao'])
-                        if post.get('link_post'):
-                            st.markdown(f"[Link]({post['link_post']})")
-                    
-                    with col2:
-                        st.caption("Views")
-                        st.write(f"{post['views']:,}")
-                    
-                    with col3:
-                        st.caption("Alcance")
-                        st.write(f"{post['alcance']:,}")
-                    
-                    with col4:
-                        st.caption("Interacoes")
-                        st.write(f"{post['interacoes']:,}")
-                    
-                    with col5:
-                        if post.get('imagens') and len(post['imagens']) > 0:
-                            try:
-                                img = post['imagens'][0]
-                                if img.startswith('http'):
-                                    st.image(img, width=50)
-                            except:
-                                pass
-                    
-                    st.markdown("---")
+                    # Verificar se está editando este post
+                    if st.session_state.get(f'editing_post_{post_key}'):
+                        render_form_editar_post(campanha, inf, idx, post)
+                    else:
+                        col1, col2, col3, col4, col5, col6 = st.columns([1.5, 1, 1, 1, 0.5, 0.8])
+                        
+                        with col1:
+                            st.write(f"**{post['formato']}** ({post['plataforma']})")
+                            st.caption(post['data_publicacao'])
+                            if post.get('link_post'):
+                                st.markdown(f"[Link]({post['link_post']})")
+                        
+                        with col2:
+                            st.caption("Impressoes")
+                            impressoes = post.get('impressoes', 0) + post.get('views', 0)
+                            st.write(f"{impressoes:,}".replace(",", "."))
+                        
+                        with col3:
+                            st.caption("Alcance")
+                            st.write(f"{post.get('alcance', 0):,}".replace(",", "."))
+                        
+                        with col4:
+                            st.caption("Interacoes")
+                            st.write(f"{post.get('interacoes', 0):,}".replace(",", "."))
+                        
+                        with col5:
+                            if post.get('imagens') and len(post['imagens']) > 0:
+                                try:
+                                    img = post['imagens'][0]
+                                    if img.startswith('http'):
+                                        st.image(img, width=50)
+                                except:
+                                    pass
+                        
+                        with col6:
+                            col_edit, col_del = st.columns(2)
+                            with col_edit:
+                                if st.button("✏️", key=f"edit_{post_key}", help="Editar"):
+                                    st.session_state[f'editing_post_{post_key}'] = True
+                                    st.rerun()
+                            with col_del:
+                                if st.button("🗑️", key=f"del_{post_key}", help="Excluir"):
+                                    data_manager.remover_post_campanha(campanha['id'], inf['id'], idx)
+                                    st.success("Post removido!")
+                                    st.rerun()
+                        
+                        st.markdown("---")
             else:
                 st.caption("Nenhum post cadastrado")
             
@@ -936,3 +955,148 @@ def render_categorias_comentarios(campanha):
             
             st.success("Categorias salvas!")
             st.rerun()
+
+
+def render_form_editar_post(campanha, inf, post_idx, post):
+    """Formulario para editar um post existente"""
+    
+    post_key = f"post_{inf['id']}_{post_idx}"
+    
+    with st.container():
+        st.markdown("#### ✏️ Editar Post")
+        
+        with st.form(f"form_edit_post_{post_key}"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                formato = st.selectbox(
+                    "Formato",
+                    ["Reels", "Feed", "Stories", "Carrossel", "IGTV", "Video"],
+                    index=["Reels", "Feed", "Stories", "Carrossel", "IGTV", "Video"].index(post.get('formato', 'Reels')) if post.get('formato') in ["Reels", "Feed", "Stories", "Carrossel", "IGTV", "Video"] else 0,
+                    key=f"edit_formato_{post_key}"
+                )
+                data_pub = st.date_input(
+                    "Data Publicacao",
+                    value=data_manager.parse_data_flexivel(post.get('data_publicacao', '')),
+                    key=f"edit_data_{post_key}"
+                )
+                link_post = st.text_input(
+                    "Link do Post",
+                    value=post.get('link_post', ''),
+                    key=f"edit_link_{post_key}"
+                )
+            
+            with col2:
+                plataforma = st.selectbox(
+                    "Plataforma",
+                    ["Instagram", "TikTok", "YouTube", "Twitter"],
+                    index=["Instagram", "TikTok", "YouTube", "Twitter"].index(post.get('plataforma', 'Instagram')) if post.get('plataforma') in ["Instagram", "TikTok", "YouTube", "Twitter"] else 0,
+                    key=f"edit_plat_{post_key}"
+                )
+            
+            st.markdown("---")
+            st.markdown("**Metricas Principais:**")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                impressoes = st.number_input(
+                    "Impressoes/Views",
+                    min_value=0,
+                    value=post.get('impressoes', 0) + post.get('views', 0),
+                    key=f"edit_imp_{post_key}"
+                )
+            with col2:
+                alcance = st.number_input(
+                    "Alcance",
+                    min_value=0,
+                    value=post.get('alcance', 0),
+                    key=f"edit_alc_{post_key}"
+                )
+            with col3:
+                interacoes = st.number_input(
+                    "Interacoes",
+                    min_value=0,
+                    value=post.get('interacoes', 0),
+                    key=f"edit_int_{post_key}"
+                )
+            with col4:
+                curtidas = st.number_input(
+                    "Curtidas",
+                    min_value=0,
+                    value=post.get('curtidas', 0),
+                    key=f"edit_curt_{post_key}"
+                )
+            
+            st.markdown("**Metricas Adicionais:**")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                comentarios = st.number_input(
+                    "Comentarios",
+                    min_value=0,
+                    value=post.get('comentarios', 0) if isinstance(post.get('comentarios'), int) else len(post.get('comentarios', [])) if isinstance(post.get('comentarios'), list) else 0,
+                    key=f"edit_com_{post_key}"
+                )
+            with col2:
+                compartilhamentos = st.number_input(
+                    "Compartilhamentos",
+                    min_value=0,
+                    value=post.get('compartilhamentos', 0),
+                    key=f"edit_comp_{post_key}"
+                )
+            with col3:
+                saves = st.number_input(
+                    "Salvamentos",
+                    min_value=0,
+                    value=post.get('saves', 0),
+                    key=f"edit_saves_{post_key}"
+                )
+            with col4:
+                clique_link = st.number_input(
+                    "Cliques no Link",
+                    min_value=0,
+                    value=post.get('clique_link', 0),
+                    key=f"edit_clink_{post_key}"
+                )
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                clique_arroba = st.number_input(
+                    "Cliques no @",
+                    min_value=0,
+                    value=post.get('clique_arroba', 0),
+                    key=f"edit_carroba_{post_key}"
+                )
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.form_submit_button("💾 Salvar Alteracoes", type="primary", use_container_width=True):
+                    post_atualizado = {
+                        'formato': formato,
+                        'plataforma': plataforma,
+                        'data_publicacao': data_pub.strftime('%Y-%m-%d'),
+                        'link_post': link_post,
+                        'impressoes': impressoes,
+                        'views': 0,  # Tudo fica em impressoes
+                        'alcance': alcance,
+                        'interacoes': interacoes,
+                        'curtidas': curtidas,
+                        'comentarios': comentarios,
+                        'compartilhamentos': compartilhamentos,
+                        'saves': saves,
+                        'clique_link': clique_link,
+                        'clique_arroba': clique_arroba,
+                        'imagens': post.get('imagens', []),
+                        'post_id': post.get('post_id', ''),
+                        'legenda': post.get('legenda', '')
+                    }
+                    
+                    data_manager.atualizar_post_campanha(campanha['id'], inf['id'], post_idx, post_atualizado)
+                    st.session_state[f'editing_post_{post_key}'] = False
+                    st.success("Post atualizado!")
+                    st.rerun()
+            
+            with col2:
+                if st.form_submit_button("Cancelar", use_container_width=True):
+                    st.session_state[f'editing_post_{post_key}'] = False
+                    st.rerun()

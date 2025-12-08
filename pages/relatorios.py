@@ -200,7 +200,7 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
     with col2:
         st.markdown(render_card("T. SEGUIDORES", funcoes_auxiliares.formatar_numero(metricas['total_seguidores'])), unsafe_allow_html=True)
     with col3:
-        st.markdown(render_card("T. IMPR/VIEWS", funcoes_auxiliares.formatar_numero(realizado_imp)), unsafe_allow_html=True)
+        st.markdown(render_card("T. IMPRESSOES", funcoes_auxiliares.formatar_numero(realizado_imp)), unsafe_allow_html=True)
     with col4:
         st.markdown(render_card("T. ALCANCE", funcoes_auxiliares.formatar_numero(realizado_alcance)), unsafe_allow_html=True)
     with col5:
@@ -231,7 +231,7 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
     with col5:
         st.markdown(render_card("ENGAJ. EFETIVO", f"{engaj_efetivo:.2f}%"), unsafe_allow_html=True)
     with col6:
-        st.markdown(render_card("AIR SCORE", f"{air_score_medio:.2f}"), unsafe_allow_html=True)
+        st.markdown(render_card("AIR SCORE", funcoes_auxiliares.formatar_air_score(air_score_medio)), unsafe_allow_html=True)
     with col7:
         st.markdown(render_card("T. COMENTARIOS", funcoes_auxiliares.formatar_numero(metricas['total_comentarios'])), unsafe_allow_html=True)
     with col8:
@@ -264,7 +264,7 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
         
         kpi_barra = st.selectbox(
             "KPI:",
-            ["Impressoes", "Alcance", "Interacoes", "Views", "Likes", "Comentarios", "Saves"],
+            ["Impressoes", "Alcance", "Interacoes", "Impressoes", "Likes", "Comentarios", "Saves"],
             key="kpi_barra_pag1"
         )
         
@@ -285,7 +285,7 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
                     valor = post.get('alcance', 0) or 0
                 elif kpi_barra == "Interacoes":
                     valor = post.get('interacoes', 0) or 0
-                elif kpi_barra == "Views":
+                elif kpi_barra == "Impressoes":
                     valor = post.get('views', 0) or 0
                 elif kpi_barra == "Likes":
                     valor = post.get('curtidas', 0) or 0
@@ -391,6 +391,60 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
             st.plotly_chart(fig_radar, use_container_width=True)
         else:
             st.info("Sem dados para exibir")
+    
+    # ========== INSIGHTS ==========
+    st.markdown("---")
+    st.subheader("Insights")
+    
+    # Insights automaticos
+    st.markdown("**Analise Automatica:**")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if engaj_efetivo > 5:
+            st.success(f"✅ **Engajamento Excelente**: {engaj_efetivo:.2f}%")
+        elif engaj_efetivo > 3:
+            st.info(f"ℹ️ **Engajamento Adequado**: {engaj_efetivo:.2f}%")
+        else:
+            st.warning(f"⚠️ **Engajamento Baixo**: {engaj_efetivo:.2f}%")
+    
+    with col2:
+        if taxa_alcance > 50:
+            st.success(f"✅ **Alcance Alto**: {taxa_alcance:.2f}%")
+        elif taxa_alcance > 20:
+            st.info(f"ℹ️ **Alcance Bom**: {taxa_alcance:.2f}%")
+        else:
+            st.warning(f"⚠️ **Alcance Baixo**: {taxa_alcance:.2f}%")
+    
+    with col3:
+        if pct_dif_imp >= 0:
+            st.success(f"✅ **Meta de Impressoes**: Superada em {pct_dif_imp:.1f}%")
+        else:
+            st.warning(f"⚠️ **Meta de Impressoes**: Abaixo em {abs(pct_dif_imp):.1f}%")
+    
+    # Insights manuais
+    st.markdown("---")
+    st.markdown("**Insights Manuais:**")
+    
+    if len(campanhas_list) == 1:
+        insights_config = campanhas_list[0].get('insights_config', {})
+        insights_manuais = insights_config.get('insights_campanha', '')
+        
+        novo_insight = st.text_area(
+            "Adicione suas observacoes sobre a campanha:", 
+            value=insights_manuais, 
+            height=100, 
+            key="insights_manual_pag1"
+        )
+        
+        if st.button("Salvar Insights", key="salvar_insights_pag1"):
+            insights_config['insights_campanha'] = novo_insight
+            data_manager.atualizar_campanha(campanhas_list[0]['id'], {'insights_config': insights_config})
+            st.success("Insights salvos!")
+            st.rerun()
+    else:
+        st.caption("Insights manuais disponiveis apenas para relatorio de campanha unica")
 
 
 def render_pag2_analise_geral(campanhas_list, metricas, cores):
@@ -402,8 +456,8 @@ def render_pag2_analise_geral(campanhas_list, metricas, cores):
     
     with col1:
         st.markdown("**Grafico 1: Comparativo por Formato**")
-        kpi1 = st.selectbox("KPI Barras:", ["Views", "Alcance", "Interacoes", "Impressoes"], key="kpi1_pag2")
-        kpi2 = st.selectbox("KPI Linha:", ["Taxa Eng. Efetivo", "Taxa Alcance", "Interacoes", "Views"], key="kpi2_pag2")
+        kpi1 = st.selectbox("KPI Barras:", ["Impressoes", "Alcance", "Interacoes", "Impressoes"], key="kpi1_pag2")
+        kpi2 = st.selectbox("KPI Linha:", ["Taxa Eng. Efetivo", "Taxa Alcance", "Interacoes", "Impressoes"], key="kpi2_pag2")
         
         dados = coletar_dados_formato(campanhas_list)
         if dados:
@@ -431,7 +485,7 @@ def render_pag2_analise_geral(campanhas_list, metricas, cores):
     
     with col2:
         st.markdown("**Grafico 2: Desempenho por Classificacao**")
-        kpi3 = st.selectbox("KPI Barras:", ["Views", "Alcance", "Interacoes", "Impressoes"], key="kpi3_pag2")
+        kpi3 = st.selectbox("KPI Barras:", ["Impressoes", "Alcance", "Interacoes", "Impressoes"], key="kpi3_pag2")
         kpi4 = st.selectbox("KPI Linha:", ["Qtd Influenciadores", "Taxa Eng. Media", "Posts"], key="kpi4_pag2")
         
         dados_class = coletar_dados_classificacao_completo(campanhas_list)
@@ -520,7 +574,8 @@ def render_pag3_visao_aon(campanhas_list, metricas, cores, cliente=None):
         name=filtro_metrica, 
         marker_color=cores[0],
         text=[funcoes_auxiliares.formatar_numero(v) for v in df_tempo[campo]],
-        textposition='outside'
+        textposition='outside',
+        width=0.5  # Barras mais finas
     ))
     
     taxa_campo = 'taxa_eng' if filtro_taxa == "Taxa Eng. Efetivo" else 'taxa_alcance'
@@ -536,7 +591,14 @@ def render_pag3_visao_aon(campanhas_list, metricas, cores, cliente=None):
         marker=dict(size=8)
     ))
     
-    fig.update_layout(title=f'Evolucao de {filtro_metrica}', yaxis=dict(title=filtro_metrica), yaxis2=dict(title=filtro_taxa, overlaying='y', side='right'), height=450, legend=dict(orientation='h', yanchor='bottom', y=1.02))
+    fig.update_layout(
+        title=f'Evolucao de {filtro_metrica}', 
+        yaxis=dict(title=filtro_metrica), 
+        yaxis2=dict(title=filtro_taxa, overlaying='y', side='right'), 
+        height=450, 
+        legend=dict(orientation='h', yanchor='bottom', y=1.02),
+        bargap=0.3  # Espacamento entre barras
+    )
     st.plotly_chart(fig, use_container_width=True)
     
     st.markdown("---")
@@ -619,7 +681,8 @@ def render_pag4_kpis_influenciador(campanhas_list, cores):
         yaxis=dict(title=kpi_barra), 
         yaxis2=dict(title=kpi_linha, overlaying='y', side='right'), 
         height=500, 
-        legend=dict(orientation='h', yanchor='bottom', y=1.02)
+        legend=dict(orientation='h', yanchor='bottom', y=1.02),
+        bargap=0.5  # Barras mais finas
     )
     st.plotly_chart(fig1, use_container_width=True)
     
@@ -646,7 +709,7 @@ def render_pag4_kpis_influenciador(campanhas_list, cores):
         if not df_custo.empty:
             fig2 = go.Figure()
             fig2.add_trace(go.Bar(x=df_custo['metrica'], y=df_custo['nome'], orientation='h', marker_color=cores[4], text=[f"R$ {v:.2f}" for v in df_custo['metrica']], textposition='outside'))
-            fig2.update_layout(title=f'{metrica_custo} (R$)', height=max(300, len(df_custo) * 25))
+            fig2.update_layout(title=f'{metrica_custo} (R$)', height=max(300, len(df_custo) * 25), bargap=0.5)
             st.plotly_chart(fig2, use_container_width=True)
         else:
             st.info("Adicione custos aos posts")
@@ -704,7 +767,7 @@ def render_pag4_kpis_influenciador(campanhas_list, cores):
         for i, row in df.iterrows():
             fig3.add_annotation(x=0, y=row['nome'], text=f"({funcoes_auxiliares.formatar_numero(row['seguidores'])} seg)", showarrow=False, xanchor='right', xshift=-10, font=dict(size=9, color='gray'))
         
-        fig3.update_layout(title='Trafego por Influenciador', height=max(300, len(df) * 25), barmode='group')
+        fig3.update_layout(title='Trafego por Influenciador', height=max(300, len(df) * 25), barmode='group', bargap=0.5)
         st.plotly_chart(fig3, use_container_width=True)
     
     st.markdown("---")
@@ -748,7 +811,7 @@ def render_pag5_top_performance(campanhas_list, cores):
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        metrica_ordenar = st.selectbox("Ordenar:", ["EMV (Custo)", "Interacoes", "Taxa Eng. Efetivo", "Views", "Alcance"], key="ordenar_pag5")
+        metrica_ordenar = st.selectbox("Ordenar:", ["Investimento (Custo)", "Interacoes", "Taxa Eng. Efetivo", "Impressoes", "Alcance"], key="ordenar_pag5")
     with col2:
         filtro_class = st.multiselect("Classificacao:", ["Nano", "Micro", "Mid", "Macro", "Mega"], key="class_pag5")
     with col3:
@@ -759,7 +822,7 @@ def render_pag5_top_performance(campanhas_list, cores):
     if filtro_class:
         df_filtrado = df_filtrado[df_filtrado['classificacao'].isin(filtro_class)]
     
-    ordem_map = {"EMV (Custo)": "custo", "Interacoes": "interacoes", "Taxa Eng. Efetivo": "taxa_eng", "Views": "views", "Alcance": "alcance"}
+    ordem_map = {"Investimento (Custo)": "custo", "Interacoes": "interacoes", "Taxa Eng. Efetivo": "taxa_eng", "Impressoes": "impressoes", "Alcance": "alcance"}
     df_filtrado = df_filtrado.sort_values(ordem_map.get(metrica_ordenar, 'interacoes'), ascending=False).head(qtd)
     
     for _, row in df_filtrado.iterrows():
@@ -771,13 +834,13 @@ def render_pag5_top_performance(campanhas_list, cores):
             st.write(f"**{row['nome']}**")
             st.caption(f"@{row['usuario']} | {row['classificacao']}")
         with col3:
-            st.metric("EMV", f"R$ {row.get('custo', 0):,.0f}".replace(",", "."))
+            st.metric("Investimento", f"R$ {row.get('custo', 0):,.0f}".replace(",", "."))
         with col4:
             st.metric("Interacoes", funcoes_auxiliares.formatar_numero(row['interacoes']))
         with col5:
             st.metric("Taxa Eng.", f"{row['taxa_eng']:.2f}%")
         with col6:
-            st.metric("Views", funcoes_auxiliares.formatar_numero(row['views']))
+            st.metric("Impressoes", funcoes_auxiliares.formatar_numero(row['impressoes']))
         st.markdown("---")
 
 
@@ -790,7 +853,7 @@ def render_pag6_lista_influenciadores(campanhas_list, cores):
     with col1:
         filtro_class = st.multiselect("Classificacao:", ["Nano", "Micro", "Mid", "Macro", "Mega"], key="class_pag6")
     with col2:
-        ordenar = st.selectbox("Ordenar:", ["Views", "Alcance", "Interacoes", "Taxa Eng.", "EMV"], key="ord_pag6")
+        ordenar = st.selectbox("Ordenar:", ["Impressoes", "Alcance", "Interacoes", "Taxa Eng.", "Investimento"], key="ord_pag6")
     
     dados = coletar_dados_influenciadores(campanhas_list)
     
@@ -803,18 +866,18 @@ def render_pag6_lista_influenciadores(campanhas_list, cores):
     if filtro_class:
         df = df[df['classificacao'].isin(filtro_class)]
     
-    ordem_map = {"Views": "views", "Alcance": "alcance", "Interacoes": "interacoes", "Taxa Eng.": "taxa_eng", "EMV": "custo"}
-    df = df.sort_values(ordem_map.get(ordenar, 'views'), ascending=False)
+    ordem_map = {"Impressoes": "impressoes", "Alcance": "alcance", "Interacoes": "interacoes", "Taxa Eng.": "taxa_eng", "Investimento": "custo"}
+    df = df.sort_values(ordem_map.get(ordenar, 'impressoes'), ascending=False)
     
     # Preparar dataframe para exibicao com formatacao
-    df_exibir = df[['nome', 'usuario', 'classificacao', 'seguidores', 'posts', 'views', 'alcance', 'interacoes', 'custo', 'taxa_eng', 'taxa_alcance']].copy()
-    df_exibir.columns = ['Nome', 'Usuario', 'Classe', 'Seguidores', 'Posts', 'Views', 'Alcance', 'Interacoes', 'EMV (R$)', 'Taxa Eng. %', 'Taxa Alc. %']
+    df_exibir = df[['nome', 'usuario', 'classificacao', 'seguidores', 'posts', 'impressoes', 'alcance', 'interacoes', 'custo', 'taxa_eng', 'taxa_alcance']].copy()
+    df_exibir.columns = ['Nome', 'Usuario', 'Classe', 'Seguidores', 'Posts', 'Impressoes', 'Alcance', 'Interacoes', 'Investimento (R$)', 'Taxa Eng. %', 'Taxa Alc. %']
     
     # Formatar numeros com ponto nas centenas
-    for col in ['Seguidores', 'Views', 'Alcance', 'Interacoes']:
+    for col in ['Seguidores', 'Impressoes', 'Alcance', 'Interacoes']:
         df_exibir[col] = df_exibir[col].apply(lambda x: f"{x:,.0f}".replace(",", "."))
     
-    df_exibir['EMV (R$)'] = df_exibir['EMV (R$)'].apply(lambda x: f"{x:,.0f}".replace(",", "."))
+    df_exibir['Investimento (R$)'] = df_exibir['Investimento (R$)'].apply(lambda x: f"{x:,.0f}".replace(",", "."))
     df_exibir['Taxa Eng. %'] = df_exibir['Taxa Eng. %'].apply(lambda x: f"{x:.2f}")
     df_exibir['Taxa Alc. %'] = df_exibir['Taxa Alc. %'].apply(lambda x: f"{x:.2f}")
     
@@ -915,19 +978,19 @@ def coletar_dados_influenciadores(campanhas_list):
                 continue
             inf_id = inf['id']
             if inf_id not in dados_inf:
-                dados_inf[inf_id] = {'id': inf_id, 'nome': inf['nome'], 'usuario': inf['usuario'], 'foto': inf.get('foto', ''), 'classificacao': inf.get('classificacao', 'Desconhecido'), 'seguidores': inf.get('seguidores', 0), 'views': 0, 'alcance': 0, 'interacoes': 0, 'impressoes': 0, 'custo': 0, 'cliques_link': 0, 'cliques_arroba': 0, 'posts': 0}
+                dados_inf[inf_id] = {'id': inf_id, 'nome': inf['nome'], 'usuario': inf['usuario'], 'foto': inf.get('foto', ''), 'classificacao': inf.get('classificacao', 'Desconhecido'), 'seguidores': inf.get('seguidores', 0), 'impressoes': 0, 'alcance': 0, 'interacoes': 0, 'custo': 0, 'cliques_link': 0, 'cliques_arroba': 0, 'posts': 0}
             dados_inf[inf_id]['custo'] += camp_inf.get('custo', 0)  # Custo por influenciador
             for post in camp_inf.get('posts', []):
-                dados_inf[inf_id]['views'] += post.get('views', 0)
+                # Impressoes = views + impressoes (combinados)
+                dados_inf[inf_id]['impressoes'] += post.get('views', 0) + post.get('impressoes', 0)
                 dados_inf[inf_id]['alcance'] += post.get('alcance', 0)
                 dados_inf[inf_id]['interacoes'] += post.get('interacoes', 0)
-                dados_inf[inf_id]['impressoes'] += post.get('impressoes', 0)
                 dados_inf[inf_id]['cliques_link'] += post.get('clique_link', 0)
                 dados_inf[inf_id]['cliques_arroba'] += post.get('clique_arroba', 0) or post.get('cliques_arroba', 0) or 0
                 dados_inf[inf_id]['posts'] += 1
     resultado = []
     for inf_id, d in dados_inf.items():
-        d['taxa_eng'] = round((d['interacoes'] / d['views'] * 100), 2) if d['views'] > 0 else 0
+        d['taxa_eng'] = round((d['interacoes'] / d['impressoes'] * 100), 2) if d['impressoes'] > 0 else 0
         d['taxa_alcance'] = round((d['alcance'] / d['seguidores'] * 100), 2) if d['seguidores'] > 0 else 0
         d['taxa_eng_geral'] = round((d['interacoes'] / d['seguidores'] * 100), 2) if d['seguidores'] > 0 else 0
         resultado.append(d)

@@ -109,7 +109,7 @@ def render():
                 st.write(funcoes_auxiliares.formatar_numero(inf.get('seguidores', 0)))
             
             with col5:
-                st.write(f"{inf.get('air_score', 0):.2f}")
+                st.write(funcoes_auxiliares.formatar_air_score(inf.get('air_score', 0)))
             
             with col6:
                 st.write(f"{inf.get('engagement_rate', 0):.2f}%")
