@@ -627,7 +627,7 @@ def render_pag4_kpis_influenciador(campanhas_list, cores):
         return
     
     df = pd.DataFrame(dados_inf)
-    df = df.sort_values('views', ascending=False).head(15)
+    df = df.sort_values('impressoes', ascending=False).head(15)
     
     st.markdown("### Grafico 1: Performance Geral")
     
@@ -640,8 +640,8 @@ def render_pag4_kpis_influenciador(campanhas_list, cores):
     kpi_map = {'Seguidores': 'seguidores', 'Impressoes': 'impressoes', 'Alcance': 'alcance', 'Interacoes': 'interacoes'}
     campo_barra = kpi_map.get(kpi_barra, 'seguidores')
     
-    # Calcular taxa de visualizacao
-    df['taxa_views'] = (df['views'] / df['seguidores'] * 100).round(2).fillna(0)
+    # Calcular taxa de visualizacao (impressoes / seguidores)
+    df['taxa_views'] = (df['impressoes'] / df['seguidores'] * 100).round(2).fillna(0)
     
     df_sorted = df.sort_values(campo_barra, ascending=False)
     
@@ -696,13 +696,13 @@ def render_pag4_kpis_influenciador(campanhas_list, cores):
     with col2:
         df_custo = df.copy()
         if metrica_custo == "CPM":
-            df_custo['metrica'] = (df_custo['custo'] / df_custo['views'] * 1000).round(2).fillna(0)
+            df_custo['metrica'] = (df_custo['custo'] / df_custo['impressoes'] * 1000).round(2).fillna(0)
         elif metrica_custo == "CPE":
             df_custo['metrica'] = (df_custo['custo'] / df_custo['interacoes']).round(2).fillna(0)
         elif metrica_custo == "CPI":
             df_custo['metrica'] = (df_custo['custo'] / df_custo['impressoes']).round(4).fillna(0)
-        else:
-            df_custo['metrica'] = (df_custo['custo'] / df_custo['views']).round(4).fillna(0)
+        else:  # CPV
+            df_custo['metrica'] = (df_custo['custo'] / df_custo['impressoes']).round(4).fillna(0)
         
         df_custo = df_custo[df_custo['metrica'] > 0].sort_values('metrica', ascending=False)
         
