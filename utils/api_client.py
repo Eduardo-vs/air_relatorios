@@ -107,14 +107,25 @@ def processar_post_api(post_data: Dict) -> Dict:
     
     # Mapear tipo para formato
     tipo = post_data.get('type', 'post')
+    network = post_data.get('network', 'instagram').lower()
+    
     formato_map = {
         'post': 'Feed',
         'reel': 'Reels',
+        'reels': 'Reels',
         'story': 'Stories',
+        'stories': 'Stories',
         'carousel': 'Carrossel',
-        'video': 'Video'
+        'video': 'Video',
+        'tiktok': 'Video',
+        'igtv': 'IGTV'
     }
-    formato = formato_map.get(tipo, 'Feed')
+    
+    # TikTok sempre é Video
+    if network == 'tiktok':
+        formato = 'Video'
+    else:
+        formato = formato_map.get(tipo.lower() if tipo else 'post', 'Feed')
     
     # Data de publicacao
     posted_at = post_data.get('posted_at', '')

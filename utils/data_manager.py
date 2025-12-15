@@ -377,6 +377,35 @@ def init_db():
         )
     ''')
     
+    # Tabela de insights de campanha
+    cursor.execute(f'''
+        CREATE TABLE IF NOT EXISTS insights_campanha (
+            id {pk_type},
+            campanha_id {int_type} NOT NULL,
+            pagina {text_type} NOT NULL,
+            tipo {text_type} DEFAULT 'info',
+            icone {text_type} DEFAULT '💡',
+            titulo {text_type} NOT NULL,
+            texto {text_type} NOT NULL,
+            fonte {text_type} DEFAULT 'ia',
+            ordem {int_type} DEFAULT 0,
+            ativo {int_type} DEFAULT 1,
+            created_at {text_type},
+            updated_at {text_type}
+        )
+    ''')
+    
+    # Tabela de historico de insights (para manter versoes anteriores)
+    cursor.execute(f'''
+        CREATE TABLE IF NOT EXISTS insights_historico (
+            id {pk_type},
+            campanha_id {int_type} NOT NULL,
+            pagina {text_type} NOT NULL,
+            insights_json {text_type},
+            created_at {text_type}
+        )
+    ''')
+    
     conn.commit()
     conn.close()
 
@@ -1550,3 +1579,227 @@ def exportar_balizadores_csv(campanha: Dict) -> str:
         writer.writerow(row)
     
     return output.getvalue()
+
+
+# ========================================
+# GESTAO DE INSIGHTS
+# ========================================
+
+def get_insights_campanha(campanha_id: int, pagina: str = None, apenas_ativos: bool = True) -> List[Dict]:
+    """Retorna insights de uma campanha, opcionalmente filtrados por página"""
+    if pagina:
+        if apenas_ativos:
+            query = "SELECT * FROM insights_campanha WHERE campanha_id = ? AND pagina = ? AND ativo = 1 ORDER BY ordem, created_at DESC"
+            rows = execute_select(query, (campanha_id, pagina))
+        else:
+            query = "SELECT * FROM insights_campanha WHERE campanha_id = ? AND pagina = ? ORDER BY ordem, created_at DESC"
+            rows = execute_select(query, (campanha_id, pagina))
+    else:
+        if apenas_ativos:
+            query = "SELECT * FROM insights_campanha WHERE campanha_id = ? AND ativo = 1 ORDER BY pagina, ordem, created_at DESC"
+            rows = execute_select(query, (campanha_id,))
+        else:
+            query = "SELECT * FROM insights_campanha WHERE campanha_id = ? ORDER BY pagina, ordem, created_at DESC"
+            rows = execute_select(query, (campanha_id,))
+    
+    return [dict(row) for row in rows] if rows else []
+
+
+def adicionar_insight(campanha_id: int, pagina: str, insight: Dict, fonte: str = 'ia') -> int:
+    """Adiciona um novo insight à campanha"""
+    now = datetime.now().isoformat()
+    
+    # Pegar a maior ordem atual para essa página
+    rows = execute_select(
+        "SELECT MAX(ordem) as max_ordem FROM insights_campanha WHERE campanha_id = ? AND pagina = ?",
+        (campanha_id, pagina)
+    )
+    max_ordem = rows[0]['max_ordem'] if rows and rows[0]['max_ordem'] else 0
+    
+    query = '''
+        INSERT INTO insights_campanha 
+        (campanha_id, pagina, tipo, icone, titulo, texto, fonte, ordem, ativo, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+    '''
+    
+    insight_id = execute_insert(query, (
+        campanha_id,
+        pagina,
+        insight.get('tipo', 'info'),
+        insight.get('icone', '💡'),
+        insight.get('titulo', 'Insight'),
+        insight.get('texto', ''),
+        fonte,
+        max_ordem + 1,
+        now,
+        now
+    ))
+    
+    invalidate_cache()
+    return insight_id
+
+
+def adicionar_insights_lote(campanha_id: int, pagina: str, insights: List[Dict], fonte: str = 'ia') -> List[int]:
+    """Adiciona múltiplos insights de uma vez"""
+    ids = []
+    for insight in insights:
+        insight_id = adicionar_insight(campanha_id, pagina, insight, fonte)
+        ids.append(insight_id)
+    return ids
+
+
+def atualizar_insight(insight_id: int, dados: Dict) -> bool:
+    """Atualiza um insight existente"""
+    now = datetime.now().isoformat()
+    
+    campos = []
+    valores = []
+    
+    for campo in ['tipo', 'icone', 'titulo', 'texto', 'ordem', 'ativo']:
+        if campo in dados:
+            campos.append(f"{campo} = ?")
+            valores.append(dados[campo])
+    
+    if not campos:
+        return False
+    
+    campos.append("updated_at = ?")
+    valores.append(now)
+    valores.append(insight_id)
+    
+    query = f"UPDATE insights_campanha SET {', '.join(campos)} WHERE id = ?"
+    execute_update(query, tuple(valores))
+    invalidate_cache()
+    return True
+
+
+def excluir_insight(insight_id: int, soft_delete: bool = True) -> bool:
+    """Exclui um insight (soft delete por padrão)"""
+    if soft_delete:
+        return atualizar_insight(insight_id, {'ativo': 0})
+    else:
+        execute_update("DELETE FROM insights_campanha WHERE id = ?", (insight_id,))
+        invalidate_cache()
+        return True
+
+
+def reordenar_insights(campanha_id: int, pagina: str, ordem_ids: List[int]) -> bool:
+    """Reordena insights de uma página"""
+    for idx, insight_id in enumerate(ordem_ids):
+        execute_update(
+            "UPDATE insights_campanha SET ordem = ? WHERE id = ? AND campanha_id = ?",
+            (idx + 1, insight_id, campanha_id)
+        )
+    invalidate_cache()
+    return True
+
+
+def salvar_historico_insights(campanha_id: int, pagina: str) -> int:
+    """Salva o estado atual dos insights no histórico antes de atualizar"""
+    insights = get_insights_campanha(campanha_id, pagina, apenas_ativos=True)
+    
+    if not insights:
+        return None
+    
+    now = datetime.now().isoformat()
+    query = '''
+        INSERT INTO insights_historico (campanha_id, pagina, insights_json, created_at)
+        VALUES (?, ?, ?, ?)
+    '''
+    
+    historico_id = execute_insert(query, (
+        campanha_id,
+        pagina,
+        json.dumps(insights, ensure_ascii=False),
+        now
+    ))
+    
+    return historico_id
+
+
+def get_historico_insights(campanha_id: int, pagina: str = None, limit: int = 10) -> List[Dict]:
+    """Retorna histórico de insights de uma campanha"""
+    if pagina:
+        query = "SELECT * FROM insights_historico WHERE campanha_id = ? AND pagina = ? ORDER BY created_at DESC LIMIT ?"
+        rows = execute_select(query, (campanha_id, pagina, limit))
+    else:
+        query = "SELECT * FROM insights_historico WHERE campanha_id = ? ORDER BY created_at DESC LIMIT ?"
+        rows = execute_select(query, (campanha_id, limit))
+    
+    result = []
+    for row in rows:
+        item = dict(row)
+        try:
+            item['insights'] = json.loads(item.get('insights_json', '[]'))
+        except:
+            item['insights'] = []
+        result.append(item)
+    
+    return result
+
+
+def restaurar_insights_historico(historico_id: int) -> bool:
+    """Restaura insights de um ponto do histórico"""
+    row = execute_select_one("SELECT * FROM insights_historico WHERE id = ?", (historico_id,))
+    
+    if not row:
+        return False
+    
+    campanha_id = row['campanha_id']
+    pagina = row['pagina']
+    
+    try:
+        insights = json.loads(row.get('insights_json', '[]'))
+    except:
+        return False
+    
+    # Desativar insights atuais dessa página
+    execute_update(
+        "UPDATE insights_campanha SET ativo = 0 WHERE campanha_id = ? AND pagina = ?",
+        (campanha_id, pagina)
+    )
+    
+    # Adicionar insights do histórico
+    for insight in insights:
+        adicionar_insight(campanha_id, pagina, insight, fonte='historico')
+    
+    invalidate_cache()
+    return True
+
+
+def limpar_insights_pagina(campanha_id: int, pagina: str, salvar_historico: bool = True) -> bool:
+    """Limpa todos os insights de uma página (desativa)"""
+    if salvar_historico:
+        salvar_historico_insights(campanha_id, pagina)
+    
+    execute_update(
+        "UPDATE insights_campanha SET ativo = 0 WHERE campanha_id = ? AND pagina = ?",
+        (campanha_id, pagina)
+    )
+    invalidate_cache()
+    return True
+
+
+def atualizar_insights_ia(campanha_id: int, pagina: str, novos_insights: List[Dict]) -> bool:
+    """
+    Atualiza insights gerados por IA:
+    1. Salva histórico
+    2. Desativa insights IA antigos
+    3. Mantém insights manuais
+    4. Adiciona novos insights IA
+    """
+    # Salvar histórico
+    salvar_historico_insights(campanha_id, pagina)
+    
+    # Desativar apenas insights de IA (manter manuais)
+    execute_update(
+        "UPDATE insights_campanha SET ativo = 0 WHERE campanha_id = ? AND pagina = ? AND fonte = 'ia'",
+        (campanha_id, pagina)
+    )
+    
+    # Adicionar novos insights
+    for insight in novos_insights:
+        adicionar_insight(campanha_id, pagina, insight, fonte='ia')
+    
+    invalidate_cache()
+    return True
