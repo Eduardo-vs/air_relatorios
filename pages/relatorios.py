@@ -35,9 +35,17 @@ def buscar_insights_ia(pagina: str, dados: dict, campanha_id: int) -> List[dict]
             "timestamp": datetime.now().isoformat()
         }
         
+        # Log para debug
+        print(f"[IA] Enviando requisição para: {WEBHOOK_IA_URL}")
+        print(f"[IA] Página: {pagina}, Campanha: {campanha_id}")
+        print(f"[IA] Payload keys: {list(payload.keys())}")
+        
         # Timeout alto e retries
         for tentativa in range(3):
             try:
+                print(f"[IA] Tentativa {tentativa + 1}/3...")
+                
+                # Fazer requisição POST
                 response = requests.post(
                     WEBHOOK_IA_URL,
                     json=payload,
@@ -45,28 +53,59 @@ def buscar_insights_ia(pagina: str, dados: dict, campanha_id: int) -> List[dict]
                     headers={"Content-Type": "application/json"}
                 )
                 
+                print(f"[IA] Status: {response.status_code}")
+                
                 if response.status_code == 200:
                     resultado = response.json()
-                    return resultado.get('insights', [])
+                    insights = resultado.get('insights', [])
+                    print(f"[IA] Sucesso! {len(insights)} insights recebidos")
+                    return insights
                 else:
+                    print(f"[IA] Erro: {response.status_code} - {response.text[:200]}")
                     if tentativa < 2:
                         time.sleep(2)
                         continue
                     return None
                     
             except requests.exceptions.Timeout:
+                print(f"[IA] Timeout na tentativa {tentativa + 1}")
                 if tentativa < 2:
                     time.sleep(2)
                     continue
                 return None
-            except requests.exceptions.RequestException:
+            except requests.exceptions.RequestException as e:
+                print(f"[IA] Erro de requisição: {e}")
                 if tentativa < 2:
                     time.sleep(2)
                     continue
                 return None
                 
-    except Exception:
+    except Exception as e:
+        print(f"[IA] Exceção: {e}")
         return None
+
+
+def testar_webhook_ia():
+    """Testa conexão com webhook de IA"""
+    try:
+        # Teste simples
+        response = requests.post(
+            WEBHOOK_IA_URL,
+            json={"teste": True, "pagina": "teste", "dados": {}},
+            timeout=10,
+            headers={"Content-Type": "application/json"}
+        )
+        return {
+            "status": response.status_code,
+            "ok": response.status_code == 200,
+            "resposta": response.text[:500] if response.text else "Sem resposta"
+        }
+    except Exception as e:
+        return {
+            "status": 0,
+            "ok": False,
+            "resposta": str(e)
+        }
 
 
 def render_secao_insights(pagina: str, dados: dict, campanha_id: int):
@@ -85,7 +124,7 @@ def render_secao_insights(pagina: str, dados: dict, campanha_id: int):
     error_key = f"ia_error_{campanha_id}_{pagina}"
     
     # Botões de ação
-    col1, col2, col3, col4, col5 = st.columns([1.5, 1, 1, 1, 1])
+    col1, col2, col3, col4, col5, col6 = st.columns([1.5, 1, 1, 1, 1, 0.5])
     
     with col1:
         # Filtro para mostrar inativos
@@ -112,14 +151,36 @@ def render_secao_insights(pagina: str, dados: dict, campanha_id: int):
             st.session_state[f'edit_mode_{pagina}_{campanha_id}'] = not st.session_state.get(f'edit_mode_{pagina}_{campanha_id}', False)
             st.rerun()
     
+    with col6:
+        # Botão de teste do webhook
+        if st.button("🔧", key=f"btn_test_webhook_{pagina}_{campanha_id}", help="Testar conexão com IA"):
+            st.session_state[f'test_webhook_{pagina}_{campanha_id}'] = True
+            st.rerun()
+    
+    # Mostrar resultado do teste de webhook
+    if st.session_state.get(f'test_webhook_{pagina}_{campanha_id}', False):
+        with st.spinner("Testando conexão..."):
+            resultado = testar_webhook_ia()
+            if resultado['ok']:
+                st.success(f"✅ Conexão OK! Status: {resultado['status']}")
+            else:
+                st.error(f"❌ Erro na conexão. Status: {resultado['status']}")
+            with st.expander("Ver detalhes"):
+                st.code(resultado['resposta'])
+        st.session_state[f'test_webhook_{pagina}_{campanha_id}'] = False
+    
     # Processar geração de insights IA
     status = st.session_state.get(status_key, 'idle')
     
     if status == 'pending':
         with st.spinner("🤖 Analisando dados com IA... Isso pode levar alguns segundos."):
+            # Mostrar dados sendo enviados
+            with st.expander("📤 Dados enviados para IA", expanded=False):
+                st.json(dados)
+            
             novos_insights = buscar_insights_ia(pagina, dados, campanha_id)
             
-            if novos_insights:
+            if novos_insights and len(novos_insights) > 0:
                 # Salvar no banco (mantém manuais, substitui IA)
                 data_manager.atualizar_insights_ia(campanha_id, pagina, novos_insights)
                 st.session_state[status_key] = 'done'
