@@ -27,8 +27,6 @@ def buscar_insights_ia(pagina: str, dados: dict, campanha_id: int) -> List[dict]
     Busca insights da IA via webhook
     Retorna lista de insights ou None em caso de erro
     """
-    import streamlit as st
-    
     try:
         payload = {
             "pagina": pagina,
@@ -37,16 +35,9 @@ def buscar_insights_ia(pagina: str, dados: dict, campanha_id: int) -> List[dict]
             "timestamp": datetime.now().isoformat()
         }
         
-        # Log para debug
-        st.write(f"🔄 Enviando para: {WEBHOOK_IA_URL}")
-        st.write(f"📄 Página: {pagina}, Campanha ID: {campanha_id}")
-        
         # Timeout alto e retries
         for tentativa in range(3):
             try:
-                st.write(f"⏳ Tentativa {tentativa + 1}/3...")
-                
-                # Fazer requisição POST com dados no body
                 response = requests.post(
                     WEBHOOK_IA_URL,
                     json=payload,
@@ -57,266 +48,146 @@ def buscar_insights_ia(pagina: str, dados: dict, campanha_id: int) -> List[dict]
                     }
                 )
                 
-                st.write(f"📡 Status HTTP: {response.status_code}")
-                
                 if response.status_code == 200:
                     try:
                         resultado = response.json()
-                        st.write(f"✅ Resposta recebida: {type(resultado)}")
-                        insights = resultado.get('insights', [])
-                        st.write(f"✅ {len(insights)} insights encontrados")
-                        return insights
+                        
+                        # O n8n retorna array com output.insights
+                        # Formato: [{"output": {"insights": [...]}}]
+                        if isinstance(resultado, list) and len(resultado) > 0:
+                            primeiro = resultado[0]
+                            if isinstance(primeiro, dict):
+                                # Tentar pegar de output.insights
+                                if 'output' in primeiro and 'insights' in primeiro['output']:
+                                    return primeiro['output']['insights']
+                                # Ou direto de insights
+                                elif 'insights' in primeiro:
+                                    return primeiro['insights']
+                        
+                        # Se for dict direto
+                        elif isinstance(resultado, dict):
+                            if 'output' in resultado and 'insights' in resultado['output']:
+                                return resultado['output']['insights']
+                            elif 'insights' in resultado:
+                                return resultado['insights']
+                        
+                        return None
+                        
                     except Exception as e:
-                        st.error(f"❌ Erro ao parsear JSON: {e}")
-                        st.code(response.text[:500])
+                        print(f"[IA] Erro ao parsear JSON: {e}")
                         return None
                 else:
-                    st.warning(f"⚠️ Erro HTTP {response.status_code}")
-                    st.code(response.text[:300] if response.text else "Sem resposta")
                     if tentativa < 2:
                         time.sleep(2)
                         continue
                     return None
                     
             except requests.exceptions.Timeout:
-                st.warning(f"⏰ Timeout na tentativa {tentativa + 1}")
                 if tentativa < 2:
                     time.sleep(2)
                     continue
                 return None
-            except requests.exceptions.ConnectionError as e:
-                st.error(f"🔌 Erro de conexão: {e}")
-                if tentativa < 2:
-                    time.sleep(2)
-                    continue
-                return None
-            except requests.exceptions.RequestException as e:
-                st.error(f"❌ Erro de requisição: {e}")
+            except requests.exceptions.RequestException:
                 if tentativa < 2:
                     time.sleep(2)
                     continue
                 return None
                 
     except Exception as e:
-        st.error(f"❌ Exceção geral: {e}")
-        import traceback
-        st.code(traceback.format_exc())
+        print(f"[IA] Exceção: {e}")
         return None
 
 
-def testar_webhook_ia():
-    """Testa conexão com webhook de IA"""
+def regenerar_insight_ia(pagina: str, dados: dict, campanha_id: int, insight_atual: dict) -> dict:
+    """
+    Pede para a IA regenerar um insight específico
+    """
     try:
-        # Teste simples com GET primeiro
-        response_get = requests.get(
-            WEBHOOK_IA_URL,
-            timeout=10
-        )
+        payload = {
+            "pagina": pagina,
+            "campanha_id": campanha_id,
+            "dados": dados,
+            "acao": "regenerar_insight",
+            "insight_atual": insight_atual,
+            "timestamp": datetime.now().isoformat()
+        }
         
-        # Depois teste com POST
-        response_post = requests.post(
+        response = requests.post(
             WEBHOOK_IA_URL,
-            json={"teste": True, "pagina": "teste", "dados": {}},
-            timeout=10,
+            json=payload,
+            timeout=120,
             headers={"Content-Type": "application/json"}
         )
         
-        return {
-            "get_status": response_get.status_code,
-            "get_resposta": response_get.text[:300] if response_get.text else "Sem resposta",
-            "post_status": response_post.status_code,
-            "post_resposta": response_post.text[:300] if response_post.text else "Sem resposta",
-            "ok": response_post.status_code == 200
-        }
-    except Exception as e:
-        return {
-            "get_status": 0,
-            "post_status": 0,
-            "get_resposta": str(e),
-            "post_resposta": str(e),
-            "ok": False
-        }
+        if response.status_code == 200:
+            resultado = response.json()
+            
+            # Mesmo parsing
+            if isinstance(resultado, list) and len(resultado) > 0:
+                primeiro = resultado[0]
+                if isinstance(primeiro, dict):
+                    if 'output' in primeiro and 'insights' in primeiro['output']:
+                        insights = primeiro['output']['insights']
+                        return insights[0] if insights else None
+                    elif 'insights' in primeiro:
+                        insights = primeiro['insights']
+                        return insights[0] if insights else None
+            elif isinstance(resultado, dict):
+                if 'output' in resultado and 'insights' in resultado['output']:
+                    insights = resultado['output']['insights']
+                    return insights[0] if insights else None
+                elif 'insights' in resultado:
+                    insights = resultado['insights']
+                    return insights[0] if insights else None
+        
+        return None
+    except:
+        return None
 
 
 def render_secao_insights(pagina: str, dados: dict, campanha_id: int):
     """
-    Renderiza seção completa de insights com:
-    - Insights salvos do banco (ativos e inativos)
-    - Botão para gerar novos insights via IA
-    - Edição/exclusão de insights
-    - Adição manual de insights
+    Renderiza seção de insights (apenas visualização)
+    A edição é feita na Central da Campanha
     """
-    st.markdown("---")
-    st.markdown("### 💡 Insights da Campanha")
-    
-    # Controle de estado para geração de insights
-    status_key = f"ia_status_{campanha_id}_{pagina}"
-    error_key = f"ia_error_{campanha_id}_{pagina}"
-    
-    # Botões de ação
-    col1, col2, col3, col4, col5, col6 = st.columns([1.5, 1, 1, 1, 1, 0.5])
-    
-    with col1:
-        # Filtro para mostrar inativos
-        mostrar_inativos = st.checkbox("Mostrar excluídos", key=f"show_inativos_{pagina}_{campanha_id}")
-    
-    with col2:
-        if st.button("🤖 Gerar com IA", key=f"btn_gerar_ia_{pagina}_{campanha_id}", help="Gerar novos insights usando IA"):
-            st.session_state[status_key] = 'pending'
-            st.rerun()
-    
-    with col3:
-        if st.button("➕ Adicionar", key=f"btn_add_insight_{pagina}_{campanha_id}", help="Adicionar insight manualmente"):
-            st.session_state[f'adding_insight_{pagina}_{campanha_id}'] = True
-            st.rerun()
-    
-    with col4:
-        if st.button("📜 Histórico", key=f"btn_hist_{pagina}_{campanha_id}", help="Ver histórico de insights"):
-            st.session_state[f'show_historico_{pagina}_{campanha_id}'] = not st.session_state.get(f'show_historico_{pagina}_{campanha_id}', False)
-            st.rerun()
-    
-    with col5:
-        # Botão para expandir/colapsar todos
-        if st.button("📝 Editar Todos", key=f"btn_edit_all_{pagina}_{campanha_id}", help="Expandir modo de edição"):
-            st.session_state[f'edit_mode_{pagina}_{campanha_id}'] = not st.session_state.get(f'edit_mode_{pagina}_{campanha_id}', False)
-            st.rerun()
-    
-    with col6:
-        # Botão de teste do webhook
-        if st.button("🔧", key=f"btn_test_webhook_{pagina}_{campanha_id}", help="Testar conexão com IA"):
-            st.session_state[f'test_webhook_{pagina}_{campanha_id}'] = True
-            st.rerun()
-    
-    # Mostrar resultado do teste de webhook
-    if st.session_state.get(f'test_webhook_{pagina}_{campanha_id}', False):
-        st.markdown("---")
-        st.markdown("**🔧 Teste de Conexão com Webhook**")
-        st.write(f"URL: `{WEBHOOK_IA_URL}`")
-        
-        with st.spinner("Testando conexão..."):
-            resultado = testar_webhook_ia()
-        
-        col_get, col_post = st.columns(2)
-        with col_get:
-            st.markdown("**GET:**")
-            if resultado.get('get_status') == 200:
-                st.success(f"✅ Status {resultado.get('get_status')}")
-            else:
-                st.error(f"❌ Status {resultado.get('get_status')}")
-            with st.expander("Resposta GET"):
-                st.code(resultado.get('get_resposta', 'N/A'))
-        
-        with col_post:
-            st.markdown("**POST:**")
-            if resultado.get('post_status') == 200:
-                st.success(f"✅ Status {resultado.get('post_status')}")
-            else:
-                st.error(f"❌ Status {resultado.get('post_status')}")
-            with st.expander("Resposta POST"):
-                st.code(resultado.get('post_resposta', 'N/A'))
-        
-        if st.button("Fechar teste", key=f"close_test_{pagina}_{campanha_id}"):
-            st.session_state[f'test_webhook_{pagina}_{campanha_id}'] = False
-            st.rerun()
-        
-        st.markdown("---")
-    
-    # Processar geração de insights IA
-    status = st.session_state.get(status_key, 'idle')
-    
-    if status == 'pending':
-        st.markdown("**🤖 Gerando insights com IA...**")
-        
-        # Mostrar dados sendo enviados
-        with st.expander("📤 Dados enviados para IA", expanded=True):
-            st.json(dados)
-        
-        novos_insights = buscar_insights_ia(pagina, dados, campanha_id)
-        
-        if novos_insights and len(novos_insights) > 0:
-            # Salvar no banco (mantém manuais, substitui IA)
-            data_manager.atualizar_insights_ia(campanha_id, pagina, novos_insights)
-            st.session_state[status_key] = 'done'
-            st.success(f"✅ {len(novos_insights)} insights gerados com sucesso!")
-            time.sleep(1)
-            st.rerun()
-        else:
-            st.session_state[status_key] = 'error'
-            st.session_state[error_key] = "Não foi possível gerar insights. Verifique a conexão com o webhook."
-    
-    elif status == 'error':
-        erro = st.session_state.get(error_key, 'Erro desconhecido')
-        st.warning(f"⚠️ {erro}")
-        if st.button("Tentar novamente", key=f"retry_{pagina}_{campanha_id}"):
-            st.session_state[status_key] = 'idle'
-            st.rerun()
-    
-    # Formulário para adicionar insight manual
-    if st.session_state.get(f'adding_insight_{pagina}_{campanha_id}', False):
-        render_form_adicionar_insight(pagina, campanha_id)
-    
-    # Mostrar histórico
-    if st.session_state.get(f'show_historico_{pagina}_{campanha_id}', False):
-        render_historico_insights(pagina, campanha_id)
-    
-    # Buscar insights salvos do banco (ativos ou todos)
-    insights = data_manager.get_insights_campanha(campanha_id, pagina, apenas_ativos=not mostrar_inativos)
+    # Buscar insights salvos do banco
+    insights = data_manager.get_insights_campanha(campanha_id, pagina, apenas_ativos=True)
     
     if not insights:
-        st.info("Nenhum insight cadastrado ainda. Clique em '🤖 Gerar com IA' ou '➕ Adicionar' para começar.")
+        st.caption("💡 Nenhum insight cadastrado para esta página. Acesse a Central da Campanha para gerenciar insights.")
         return
     
-    # Modo de edição
-    edit_mode = st.session_state.get(f'edit_mode_{pagina}_{campanha_id}', False)
+    st.markdown("---")
+    st.markdown("### 💡 Insights")
     
-    # Separar insights por fonte
-    insights_ia = [i for i in insights if i.get('fonte') == 'ia']
-    insights_manuais = [i for i in insights if i.get('fonte') != 'ia']
-    
-    # Renderizar insights IA
-    if insights_ia:
-        st.markdown("**Insights Automáticos (IA):**")
-        render_lista_insights(insights_ia, pagina, campanha_id, editavel=True)
-    
-    # Renderizar insights manuais
-    if insights_manuais:
-        st.markdown("**Insights Manuais:**")
-        render_lista_insights(insights_manuais, pagina, campanha_id, editavel=True)
-
-
-def render_lista_insights(insights: List[dict], pagina: str, campanha_id: int, editavel: bool = True):
-    """Renderiza lista de insights com opções de edição"""
+    # Renderizar cards de insights (apenas visualização)
     cols_per_row = 2
-    
     for i in range(0, len(insights), cols_per_row):
         cols = st.columns(cols_per_row)
         for j, col in enumerate(cols):
             if i + j < len(insights):
                 insight = insights[i + j]
                 with col:
-                    render_card_insight_editavel(insight, pagina, campanha_id, editavel)
+                    render_card_insight_simples(insight)
 
 
-def render_card_insight_editavel(insight: dict, pagina: str, campanha_id: int, editavel: bool = True):
-    """Renderiza um card de insight com opções de edição"""
-    insight_id = insight.get('id')
+def render_card_insight_simples(insight: dict):
+    """Renderiza card de insight apenas para visualização"""
     tipo = insight.get('tipo', 'info')
     titulo = insight.get('titulo', 'Insight')
     texto = insight.get('texto', '')
     icone = insight.get('icone', '💡')
     fonte = insight.get('fonte', 'ia')
-    ativo = insight.get('ativo', 1)
     created_at = insight.get('created_at', '')
-    updated_at = insight.get('updated_at', '')
     
     # Formatar data
     data_criacao = ''
     if created_at:
         try:
             dt = datetime.fromisoformat(created_at.replace('Z', '+00:00')) if 'T' in created_at else datetime.strptime(created_at[:19], '%Y-%m-%d %H:%M:%S')
-            data_criacao = dt.strftime('%d/%m/%Y %H:%M')
+            data_criacao = dt.strftime('%d/%m/%Y')
         except:
-            data_criacao = created_at[:16] if len(created_at) > 16 else created_at
+            data_criacao = created_at[:10] if len(created_at) > 10 else created_at
     
     cores = {
         'sucesso': '#dcfce7',
@@ -327,150 +198,15 @@ def render_card_insight_editavel(insight: dict, pagina: str, campanha_id: int, e
     }
     
     cor_fundo = cores.get(tipo, '#f3f4f6')
+    fonte_badge = "🤖" if fonte == 'ia' else "✍️"
     
-    # Se inativo, deixar mais transparente
-    if not ativo:
-        cor_fundo = '#e5e7eb'
-    
-    # Verificar se está em modo de edição
-    editing_key = f'editing_insight_{insight_id}'
-    
-    if st.session_state.get(editing_key, False):
-        # Modo de edição
-        with st.container():
-            st.markdown(f"**Editando Insight #{insight_id}**")
-            st.caption(f"📅 Criado em: {data_criacao}")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                novo_tipo = st.selectbox("Tipo:", ['sucesso', 'alerta', 'info', 'destaque', 'critico'], 
-                                        index=['sucesso', 'alerta', 'info', 'destaque', 'critico'].index(tipo) if tipo in ['sucesso', 'alerta', 'info', 'destaque', 'critico'] else 2,
-                                        key=f"edit_tipo_{insight_id}")
-            with col2:
-                novo_icone = st.text_input("Ícone:", value=icone, key=f"edit_icone_{insight_id}")
-            
-            novo_titulo = st.text_input("Título:", value=titulo, key=f"edit_titulo_{insight_id}")
-            novo_texto = st.text_area("Texto:", value=texto, height=100, key=f"edit_texto_{insight_id}")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("💾 Salvar", key=f"save_insight_{insight_id}"):
-                    data_manager.atualizar_insight(insight_id, {
-                        'tipo': novo_tipo,
-                        'icone': novo_icone,
-                        'titulo': novo_titulo,
-                        'texto': novo_texto
-                    })
-                    st.session_state[editing_key] = False
-                    st.rerun()
-            with col2:
-                if st.button("❌ Cancelar", key=f"cancel_insight_{insight_id}"):
-                    st.session_state[editing_key] = False
-                    st.rerun()
-    else:
-        # Modo de visualização
-        fonte_badge = "🤖" if fonte == 'ia' else "✍️"
-        status_badge = "" if ativo else "🚫 "
-        opacity = "1" if ativo else "0.6"
-        
-        st.markdown(f"""
-        <div style="background: {cor_fundo}; border-radius: 12px; padding: 1rem; margin-bottom: 0.5rem; position: relative; opacity: {opacity};">
-            <div style="position: absolute; top: 0.5rem; right: 0.5rem; font-size: 0.7rem; opacity: 0.6;">{fonte_badge}</div>
-            <div style="font-size: 1.2rem; margin-bottom: 0.3rem;">{status_badge}{icone} <strong>{titulo}</strong></div>
-            <div style="font-size: 0.9rem; color: #374151; margin-bottom: 0.5rem;">{texto}</div>
-            <div style="font-size: 0.7rem; color: #6b7280;">📅 {data_criacao}</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        if editavel:
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                if st.button("✏️ Editar", key=f"btn_edit_{insight_id}", help="Editar insight"):
-                    st.session_state[editing_key] = True
-                    st.rerun()
-            with col2:
-                if ativo:
-                    if st.button("🗑️ Excluir", key=f"btn_del_{insight_id}", help="Excluir insight"):
-                        data_manager.excluir_insight(insight_id)
-                        st.rerun()
-                else:
-                    if st.button("♻️ Restaurar", key=f"btn_restore_{insight_id}", help="Restaurar insight"):
-                        data_manager.atualizar_insight(insight_id, {'ativo': 1})
-                        st.rerun()
-            with col3:
-                if not ativo:
-                    if st.button("🗑️ Apagar", key=f"btn_delete_perm_{insight_id}", help="Apagar permanentemente"):
-                        data_manager.excluir_insight(insight_id, soft_delete=False)
-                        st.rerun()
-
-
-def render_form_adicionar_insight(pagina: str, campanha_id: int):
-    """Formulário para adicionar insight manualmente"""
-    st.markdown("---")
-    st.markdown("**➕ Adicionar Insight Manual**")
-    
-    with st.form(key=f"form_add_insight_{pagina}_{campanha_id}"):
-        col1, col2 = st.columns(2)
-        with col1:
-            tipo = st.selectbox("Tipo:", ['sucesso', 'alerta', 'info', 'destaque', 'critico'])
-        with col2:
-            icone = st.text_input("Ícone:", value='💡')
-        
-        titulo = st.text_input("Título:", placeholder="Ex: Meta de Impressões Superada")
-        texto = st.text_area("Texto:", placeholder="Descrição detalhada do insight...", height=100)
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            submitted = st.form_submit_button("💾 Salvar Insight")
-        with col2:
-            cancelled = st.form_submit_button("❌ Cancelar")
-        
-        if submitted and titulo and texto:
-            data_manager.adicionar_insight(campanha_id, pagina, {
-                'tipo': tipo,
-                'icone': icone,
-                'titulo': titulo,
-                'texto': texto
-            }, fonte='manual')
-            st.session_state[f'adding_insight_{pagina}_{campanha_id}'] = False
-            st.success("✅ Insight adicionado!")
-            time.sleep(0.5)
-            st.rerun()
-        
-        if cancelled:
-            st.session_state[f'adding_insight_{pagina}_{campanha_id}'] = False
-            st.rerun()
-
-
-def render_historico_insights(pagina: str, campanha_id: int):
-    """Mostra histórico de insights com opção de restaurar"""
-    st.markdown("---")
-    st.markdown("**📜 Histórico de Insights**")
-    
-    historico = data_manager.get_historico_insights(campanha_id, pagina, limit=5)
-    
-    if not historico:
-        st.info("Nenhum histórico disponível.")
-        return
-    
-    for item in historico:
-        created_at = item.get('created_at', '')[:16].replace('T', ' ')
-        qtd_insights = len(item.get('insights', []))
-        
-        col1, col2, col3 = st.columns([2, 1, 1])
-        with col1:
-            st.write(f"📅 {created_at} - {qtd_insights} insights")
-        with col2:
-            with st.expander("Ver"):
-                for ins in item.get('insights', []):
-                    st.write(f"{ins.get('icone', '💡')} **{ins.get('titulo', '')}**")
-                    st.caption(ins.get('texto', '')[:100] + "...")
-        with col3:
-            if st.button("🔄 Restaurar", key=f"restore_{item['id']}"):
-                data_manager.restaurar_insights_historico(item['id'])
-                st.success("✅ Insights restaurados!")
-                time.sleep(0.5)
-                st.rerun()
+    st.markdown(f"""
+    <div style="background: {cor_fundo}; border-radius: 12px; padding: 1rem; margin-bottom: 0.5rem; position: relative;">
+        <div style="position: absolute; top: 0.5rem; right: 0.5rem; font-size: 0.7rem; opacity: 0.6;">{fonte_badge} {data_criacao}</div>
+        <div style="font-size: 1.1rem; margin-bottom: 0.3rem;">{icone} <strong>{titulo}</strong></div>
+        <div style="font-size: 0.9rem; color: #374151;">{texto}</div>
+    </div>
+    """, unsafe_allow_html=True)
 
 
 def render_card_insight(insight: dict):

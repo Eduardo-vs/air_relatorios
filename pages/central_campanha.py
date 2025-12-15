@@ -849,71 +849,468 @@ def render_configuracoes_campanha(campanha):
 
 
 def render_configurar_insights(campanha):
-    """Configuracao de insights do relatorio"""
+    """Gestão completa de insights do relatório por página"""
+    import requests
+    import time
     
-    st.subheader("Configurar Insights")
+    WEBHOOK_IA_URL = "https://n8n.air.com.vc/webhook/e19fe530-62b6-44af-b6d1-3aeed59cfe0b"
     
-    insights = campanha.get('insights_config', {})
+    st.subheader("💡 Gestão de Insights")
+    st.caption("Gerencie os insights que aparecem em cada página do relatório")
     
-    with st.form("form_insights"):
-        st.markdown("**Secoes do Relatorio:**")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            mostrar_eng = st.checkbox("Mostrar Engajamento", value=insights.get('mostrar_engajamento', True))
-            mostrar_alc = st.checkbox("Mostrar Alcance", value=insights.get('mostrar_alcance', True))
-            mostrar_conv = st.checkbox("Mostrar Conversao", value=insights.get('mostrar_conversao', True))
-        with col2:
-            mostrar_saves = st.checkbox("Mostrar Saves", value=insights.get('mostrar_saves', True))
-            mostrar_formato = st.checkbox("Comparativo por Formato", value=insights.get('mostrar_comparativo_formato', True))
-            mostrar_top = st.checkbox("Top Influenciadores", value=insights.get('mostrar_top_influenciadores', True))
-        
-        st.markdown("---")
-        st.markdown("**Insights Personalizados:**")
-        
-        insights_pers = insights.get('insights_personalizados', [])
-        
-        insights_influenciadores = st.text_area(
-            "Insights sobre Influenciadores:",
-            value=insights.get('insights_influenciadores', ''),
-            height=100,
-            placeholder="Escreva insights sobre performance dos influenciadores..."
-        )
-        
-        insights_campanha = st.text_area(
-            "Insights sobre a Campanha:",
-            value=insights.get('insights_campanha', ''),
-            height=100,
-            placeholder="Escreva insights gerais sobre a campanha..."
-        )
-        
-        notas = st.text_area(
-            "Notas Gerais:",
-            value=campanha.get('notas', ''),
-            height=100,
-            placeholder="Notas e observacoes..."
-        )
-        
-        if st.form_submit_button("Salvar Insights", type="primary", use_container_width=True):
-            novos_insights = {
-                'mostrar_engajamento': mostrar_eng,
-                'mostrar_alcance': mostrar_alc,
-                'mostrar_conversao': mostrar_conv,
-                'mostrar_saves': mostrar_saves,
-                'mostrar_comparativo_formato': mostrar_formato,
-                'mostrar_top_influenciadores': mostrar_top,
-                'insights_personalizados': insights_pers,
-                'insights_influenciadores': insights_influenciadores,
-                'insights_campanha': insights_campanha
-            }
-            
-            data_manager.atualizar_campanha(campanha['id'], {
-                'insights_config': novos_insights,
-                'notas': notas
-            })
-            
-            st.success("Insights salvos!")
+    campanha_id = campanha['id']
+    
+    # Páginas disponíveis
+    PAGINAS = {
+        'big_numbers': '📊 Big Numbers',
+        'visao_aon': '📈 Visão AON',
+        'kpis_influenciador': '👥 KPIs por Influenciador',
+        'top_performance': '🏆 Top Performance'
+    }
+    
+    # Selecionar página
+    pagina_selecionada = st.selectbox(
+        "Selecione a página:",
+        options=list(PAGINAS.keys()),
+        format_func=lambda x: PAGINAS[x]
+    )
+    
+    st.markdown("---")
+    
+    # Botões de ação
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("🤖 Gerar Insights com IA", use_container_width=True, type="primary"):
+            st.session_state[f'gerando_ia_{pagina_selecionada}'] = True
             st.rerun()
+    
+    with col2:
+        if st.button("➕ Adicionar Manualmente", use_container_width=True):
+            st.session_state[f'adicionando_insight_{pagina_selecionada}'] = True
+            st.rerun()
+    
+    with col3:
+        mostrar_excluidos = st.checkbox("Mostrar excluídos", key=f"mostrar_exc_{pagina_selecionada}")
+    
+    # Processar geração de IA
+    if st.session_state.get(f'gerando_ia_{pagina_selecionada}', False):
+        st.markdown("---")
+        st.markdown("### 🤖 Gerando Insights com IA...")
+        
+        # Preparar dados
+        with st.spinner("Preparando dados da campanha..."):
+            dados = preparar_dados_para_ia(campanha)
+        
+        with st.expander("📤 Dados enviados", expanded=False):
+            st.json(dados)
+        
+        with st.spinner("Aguardando resposta da IA (pode levar até 2 minutos)..."):
+            try:
+                payload = {
+                    "pagina": pagina_selecionada,
+                    "campanha_id": campanha_id,
+                    "dados": dados,
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+                response = requests.post(
+                    WEBHOOK_IA_URL,
+                    json=payload,
+                    timeout=120,
+                    headers={"Content-Type": "application/json"}
+                )
+                
+                if response.status_code == 200:
+                    resultado = response.json()
+                    
+                    # Parsing do formato n8n: [{"output": {"insights": [...]}}]
+                    insights = None
+                    if isinstance(resultado, list) and len(resultado) > 0:
+                        primeiro = resultado[0]
+                        if isinstance(primeiro, dict):
+                            if 'output' in primeiro and 'insights' in primeiro['output']:
+                                insights = primeiro['output']['insights']
+                            elif 'insights' in primeiro:
+                                insights = primeiro['insights']
+                    elif isinstance(resultado, dict):
+                        if 'output' in resultado and 'insights' in resultado['output']:
+                            insights = resultado['output']['insights']
+                        elif 'insights' in resultado:
+                            insights = resultado['insights']
+                    
+                    if insights and len(insights) > 0:
+                        # Salvar insights no banco
+                        data_manager.atualizar_insights_ia(campanha_id, pagina_selecionada, insights)
+                        st.success(f"✅ {len(insights)} insights gerados com sucesso!")
+                    else:
+                        st.error("❌ Nenhum insight encontrado na resposta")
+                        with st.expander("Ver resposta bruta"):
+                            st.json(resultado)
+                else:
+                    st.error(f"❌ Erro HTTP {response.status_code}")
+                    st.code(response.text[:500])
+                    
+            except requests.exceptions.Timeout:
+                st.error("⏰ Timeout - A IA demorou muito para responder")
+            except Exception as e:
+                st.error(f"❌ Erro: {e}")
+        
+        st.session_state[f'gerando_ia_{pagina_selecionada}'] = False
+        time.sleep(1)
+        st.rerun()
+    
+    # Formulário para adicionar insight manualmente
+    if st.session_state.get(f'adicionando_insight_{pagina_selecionada}', False):
+        st.markdown("---")
+        st.markdown("### ➕ Adicionar Insight Manualmente")
+        
+        with st.form(f"form_add_insight_{pagina_selecionada}"):
+            col1, col2 = st.columns(2)
+            with col1:
+                tipo = st.selectbox("Tipo:", ['sucesso', 'alerta', 'info', 'destaque', 'critico'])
+            with col2:
+                icone = st.text_input("Ícone:", value='💡')
+            
+            titulo = st.text_input("Título:", placeholder="Ex: Meta de Impressões Superada")
+            texto = st.text_area("Texto:", placeholder="Descrição detalhada do insight com **dados** e recomendações...", height=150)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.form_submit_button("💾 Salvar", type="primary", use_container_width=True):
+                    if titulo and texto:
+                        data_manager.adicionar_insight(campanha_id, pagina_selecionada, {
+                            'tipo': tipo,
+                            'icone': icone,
+                            'titulo': titulo,
+                            'texto': texto
+                        }, fonte='manual')
+                        st.session_state[f'adicionando_insight_{pagina_selecionada}'] = False
+                        st.success("✅ Insight adicionado!")
+                        time.sleep(0.5)
+                        st.rerun()
+                    else:
+                        st.warning("Preencha título e texto")
+            with col2:
+                if st.form_submit_button("❌ Cancelar", use_container_width=True):
+                    st.session_state[f'adicionando_insight_{pagina_selecionada}'] = False
+                    st.rerun()
+    
+    # Listar insights existentes
+    st.markdown("---")
+    st.markdown(f"### Insights - {PAGINAS[pagina_selecionada]}")
+    
+    insights = data_manager.get_insights_campanha(campanha_id, pagina_selecionada, apenas_ativos=not mostrar_excluidos)
+    
+    if not insights:
+        st.info("Nenhum insight cadastrado para esta página. Use os botões acima para adicionar.")
+    else:
+        for insight in insights:
+            render_card_insight_editavel(insight, campanha_id, pagina_selecionada)
+
+
+def render_card_insight_editavel(insight: dict, campanha_id: int, pagina: str):
+    """Renderiza card de insight com opções de edição"""
+    import requests
+    import time
+    
+    WEBHOOK_IA_URL = "https://n8n.air.com.vc/webhook/e19fe530-62b6-44af-b6d1-3aeed59cfe0b"
+    
+    insight_id = insight.get('id')
+    tipo = insight.get('tipo', 'info')
+    titulo = insight.get('titulo', 'Insight')
+    texto = insight.get('texto', '')
+    icone = insight.get('icone', '💡')
+    fonte = insight.get('fonte', 'ia')
+    ativo = insight.get('ativo', 1)
+    created_at = insight.get('created_at', '')
+    
+    # Formatar data
+    data_criacao = ''
+    if created_at:
+        try:
+            if 'T' in created_at:
+                dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+            else:
+                dt = datetime.strptime(created_at[:19], '%Y-%m-%d %H:%M:%S')
+            data_criacao = dt.strftime('%d/%m/%Y %H:%M')
+        except:
+            data_criacao = created_at[:16] if len(created_at) > 16 else created_at
+    
+    cores = {
+        'sucesso': '#dcfce7',
+        'alerta': '#fef3c7',
+        'info': '#dbeafe',
+        'destaque': '#f3e8ff',
+        'critico': '#fee2e2'
+    }
+    
+    cor_fundo = cores.get(tipo, '#f3f4f6')
+    if not ativo:
+        cor_fundo = '#e5e7eb'
+    
+    fonte_badge = "🤖 IA" if fonte == 'ia' else "✍️ Manual"
+    status_badge = "🚫 EXCLUÍDO - " if not ativo else ""
+    opacity = "0.6" if not ativo else "1"
+    
+    # Container do card
+    with st.container():
+        st.markdown(f"""
+        <div style="background: {cor_fundo}; border-radius: 12px; padding: 1rem; margin-bottom: 0.5rem; opacity: {opacity};">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <span style="font-size: 1.2rem;">{status_badge}{icone} <strong>{titulo}</strong></span>
+                <span style="font-size: 0.75rem; color: #6b7280;">{fonte_badge} | 📅 {data_criacao}</span>
+            </div>
+            <div style="font-size: 0.9rem; color: #374151;">{texto}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Botões de ação
+        editing_key = f'editing_{insight_id}'
+        regenerating_key = f'regenerating_{insight_id}'
+        
+        if st.session_state.get(editing_key, False):
+            # Modo de edição
+            with st.form(f"form_edit_{insight_id}"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    novo_tipo = st.selectbox(
+                        "Tipo:", 
+                        ['sucesso', 'alerta', 'info', 'destaque', 'critico'],
+                        index=['sucesso', 'alerta', 'info', 'destaque', 'critico'].index(tipo) if tipo in ['sucesso', 'alerta', 'info', 'destaque', 'critico'] else 2,
+                        key=f"tipo_{insight_id}"
+                    )
+                with col2:
+                    novo_icone = st.text_input("Ícone:", value=icone, key=f"icone_{insight_id}")
+                
+                novo_titulo = st.text_input("Título:", value=titulo, key=f"titulo_{insight_id}")
+                novo_texto = st.text_area("Texto:", value=texto, height=150, key=f"texto_{insight_id}")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.form_submit_button("💾 Salvar", type="primary", use_container_width=True):
+                        data_manager.atualizar_insight(insight_id, {
+                            'tipo': novo_tipo,
+                            'icone': novo_icone,
+                            'titulo': novo_titulo,
+                            'texto': novo_texto
+                        })
+                        st.session_state[editing_key] = False
+                        st.rerun()
+                with col2:
+                    if st.form_submit_button("❌ Cancelar", use_container_width=True):
+                        st.session_state[editing_key] = False
+                        st.rerun()
+        
+        elif st.session_state.get(regenerating_key, False):
+            # Regenerando com IA
+            with st.spinner("🤖 Pedindo para IA regenerar este insight..."):
+                try:
+                    # Preparar dados
+                    campanha = data_manager.get_campanha(campanha_id)
+                    dados = preparar_dados_para_ia(campanha)
+                    
+                    payload = {
+                        "pagina": pagina,
+                        "campanha_id": campanha_id,
+                        "dados": dados,
+                        "acao": "regenerar_insight",
+                        "insight_atual": {
+                            "titulo": titulo,
+                            "texto": texto,
+                            "tipo": tipo
+                        },
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    
+                    response = requests.post(
+                        WEBHOOK_IA_URL,
+                        json=payload,
+                        timeout=120,
+                        headers={"Content-Type": "application/json"}
+                    )
+                    
+                    if response.status_code == 200:
+                        resultado = response.json()
+                        
+                        # Parsing
+                        novo_insight = None
+                        if isinstance(resultado, list) and len(resultado) > 0:
+                            primeiro = resultado[0]
+                            if isinstance(primeiro, dict):
+                                if 'output' in primeiro and 'insights' in primeiro['output']:
+                                    insights = primeiro['output']['insights']
+                                    novo_insight = insights[0] if insights else None
+                                elif 'insights' in primeiro:
+                                    insights = primeiro['insights']
+                                    novo_insight = insights[0] if insights else None
+                        
+                        if novo_insight:
+                            data_manager.atualizar_insight(insight_id, {
+                                'tipo': novo_insight.get('tipo', tipo),
+                                'icone': novo_insight.get('icone', icone),
+                                'titulo': novo_insight.get('titulo', titulo),
+                                'texto': novo_insight.get('texto', texto)
+                            })
+                            st.success("✅ Insight regenerado!")
+                        else:
+                            st.error("❌ Não foi possível regenerar")
+                    else:
+                        st.error(f"❌ Erro HTTP {response.status_code}")
+                        
+                except Exception as e:
+                    st.error(f"❌ Erro: {e}")
+            
+            st.session_state[regenerating_key] = False
+            time.sleep(0.5)
+            st.rerun()
+        
+        else:
+            # Botões normais
+            if ativo:
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    if st.button("✏️ Editar", key=f"edit_{insight_id}", use_container_width=True):
+                        st.session_state[editing_key] = True
+                        st.rerun()
+                with col2:
+                    if st.button("🔄 Regenerar", key=f"regen_{insight_id}", use_container_width=True, help="Pedir para IA refazer este insight"):
+                        st.session_state[regenerating_key] = True
+                        st.rerun()
+                with col3:
+                    if st.button("🗑️ Excluir", key=f"del_{insight_id}", use_container_width=True):
+                        data_manager.excluir_insight(insight_id)
+                        st.rerun()
+                with col4:
+                    pass  # Espaço vazio
+            else:
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    if st.button("♻️ Restaurar", key=f"restore_{insight_id}", use_container_width=True):
+                        data_manager.atualizar_insight(insight_id, {'ativo': 1})
+                        st.rerun()
+                with col2:
+                    if st.button("🗑️ Apagar", key=f"delete_{insight_id}", use_container_width=True, help="Apagar permanentemente"):
+                        data_manager.excluir_insight(insight_id, soft_delete=False)
+                        st.rerun()
+                with col3:
+                    pass
+        
+        st.markdown("")  # Espaçamento
+
+
+def preparar_dados_para_ia(campanha: dict) -> dict:
+    """Prepara todos os dados da campanha para enviar à IA"""
+    campanha_id = campanha['id']
+    
+    # Buscar influenciadores e posts
+    influenciadores = data_manager.get_influenciadores_campanha(campanha_id)
+    
+    # Calcular métricas gerais
+    total_impressoes = 0
+    total_alcance = 0
+    total_interacoes = 0
+    total_views = 0
+    total_curtidas = 0
+    total_comentarios = 0
+    total_compartilhamentos = 0
+    total_saves = 0
+    total_posts = 0
+    
+    dados_influenciadores = []
+    dados_posts = []
+    
+    for inf in influenciadores:
+        posts = inf.get('posts', [])
+        inf_impressoes = 0
+        inf_alcance = 0
+        inf_interacoes = 0
+        
+        for post in posts:
+            total_posts += 1
+            impressoes = post.get('impressoes', 0) or 0
+            alcance = post.get('alcance', 0) or 0
+            views = post.get('views', 0) or 0
+            curtidas = post.get('curtidas', 0) or 0
+            comentarios = post.get('comentarios', 0) or 0
+            compartilhamentos = post.get('compartilhamentos', 0) or 0
+            saves = post.get('saves', 0) or 0
+            interacoes = post.get('interacoes', 0) or (curtidas + comentarios + compartilhamentos + saves)
+            
+            total_impressoes += impressoes
+            total_alcance += alcance
+            total_views += views
+            total_curtidas += curtidas
+            total_comentarios += comentarios
+            total_compartilhamentos += compartilhamentos
+            total_saves += saves
+            total_interacoes += interacoes
+            
+            inf_impressoes += impressoes
+            inf_alcance += alcance
+            inf_interacoes += interacoes
+            
+            dados_posts.append({
+                'influenciador': inf.get('nome', ''),
+                'formato': post.get('formato', ''),
+                'plataforma': post.get('plataforma', inf.get('network', 'instagram')),
+                'data': post.get('data_publicacao', ''),
+                'impressoes': impressoes,
+                'alcance': alcance,
+                'views': views,
+                'interacoes': interacoes,
+                'curtidas': curtidas,
+                'comentarios': comentarios,
+                'compartilhamentos': compartilhamentos,
+                'saves': saves
+            })
+        
+        dados_influenciadores.append({
+            'nome': inf.get('nome', ''),
+            'usuario': inf.get('usuario', ''),
+            'network': inf.get('network', 'instagram'),
+            'classificacao': inf.get('classificacao', ''),
+            'seguidores': inf.get('seguidores', 0),
+            'air_score': inf.get('air_score', 0),
+            'custo': inf.get('custo', 0),
+            'total_posts': len(posts),
+            'impressoes': inf_impressoes,
+            'alcance': inf_alcance,
+            'interacoes': inf_interacoes
+        })
+    
+    # Calcular taxas
+    engajamento_efetivo = round((total_interacoes / total_impressoes * 100), 2) if total_impressoes > 0 else 0
+    taxa_alcance = round((total_alcance / sum([i.get('seguidores', 0) for i in influenciadores]) * 100), 2) if influenciadores else 0
+    
+    return {
+        "campanha": {
+            "id": campanha_id,
+            "nome": campanha.get('nome', ''),
+            "cliente": campanha.get('cliente_nome', ''),
+            "data_inicio": campanha.get('data_inicio', ''),
+            "data_fim": campanha.get('data_fim', ''),
+            "estimativa_alcance": campanha.get('estimativa_alcance', 0),
+            "estimativa_impressoes": campanha.get('estimativa_impressoes', 0),
+            "investimento": campanha.get('investimento_total', 0)
+        },
+        "influenciadores": dados_influenciadores,
+        "posts": dados_posts,
+        "metricas_gerais": {
+            "total_influenciadores": len(influenciadores),
+            "total_posts": total_posts,
+            "total_impressoes": total_impressoes,
+            "total_alcance": total_alcance,
+            "total_views": total_views,
+            "total_interacoes": total_interacoes,
+            "total_curtidas": total_curtidas,
+            "total_comentarios": total_comentarios,
+            "total_compartilhamentos": total_compartilhamentos,
+            "total_saves": total_saves,
+            "engajamento_efetivo": engajamento_efetivo,
+            "taxa_alcance": taxa_alcance
+        }
+    }
 
 
 def render_categorias_comentarios(campanha):
