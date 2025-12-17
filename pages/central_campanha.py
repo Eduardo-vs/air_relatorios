@@ -710,7 +710,7 @@ def render_modal_add_influenciador(campanha):
     """Modal para adicionar influenciador a campanha"""
     
     st.markdown("---")
-    st.markdown("#### Adicionar Influenciador")
+    st.markdown("#### Adicionar Influenciadores")
     
     # Influenciadores ja na campanha
     inf_na_campanha = [inf['id'] for inf in data_manager.get_influenciadores_campanha(campanha['id'])]
@@ -719,25 +719,35 @@ def render_modal_add_influenciador(campanha):
     todos_inf = data_manager.get_influenciadores()
     disponiveis = [inf for inf in todos_inf if inf['id'] not in inf_na_campanha]
     
-    col1, col2 = st.columns([3, 1])
-    
-    with col1:
-        if disponiveis:
-            opcoes = {f"{inf['nome']} (@{inf['usuario']}) - {inf['classificacao']}": inf['id'] for inf in disponiveis}
-            selecionado = st.selectbox("Selecione:", list(opcoes.keys()))
-            
-            if selecionado:
-                inf_id = opcoes[selecionado]
-                if st.button("Adicionar a Campanha", type="primary"):
-                    data_manager.adicionar_influenciador_campanha(campanha['id'], inf_id)
+    if disponiveis:
+        # Criar opcoes para multiselect
+        opcoes = {f"{inf['nome']} (@{inf['usuario']}) - {inf.get('classificacao', 'N/A')}": inf['id'] for inf in disponiveis}
+        
+        selecionados = st.multiselect(
+            "Selecione os influenciadores:",
+            list(opcoes.keys()),
+            placeholder="Escolha um ou mais influenciadores..."
+        )
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if selecionados:
+                if st.button(f"Adicionar {len(selecionados)} influenciador(es)", type="primary", use_container_width=True):
+                    for sel in selecionados:
+                        inf_id = opcoes[sel]
+                        data_manager.adicionar_influenciador_campanha(campanha['id'], inf_id)
                     st.session_state.show_add_inf_to_campaign = False
-                    st.success("Influenciador adicionado!")
+                    st.success(f"{len(selecionados)} influenciador(es) adicionado(s)!")
                     st.rerun()
-        else:
-            st.info("Todos os influenciadores ja estao na campanha ou nao ha influenciadores cadastrados.")
-    
-    with col2:
-        if st.button("Cancelar"):
+        
+        with col2:
+            if st.button("Cancelar", use_container_width=True):
+                st.session_state.show_add_inf_to_campaign = False
+                st.rerun()
+    else:
+        st.info("Todos os influenciadores ja estao na campanha ou nao ha influenciadores cadastrados.")
+        if st.button("Fechar"):
             st.session_state.show_add_inf_to_campaign = False
             st.rerun()
 
