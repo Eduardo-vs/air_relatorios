@@ -172,11 +172,16 @@ def render_secao_insights(pagina: str, dados: dict, campanha_id: int):
 
 def render_card_insight_simples(insight: dict):
     """Renderiza card de insight apenas para visualização"""
+    import re
+    
     tipo = insight.get('tipo', 'info')
     titulo = insight.get('titulo', 'Insight')
     texto = insight.get('texto', '')
     fonte = insight.get('fonte', 'ia')
     created_at = insight.get('created_at', '')
+    
+    # Converter markdown **texto** para HTML <strong>texto</strong>
+    texto_html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', texto)
     
     # Formatar data
     data_criacao = ''
@@ -202,7 +207,7 @@ def render_card_insight_simples(insight: dict):
     <div style="background: {cor_fundo}; border-radius: 12px; padding: 1rem; margin-bottom: 0.5rem; position: relative;">
         <div style="position: absolute; top: 0.5rem; right: 0.5rem; font-size: 0.7rem; opacity: 0.6;">{fonte_label} | {data_criacao}</div>
         <div style="font-size: 1.1rem; margin-bottom: 0.3rem;"><strong>{titulo}</strong></div>
-        <div style="font-size: 0.9rem; color: #374151;">{texto}</div>
+        <div style="font-size: 0.9rem; color: #374151;">{texto_html}</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -672,37 +677,6 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
             st.plotly_chart(fig_radar, use_container_width=True)
         else:
             st.info("Sem dados para exibir")
-    
-    # ========== INSIGHTS ==========
-    st.markdown("---")
-    st.subheader("Insights")
-    
-    # Insights automaticos
-    st.markdown("**Analise Automatica:**")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        if engaj_efetivo > 5:
-            st.success(f"✅ **Engajamento Excelente**: {engaj_efetivo:.2f}%")
-        elif engaj_efetivo > 3:
-            st.info(f"ℹ️ **Engajamento Adequado**: {engaj_efetivo:.2f}%")
-        else:
-            st.warning(f"⚠️ **Engajamento Baixo**: {engaj_efetivo:.2f}%")
-    
-    with col2:
-        if taxa_alcance > 50:
-            st.success(f"✅ **Alcance Alto**: {taxa_alcance:.2f}%")
-        elif taxa_alcance > 20:
-            st.info(f"ℹ️ **Alcance Bom**: {taxa_alcance:.2f}%")
-        else:
-            st.warning("Alcance Baixo: {:.2f}%".format(taxa_alcance))
-    
-    with col3:
-        if pct_dif_imp >= 0:
-            st.success("Meta de Impressoes: Superada em {:.1f}%".format(pct_dif_imp))
-        else:
-            st.warning("Meta de Impressoes: Abaixo em {:.1f}%".format(abs(pct_dif_imp)))
     
     # Insights da campanha (apenas visualizacao)
     if len(campanhas_list) == 1:
