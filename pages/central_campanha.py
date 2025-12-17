@@ -51,10 +51,11 @@ def render():
             st.rerun()
     
     # Tabs
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "Influenciadores e Posts",
         "Configuracoes da Campanha",
         "Configurar Insights",
+        "Comentarios",
         "Categorias de Comentarios"
     ])
     
@@ -68,6 +69,9 @@ def render():
         render_configurar_insights(campanha)
     
     with tab4:
+        render_comentarios(campanha)
+    
+    with tab5:
         render_categorias_comentarios(campanha)
 
 
@@ -855,57 +859,110 @@ def render_configurar_insights(campanha):
     
     WEBHOOK_IA_URL = "https://n8n.air.com.vc/webhook/e19fe530-62b6-44af-b6d1-3aeed59cfe0b"
     
-    st.subheader("💡 Gestão de Insights")
-    st.caption("Gerencie os insights que aparecem em cada página do relatório")
+    st.subheader("Gestao de Insights")
+    st.caption("Gerencie os insights que aparecem em cada pagina do relatorio")
     
     campanha_id = campanha['id']
     
     # Páginas disponíveis
     PAGINAS = {
-        'big_numbers': '📊 Big Numbers',
-        'visao_aon': '📈 Visão AON',
-        'kpis_influenciador': '👥 KPIs por Influenciador',
-        'top_performance': '🏆 Top Performance'
+        'big_numbers': 'Big Numbers',
+        'visao_aon': 'Visao AON',
+        'kpis_influenciador': 'KPIs por Influenciador',
+        'top_performance': 'Top Performance'
     }
     
-    # Selecionar página
+    # Botão para gerar insights de todas as páginas
+    st.markdown("---")
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        st.markdown("**Gerar insights para todas as paginas de uma vez:**")
+    with col2:
+        if st.button("Gerar Todos com IA", type="primary", use_container_width=True):
+            st.session_state['gerando_todos'] = True
+            st.rerun()
+    
+    # Processar geração de todos
+    if st.session_state.get('gerando_todos', False):
+        st.markdown("---")
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        dados = preparar_dados_para_ia(campanha)
+        total_paginas = len(PAGINAS)
+        
+        for idx, (pagina_key, pagina_nome) in enumerate(PAGINAS.items()):
+            status_text.text(f"Gerando insights para {pagina_nome}...")
+            progress_bar.progress((idx) / total_paginas)
+            
+            try:
+                payload = {
+                    "pagina": pagina_key,
+                    "campanha_id": campanha_id,
+                    "dados": dados,
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+                response = requests.post(
+                    WEBHOOK_IA_URL,
+                    json=payload,
+                    timeout=120,
+                    headers={"Content-Type": "application/json"}
+                )
+                
+                if response.status_code == 200:
+                    resultado = response.json()
+                    insights = extrair_insights_resposta(resultado)
+                    
+                    if insights:
+                        data_manager.atualizar_insights_ia(campanha_id, pagina_key, insights)
+                        st.success(f"{pagina_nome}: {len(insights)} insights gerados")
+                    else:
+                        st.warning(f"{pagina_nome}: Nenhum insight na resposta")
+                else:
+                    st.error(f"{pagina_nome}: Erro HTTP {response.status_code}")
+                    
+            except requests.exceptions.Timeout:
+                st.error(f"{pagina_nome}: Timeout")
+            except Exception as e:
+                st.error(f"{pagina_nome}: Erro - {str(e)[:50]}")
+        
+        progress_bar.progress(1.0)
+        status_text.text("Concluido!")
+        st.session_state['gerando_todos'] = False
+        time.sleep(1)
+        st.rerun()
+    
+    st.markdown("---")
+    
+    # Selecionar página individual
     pagina_selecionada = st.selectbox(
-        "Selecione a página:",
+        "Selecione a pagina para gerenciar:",
         options=list(PAGINAS.keys()),
         format_func=lambda x: PAGINAS[x]
     )
     
-    st.markdown("---")
-    
-    # Botões de ação
+    # Botões de ação para página individual
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("🤖 Gerar Insights com IA", use_container_width=True, type="primary"):
+        if st.button("Gerar com IA", use_container_width=True):
             st.session_state[f'gerando_ia_{pagina_selecionada}'] = True
             st.rerun()
     
     with col2:
-        if st.button("➕ Adicionar Manualmente", use_container_width=True):
+        if st.button("Adicionar Manual", use_container_width=True):
             st.session_state[f'adicionando_insight_{pagina_selecionada}'] = True
             st.rerun()
     
     with col3:
-        mostrar_excluidos = st.checkbox("Mostrar excluídos", key=f"mostrar_exc_{pagina_selecionada}")
+        mostrar_excluidos = st.checkbox("Mostrar excluidos", key=f"mostrar_exc_{pagina_selecionada}")
     
-    # Processar geração de IA
+    # Processar geração de IA para página individual
     if st.session_state.get(f'gerando_ia_{pagina_selecionada}', False):
-        st.markdown("---")
-        st.markdown("### 🤖 Gerando Insights com IA...")
-        
-        # Preparar dados
-        with st.spinner("Preparando dados da campanha..."):
+        with st.spinner(f"Gerando insights para {PAGINAS[pagina_selecionada]}..."):
             dados = preparar_dados_para_ia(campanha)
-        
-        with st.expander("📤 Dados enviados", expanded=False):
-            st.json(dados)
-        
-        with st.spinner("Aguardando resposta da IA (pode levar até 2 minutos)..."):
+            
             try:
                 payload = {
                     "pagina": pagina_selecionada,
@@ -923,38 +980,20 @@ def render_configurar_insights(campanha):
                 
                 if response.status_code == 200:
                     resultado = response.json()
+                    insights = extrair_insights_resposta(resultado)
                     
-                    # Parsing do formato n8n: [{"output": {"insights": [...]}}]
-                    insights = None
-                    if isinstance(resultado, list) and len(resultado) > 0:
-                        primeiro = resultado[0]
-                        if isinstance(primeiro, dict):
-                            if 'output' in primeiro and 'insights' in primeiro['output']:
-                                insights = primeiro['output']['insights']
-                            elif 'insights' in primeiro:
-                                insights = primeiro['insights']
-                    elif isinstance(resultado, dict):
-                        if 'output' in resultado and 'insights' in resultado['output']:
-                            insights = resultado['output']['insights']
-                        elif 'insights' in resultado:
-                            insights = resultado['insights']
-                    
-                    if insights and len(insights) > 0:
-                        # Salvar insights no banco
+                    if insights:
                         data_manager.atualizar_insights_ia(campanha_id, pagina_selecionada, insights)
-                        st.success(f"✅ {len(insights)} insights gerados com sucesso!")
+                        st.success(f"{len(insights)} insights gerados!")
                     else:
-                        st.error("❌ Nenhum insight encontrado na resposta")
-                        with st.expander("Ver resposta bruta"):
-                            st.json(resultado)
+                        st.error("Nenhum insight encontrado na resposta")
                 else:
-                    st.error(f"❌ Erro HTTP {response.status_code}")
-                    st.code(response.text[:500])
+                    st.error(f"Erro HTTP {response.status_code}")
                     
             except requests.exceptions.Timeout:
-                st.error("⏰ Timeout - A IA demorou muito para responder")
+                st.error("Timeout - A IA demorou muito para responder")
             except Exception as e:
-                st.error(f"❌ Erro: {e}")
+                st.error(f"Erro: {e}")
         
         st.session_state[f'gerando_ia_{pagina_selecionada}'] = False
         time.sleep(1)
@@ -963,50 +1002,68 @@ def render_configurar_insights(campanha):
     # Formulário para adicionar insight manualmente
     if st.session_state.get(f'adicionando_insight_{pagina_selecionada}', False):
         st.markdown("---")
-        st.markdown("### ➕ Adicionar Insight Manualmente")
+        st.markdown("**Adicionar Insight Manual**")
         
         with st.form(f"form_add_insight_{pagina_selecionada}"):
             col1, col2 = st.columns(2)
             with col1:
                 tipo = st.selectbox("Tipo:", ['sucesso', 'alerta', 'info', 'destaque', 'critico'])
             with col2:
-                icone = st.text_input("Ícone:", value='💡')
+                pass
             
-            titulo = st.text_input("Título:", placeholder="Ex: Meta de Impressões Superada")
-            texto = st.text_area("Texto:", placeholder="Descrição detalhada do insight com **dados** e recomendações...", height=150)
+            titulo = st.text_input("Titulo:", placeholder="Ex: Meta de Impressoes Superada")
+            texto = st.text_area("Texto:", placeholder="Descricao detalhada do insight...", height=150)
             
             col1, col2 = st.columns(2)
             with col1:
-                if st.form_submit_button("💾 Salvar", type="primary", use_container_width=True):
+                if st.form_submit_button("Salvar", type="primary", use_container_width=True):
                     if titulo and texto:
                         data_manager.adicionar_insight(campanha_id, pagina_selecionada, {
                             'tipo': tipo,
-                            'icone': icone,
+                            'icone': '',
                             'titulo': titulo,
                             'texto': texto
                         }, fonte='manual')
                         st.session_state[f'adicionando_insight_{pagina_selecionada}'] = False
-                        st.success("✅ Insight adicionado!")
+                        st.success("Insight adicionado!")
                         time.sleep(0.5)
                         st.rerun()
                     else:
-                        st.warning("Preencha título e texto")
+                        st.warning("Preencha titulo e texto")
             with col2:
-                if st.form_submit_button("❌ Cancelar", use_container_width=True):
+                if st.form_submit_button("Cancelar", use_container_width=True):
                     st.session_state[f'adicionando_insight_{pagina_selecionada}'] = False
                     st.rerun()
     
     # Listar insights existentes
     st.markdown("---")
-    st.markdown(f"### Insights - {PAGINAS[pagina_selecionada]}")
+    st.markdown(f"**Insights - {PAGINAS[pagina_selecionada]}**")
     
     insights = data_manager.get_insights_campanha(campanha_id, pagina_selecionada, apenas_ativos=not mostrar_excluidos)
     
     if not insights:
-        st.info("Nenhum insight cadastrado para esta página. Use os botões acima para adicionar.")
+        st.info("Nenhum insight cadastrado para esta pagina.")
     else:
         for insight in insights:
             render_card_insight_editavel(insight, campanha_id, pagina_selecionada)
+
+
+def extrair_insights_resposta(resultado) -> list:
+    """Extrai insights da resposta do webhook n8n"""
+    # Formato: [{"output": {"insights": [...]}}]
+    if isinstance(resultado, list) and len(resultado) > 0:
+        primeiro = resultado[0]
+        if isinstance(primeiro, dict):
+            if 'output' in primeiro and 'insights' in primeiro['output']:
+                return primeiro['output']['insights']
+            elif 'insights' in primeiro:
+                return primeiro['insights']
+    elif isinstance(resultado, dict):
+        if 'output' in resultado and 'insights' in resultado['output']:
+            return resultado['output']['insights']
+        elif 'insights' in resultado:
+            return resultado['insights']
+    return None
 
 
 def render_card_insight_editavel(insight: dict, campanha_id: int, pagina: str):
@@ -1020,7 +1077,6 @@ def render_card_insight_editavel(insight: dict, campanha_id: int, pagina: str):
     tipo = insight.get('tipo', 'info')
     titulo = insight.get('titulo', 'Insight')
     texto = insight.get('texto', '')
-    icone = insight.get('icone', '💡')
     fonte = insight.get('fonte', 'ia')
     ativo = insight.get('ativo', 1)
     created_at = insight.get('created_at', '')
@@ -1049,8 +1105,8 @@ def render_card_insight_editavel(insight: dict, campanha_id: int, pagina: str):
     if not ativo:
         cor_fundo = '#e5e7eb'
     
-    fonte_badge = "🤖 IA" if fonte == 'ia' else "✍️ Manual"
-    status_badge = "🚫 EXCLUÍDO - " if not ativo else ""
+    fonte_label = "IA" if fonte == 'ia' else "Manual"
+    status_label = "EXCLUIDO - " if not ativo else ""
     opacity = "0.6" if not ativo else "1"
     
     # Container do card
@@ -1058,8 +1114,8 @@ def render_card_insight_editavel(insight: dict, campanha_id: int, pagina: str):
         st.markdown(f"""
         <div style="background: {cor_fundo}; border-radius: 12px; padding: 1rem; margin-bottom: 0.5rem; opacity: {opacity};">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                <span style="font-size: 1.2rem;">{status_badge}{icone} <strong>{titulo}</strong></span>
-                <span style="font-size: 0.75rem; color: #6b7280;">{fonte_badge} | 📅 {data_criacao}</span>
+                <span style="font-size: 1.1rem;">{status_label}<strong>{titulo}</strong></span>
+                <span style="font-size: 0.75rem; color: #6b7280;">{fonte_label} | {data_criacao}</span>
             </div>
             <div style="font-size: 0.9rem; color: #374151;">{texto}</div>
         </div>
@@ -1081,32 +1137,30 @@ def render_card_insight_editavel(insight: dict, campanha_id: int, pagina: str):
                         key=f"tipo_{insight_id}"
                     )
                 with col2:
-                    novo_icone = st.text_input("Ícone:", value=icone, key=f"icone_{insight_id}")
+                    pass
                 
-                novo_titulo = st.text_input("Título:", value=titulo, key=f"titulo_{insight_id}")
+                novo_titulo = st.text_input("Titulo:", value=titulo, key=f"titulo_{insight_id}")
                 novo_texto = st.text_area("Texto:", value=texto, height=150, key=f"texto_{insight_id}")
                 
                 col1, col2 = st.columns(2)
                 with col1:
-                    if st.form_submit_button("💾 Salvar", type="primary", use_container_width=True):
+                    if st.form_submit_button("Salvar", type="primary", use_container_width=True):
                         data_manager.atualizar_insight(insight_id, {
                             'tipo': novo_tipo,
-                            'icone': novo_icone,
                             'titulo': novo_titulo,
                             'texto': novo_texto
                         })
                         st.session_state[editing_key] = False
                         st.rerun()
                 with col2:
-                    if st.form_submit_button("❌ Cancelar", use_container_width=True):
+                    if st.form_submit_button("Cancelar", use_container_width=True):
                         st.session_state[editing_key] = False
                         st.rerun()
         
         elif st.session_state.get(regenerating_key, False):
             # Regenerando com IA
-            with st.spinner("🤖 Pedindo para IA regenerar este insight..."):
+            with st.spinner("Pedindo para IA regenerar este insight..."):
                 try:
-                    # Preparar dados
                     campanha = data_manager.get_campanha(campanha_id)
                     dados = preparar_dados_para_ia(campanha)
                     
@@ -1132,34 +1186,23 @@ def render_card_insight_editavel(insight: dict, campanha_id: int, pagina: str):
                     
                     if response.status_code == 200:
                         resultado = response.json()
+                        insights = extrair_insights_resposta(resultado)
                         
-                        # Parsing
-                        novo_insight = None
-                        if isinstance(resultado, list) and len(resultado) > 0:
-                            primeiro = resultado[0]
-                            if isinstance(primeiro, dict):
-                                if 'output' in primeiro and 'insights' in primeiro['output']:
-                                    insights = primeiro['output']['insights']
-                                    novo_insight = insights[0] if insights else None
-                                elif 'insights' in primeiro:
-                                    insights = primeiro['insights']
-                                    novo_insight = insights[0] if insights else None
-                        
-                        if novo_insight:
+                        if insights and len(insights) > 0:
+                            novo_insight = insights[0]
                             data_manager.atualizar_insight(insight_id, {
                                 'tipo': novo_insight.get('tipo', tipo),
-                                'icone': novo_insight.get('icone', icone),
                                 'titulo': novo_insight.get('titulo', titulo),
                                 'texto': novo_insight.get('texto', texto)
                             })
-                            st.success("✅ Insight regenerado!")
+                            st.success("Insight regenerado!")
                         else:
-                            st.error("❌ Não foi possível regenerar")
+                            st.error("Nao foi possivel regenerar")
                     else:
-                        st.error(f"❌ Erro HTTP {response.status_code}")
+                        st.error(f"Erro HTTP {response.status_code}")
                         
                 except Exception as e:
-                    st.error(f"❌ Erro: {e}")
+                    st.error(f"Erro: {e}")
             
             st.session_state[regenerating_key] = False
             time.sleep(0.5)
@@ -1168,33 +1211,29 @@ def render_card_insight_editavel(insight: dict, campanha_id: int, pagina: str):
         else:
             # Botões normais
             if ativo:
-                col1, col2, col3, col4 = st.columns(4)
+                col1, col2, col3 = st.columns(3)
                 with col1:
-                    if st.button("✏️ Editar", key=f"edit_{insight_id}", use_container_width=True):
+                    if st.button("Editar", key=f"edit_{insight_id}", use_container_width=True):
                         st.session_state[editing_key] = True
                         st.rerun()
                 with col2:
-                    if st.button("🔄 Regenerar", key=f"regen_{insight_id}", use_container_width=True, help="Pedir para IA refazer este insight"):
+                    if st.button("Regenerar IA", key=f"regen_{insight_id}", use_container_width=True):
                         st.session_state[regenerating_key] = True
                         st.rerun()
                 with col3:
-                    if st.button("🗑️ Excluir", key=f"del_{insight_id}", use_container_width=True):
+                    if st.button("Excluir", key=f"del_{insight_id}", use_container_width=True):
                         data_manager.excluir_insight(insight_id)
                         st.rerun()
-                with col4:
-                    pass  # Espaço vazio
             else:
-                col1, col2, col3 = st.columns(3)
+                col1, col2 = st.columns(2)
                 with col1:
-                    if st.button("♻️ Restaurar", key=f"restore_{insight_id}", use_container_width=True):
+                    if st.button("Restaurar", key=f"restore_{insight_id}", use_container_width=True):
                         data_manager.atualizar_insight(insight_id, {'ativo': 1})
                         st.rerun()
                 with col2:
-                    if st.button("🗑️ Apagar", key=f"delete_{insight_id}", use_container_width=True, help="Apagar permanentemente"):
+                    if st.button("Apagar", key=f"delete_{insight_id}", use_container_width=True):
                         data_manager.excluir_insight(insight_id, soft_delete=False)
                         st.rerun()
-                with col3:
-                    pass
         
         st.markdown("")  # Espaçamento
 
@@ -1311,6 +1350,306 @@ def preparar_dados_para_ia(campanha: dict) -> dict:
             "taxa_alcance": taxa_alcance
         }
     }
+
+
+def render_comentarios(campanha):
+    """Extrair e classificar comentarios de posts da campanha"""
+    import time
+    
+    st.subheader("Extracao e Classificacao de Comentarios")
+    st.caption("Extraia comentarios dos posts da campanha e classifique-os com IA")
+    
+    campanha_id = campanha['id']
+    
+    # Webhook para classificacao
+    WEBHOOK_CLASSIFICACAO = "https://n8n.air.com.vc/webhook/classificar-comentarios"
+    
+    # Categorias configuradas
+    categorias = campanha.get('categorias_comentarios', [
+        'Elogio ao Produto',
+        'Intencao de Compra',
+        'Conexao Emocional',
+        'Duvida',
+        'Critica',
+        'Geral'
+    ])
+    
+    # Buscar influenciadores e posts da campanha
+    influenciadores = data_manager.get_influenciadores_campanha(campanha_id)
+    
+    # Coletar todos os posts com links
+    posts_campanha = []
+    for inf in influenciadores:
+        for post in inf.get('posts', []):
+            link = post.get('link', '')
+            if link and ('instagram.com' in link):
+                posts_campanha.append({
+                    'influenciador': inf.get('nome', ''),
+                    'influenciador_id': inf.get('id'),
+                    'usuario': inf.get('usuario', ''),
+                    'link': link,
+                    'formato': post.get('formato', ''),
+                    'data': post.get('data_publicacao', ''),
+                    'curtidas': post.get('curtidas', 0),
+                    'comentarios_qtd': post.get('comentarios', 0) or post.get('comentarios_qtd', 0)
+                })
+    
+    if not posts_campanha:
+        st.warning("Nenhum post com link do Instagram encontrado na campanha.")
+        st.caption("Adicione links aos posts dos influenciadores para extrair comentarios.")
+        return
+    
+    st.markdown("---")
+    
+    # Secao 1: Posts disponiveis
+    st.markdown(f"**Posts da Campanha ({len(posts_campanha)} com link)**")
+    
+    # Mostrar posts em tabela
+    import pandas as pd
+    
+    df_posts = pd.DataFrame([
+        {
+            'Influenciador': p['influenciador'],
+            'Formato': p['formato'],
+            'Data': p['data'],
+            'Curtidas': p['curtidas'],
+            'Comentarios': p['comentarios_qtd'],
+            'Link': p['link'][:50] + '...' if len(p['link']) > 50 else p['link']
+        }
+        for p in posts_campanha
+    ])
+    
+    st.dataframe(df_posts, use_container_width=True, hide_index=True)
+    
+    # Selecionar post para extrair
+    st.markdown("---")
+    st.markdown("**Extrair Comentarios**")
+    
+    opcoes_posts = [f"{p['influenciador']} - {p['formato']} ({p['data']})" for p in posts_campanha]
+    opcoes_posts.insert(0, "Todos os posts")
+    
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        post_selecionado = st.selectbox(
+            "Selecione o post:",
+            opcoes_posts,
+            key="select_post_comentarios"
+        )
+    with col2:
+        limite_comentarios = st.number_input("Limite por post:", min_value=10, max_value=500, value=100, step=10)
+    
+    if st.button("Extrair Comentarios", use_container_width=False):
+        st.session_state['extraindo_comentarios'] = True
+        st.session_state['post_selecionado'] = post_selecionado
+        st.session_state['limite_extracao'] = limite_comentarios
+        st.rerun()
+    
+    # Processar extracao
+    if st.session_state.get('extraindo_comentarios', False):
+        post_sel = st.session_state.get('post_selecionado', '')
+        limite = st.session_state.get('limite_extracao', 100)
+        
+        # Determinar quais posts extrair
+        if post_sel == "Todos os posts":
+            posts_extrair = posts_campanha
+        else:
+            idx = opcoes_posts.index(post_sel) - 1  # -1 porque "Todos" esta no indice 0
+            posts_extrair = [posts_campanha[idx]]
+        
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        total_comentarios = []
+        
+        try:
+            from utils.comentarios_extractor import ComentariosExtractor
+            
+            extractor = ComentariosExtractor(webhook_url=WEBHOOK_CLASSIFICACAO)
+            
+            for i, post in enumerate(posts_extrair):
+                status_text.text(f"Extraindo de {post['influenciador']} ({i+1}/{len(posts_extrair)})...")
+                progress_bar.progress((i) / len(posts_extrair))
+                
+                resultado = extractor.extrair_comentarios(post['link'], limite=limite)
+                
+                if resultado.get('sucesso'):
+                    comentarios = resultado.get('comentarios', [])
+                    # Adicionar info do post aos comentarios
+                    for c in comentarios:
+                        c['post_link'] = post['link']
+                        c['influenciador'] = post['influenciador']
+                        c['influenciador_id'] = post['influenciador_id']
+                    total_comentarios.extend(comentarios)
+                    status_text.text(f"{post['influenciador']}: {len(comentarios)} comentarios")
+                else:
+                    st.warning(f"{post['influenciador']}: {resultado.get('erro', 'Erro')}")
+                
+                time.sleep(1)  # Pausa entre posts
+            
+            progress_bar.progress(1.0)
+            
+            if total_comentarios:
+                st.session_state['comentarios_extraidos'] = total_comentarios
+                st.success(f"Total: {len(total_comentarios)} comentarios extraidos!")
+            else:
+                st.warning("Nenhum comentario extraido")
+                
+        except ImportError:
+            st.error("Biblioteca instaloader nao instalada. Execute: pip install instaloader")
+        except Exception as e:
+            st.error(f"Erro na extracao: {str(e)}")
+        
+        st.session_state['extraindo_comentarios'] = False
+        time.sleep(1)
+        st.rerun()
+    
+    # Mostrar comentarios extraidos
+    comentarios_extraidos = st.session_state.get('comentarios_extraidos', [])
+    
+    if comentarios_extraidos:
+        st.markdown("---")
+        st.markdown(f"**Comentarios Extraidos: {len(comentarios_extraidos)}**")
+        
+        # Preview dos comentarios
+        with st.expander(f"Ver {min(10, len(comentarios_extraidos))} primeiros"):
+            for c in comentarios_extraidos[:10]:
+                st.markdown(f"**@{c.get('usuario', 'N/A')}** ({c.get('influenciador', '')})")
+                st.caption(c.get('texto', '')[:200])
+                st.markdown("---")
+        
+        # Secao 2: Classificar
+        st.markdown("**Classificar com IA**")
+        
+        st.caption(f"Categorias: {', '.join(categorias)}")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            modo_classificacao = st.radio(
+                "Modo:",
+                ["Individual (mais preciso)", "Lote (mais rapido)"],
+                key="modo_class"
+            )
+        with col2:
+            contexto = st.text_input(
+                "Contexto (opcional):",
+                value=campanha.get('nome', ''),
+                key="contexto_class"
+            )
+        
+        if st.button("Classificar Comentarios", type="primary"):
+            st.session_state['classificando'] = True
+            st.session_state['modo_class_atual'] = modo_classificacao
+            st.session_state['contexto_atual'] = contexto
+            st.rerun()
+        
+        # Processar classificacao
+        if st.session_state.get('classificando', False):
+            modo = st.session_state.get('modo_class_atual', 'Individual')
+            contexto = st.session_state.get('contexto_atual', '')
+            
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            try:
+                from utils.comentarios_extractor import ComentariosExtractor
+                
+                extractor = ComentariosExtractor(webhook_url=WEBHOOK_CLASSIFICACAO)
+                
+                def update_progress(atual, total):
+                    progress_bar.progress(atual / total)
+                    status_text.text(f"Classificando {atual}/{total}...")
+                
+                if "Individual" in modo:
+                    comentarios_classificados = extractor.classificar_comentarios(
+                        comentarios_extraidos,
+                        categorias,
+                        contexto_campanha=contexto,
+                        progress_callback=update_progress
+                    )
+                else:
+                    resultado = extractor.classificar_lote(
+                        comentarios_extraidos,
+                        categorias,
+                        contexto_campanha=contexto,
+                        tamanho_lote=len(comentarios_extraidos)
+                    )
+                    comentarios_classificados = resultado.get('comentarios', comentarios_extraidos)
+                
+                # Salvar no banco
+                salvos = 0
+                for c in comentarios_classificados:
+                    qtd = data_manager.salvar_comentarios(
+                        campanha_id,
+                        c.get('post_link', ''),
+                        [c],
+                        influenciador_id=c.get('influenciador_id'),
+                        post_shortcode=c.get('post_link', '').split('/')[-2] if c.get('post_link') else ''
+                    )
+                    salvos += qtd
+                
+                st.success(f"{salvos} comentarios classificados e salvos!")
+                st.session_state['comentarios_extraidos'] = []
+                
+            except Exception as e:
+                st.error(f"Erro na classificacao: {str(e)}")
+            
+            st.session_state['classificando'] = False
+            time.sleep(1)
+            st.rerun()
+    
+    # Secao 3: Comentarios salvos
+    st.markdown("---")
+    st.markdown("**Comentarios Salvos**")
+    
+    comentarios_salvos = data_manager.get_comentarios_campanha(campanha_id)
+    
+    if comentarios_salvos:
+        stats = data_manager.get_estatisticas_comentarios(campanha_id)
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total", stats.get('total', 0))
+        with col2:
+            positivos = stats.get('por_sentimento', {}).get('positivo', {}).get('percentual', 0)
+            st.metric("Positivos", f"{positivos}%")
+        with col3:
+            negativos = stats.get('por_sentimento', {}).get('negativo', {}).get('percentual', 0)
+            st.metric("Negativos", f"{negativos}%")
+        
+        # Por categoria
+        if stats.get('por_categoria'):
+            st.markdown("**Por Categoria:**")
+            for cat, dados in stats['por_categoria'].items():
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.progress(dados['percentual'] / 100)
+                with col2:
+                    st.caption(f"{cat}: {dados['quantidade']} ({dados['percentual']}%)")
+        
+        # Tabela
+        with st.expander(f"Ver todos ({len(comentarios_salvos)})"):
+            df = pd.DataFrame([
+                {
+                    'Usuario': c.get('usuario', ''),
+                    'Texto': c.get('texto', '')[:80] + '...' if len(c.get('texto', '')) > 80 else c.get('texto', ''),
+                    'Categoria': c.get('categoria', 'N/A'),
+                    'Sentimento': c.get('sentimento', 'N/A'),
+                    'Likes': c.get('likes', 0)
+                }
+                for c in comentarios_salvos
+            ])
+            st.dataframe(df, use_container_width=True, hide_index=True)
+        
+        # Excluir
+        col1, col2 = st.columns([3, 1])
+        with col2:
+            if st.button("Excluir todos", type="secondary"):
+                data_manager.excluir_comentarios_campanha(campanha_id)
+                st.success("Excluidos!")
+                time.sleep(1)
+                st.rerun()
+    else:
+        st.info("Nenhum comentario salvo. Extraia e classifique os comentarios dos posts acima.")
 
 
 def render_categorias_comentarios(campanha):

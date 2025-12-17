@@ -406,6 +406,28 @@ def init_db():
         )
     ''')
     
+    # Tabela de comentarios extraidos e classificados
+    cursor.execute(f'''
+        CREATE TABLE IF NOT EXISTS comentarios_posts (
+            id {pk_type},
+            campanha_id {int_type} NOT NULL,
+            influenciador_id {int_type},
+            post_url {text_type},
+            post_shortcode {text_type},
+            comment_id {text_type},
+            usuario {text_type},
+            texto {text_type},
+            data_comentario {text_type},
+            likes {int_type} DEFAULT 0,
+            categoria {text_type},
+            sentimento {text_type},
+            confianca {real_type} DEFAULT 0,
+            justificativa {text_type},
+            classificado {int_type} DEFAULT 0,
+            created_at {text_type}
+        )
+    ''')
+    
     conn.commit()
     conn.close()
 
@@ -1801,5 +1823,157 @@ def atualizar_insights_ia(campanha_id: int, pagina: str, novos_insights: List[Di
     for insight in novos_insights:
         adicionar_insight(campanha_id, pagina, insight, fonte='ia')
     
+    invalidate_cache()
+    return True
+
+
+# ========================================
+# COMENTARIOS - CRUD
+# ========================================
+
+def salvar_comentarios(campanha_id: int, post_url: str, comentarios: List[Dict], 
+                       influenciador_id: int = None, post_shortcode: str = None) -> int:
+    """
+    Salva comentarios extraidos no banco
+    
+    Returns:
+        Quantidade de comentarios salvos
+    """
+    count = 0
+    now = datetime.now().isoformat()
+    
+    for comentario in comentarios:
+        try:
+            execute_insert(
+                """INSERT INTO comentarios_posts 
+                   (campanha_id, influenciador_id, post_url, post_shortcode, comment_id,
+                    usuario, texto, data_comentario, likes, categoria, sentimento,
+                    confianca, justificativa, classificado, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    campanha_id,
+                    influenciador_id,
+                    post_url,
+                    post_shortcode or '',
+                    comentario.get('id', ''),
+                    comentario.get('usuario', ''),
+                    comentario.get('texto', ''),
+                    comentario.get('data', ''),
+                    comentario.get('likes', 0),
+                    comentario.get('categoria', ''),
+                    comentario.get('sentimento', ''),
+                    comentario.get('confianca', 0),
+                    comentario.get('justificativa', ''),
+                    1 if comentario.get('categoria') else 0,
+                    now
+                )
+            )
+            count += 1
+        except Exception as e:
+            print(f"Erro ao salvar comentario: {e}")
+    
+    invalidate_cache()
+    return count
+
+
+def get_comentarios_campanha(campanha_id: int, apenas_classificados: bool = False) -> List[Dict]:
+    """Retorna todos os comentarios de uma campanha"""
+    if apenas_classificados:
+        rows = execute_select(
+            "SELECT * FROM comentarios_posts WHERE campanha_id = ? AND classificado = 1 ORDER BY created_at DESC",
+            (campanha_id,)
+        )
+    else:
+        rows = execute_select(
+            "SELECT * FROM comentarios_posts WHERE campanha_id = ? ORDER BY created_at DESC",
+            (campanha_id,)
+        )
+    return rows
+
+
+def get_comentarios_post(post_url: str) -> List[Dict]:
+    """Retorna comentarios de um post especifico"""
+    rows = execute_select(
+        "SELECT * FROM comentarios_posts WHERE post_url = ? ORDER BY data_comentario DESC",
+        (post_url,)
+    )
+    return rows
+
+
+def get_estatisticas_comentarios(campanha_id: int) -> Dict:
+    """Retorna estatisticas dos comentarios de uma campanha"""
+    comentarios = get_comentarios_campanha(campanha_id, apenas_classificados=True)
+    
+    if not comentarios:
+        return {
+            'total': 0,
+            'classificados': 0,
+            'por_categoria': {},
+            'por_sentimento': {}
+        }
+    
+    total = len(comentarios)
+    
+    # Contagem por categoria
+    por_categoria = {}
+    for c in comentarios:
+        cat = c.get('categoria', 'Nao Classificado')
+        por_categoria[cat] = por_categoria.get(cat, 0) + 1
+    
+    # Contagem por sentimento
+    por_sentimento = {'positivo': 0, 'neutro': 0, 'negativo': 0}
+    for c in comentarios:
+        sent = c.get('sentimento', 'neutro')
+        if sent in por_sentimento:
+            por_sentimento[sent] += 1
+    
+    return {
+        'total': total,
+        'classificados': total,
+        'por_categoria': {
+            cat: {'quantidade': qtd, 'percentual': round(qtd / total * 100, 1)}
+            for cat, qtd in por_categoria.items()
+        },
+        'por_sentimento': {
+            sent: {'quantidade': qtd, 'percentual': round(qtd / total * 100, 1)}
+            for sent, qtd in por_sentimento.items()
+        }
+    }
+
+
+def atualizar_classificacao_comentario(comment_id: int, classificacao: Dict) -> bool:
+    """Atualiza a classificacao de um comentario"""
+    execute_update(
+        """UPDATE comentarios_posts 
+           SET categoria = ?, sentimento = ?, confianca = ?, justificativa = ?, classificado = 1
+           WHERE id = ?""",
+        (
+            classificacao.get('categoria', ''),
+            classificacao.get('sentimento', 'neutro'),
+            classificacao.get('confianca', 0),
+            classificacao.get('justificativa', ''),
+            comment_id
+        )
+    )
+    invalidate_cache()
+    return True
+
+
+def excluir_comentarios_post(post_url: str) -> bool:
+    """Exclui todos os comentarios de um post"""
+    execute_update(
+        "DELETE FROM comentarios_posts WHERE post_url = ?",
+        (post_url,)
+    )
+    invalidate_cache()
+    return True
+
+
+def excluir_comentarios_campanha(campanha_id: int) -> bool:
+    """Exclui todos os comentarios de uma campanha"""
+    execute_update(
+        "DELETE FROM comentarios_posts WHERE campanha_id = ?",
+        (campanha_id,)
+    )
     invalidate_cache()
     return True

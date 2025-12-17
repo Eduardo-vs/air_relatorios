@@ -154,11 +154,10 @@ def render_secao_insights(pagina: str, dados: dict, campanha_id: int):
     insights = data_manager.get_insights_campanha(campanha_id, pagina, apenas_ativos=True)
     
     if not insights:
-        st.caption("💡 Nenhum insight cadastrado para esta página. Acesse a Central da Campanha para gerenciar insights.")
         return
     
     st.markdown("---")
-    st.markdown("### 💡 Insights")
+    st.markdown("### Insights")
     
     # Renderizar cards de insights (apenas visualização)
     cols_per_row = 2
@@ -176,7 +175,6 @@ def render_card_insight_simples(insight: dict):
     tipo = insight.get('tipo', 'info')
     titulo = insight.get('titulo', 'Insight')
     texto = insight.get('texto', '')
-    icone = insight.get('icone', '💡')
     fonte = insight.get('fonte', 'ia')
     created_at = insight.get('created_at', '')
     
@@ -198,12 +196,12 @@ def render_card_insight_simples(insight: dict):
     }
     
     cor_fundo = cores.get(tipo, '#f3f4f6')
-    fonte_badge = "🤖" if fonte == 'ia' else "✍️"
+    fonte_label = "IA" if fonte == 'ia' else "Manual"
     
     st.markdown(f"""
     <div style="background: {cor_fundo}; border-radius: 12px; padding: 1rem; margin-bottom: 0.5rem; position: relative;">
-        <div style="position: absolute; top: 0.5rem; right: 0.5rem; font-size: 0.7rem; opacity: 0.6;">{fonte_badge} {data_criacao}</div>
-        <div style="font-size: 1.1rem; margin-bottom: 0.3rem;">{icone} <strong>{titulo}</strong></div>
+        <div style="position: absolute; top: 0.5rem; right: 0.5rem; font-size: 0.7rem; opacity: 0.6;">{fonte_label} | {data_criacao}</div>
+        <div style="font-size: 1.1rem; margin-bottom: 0.3rem;"><strong>{titulo}</strong></div>
         <div style="font-size: 0.9rem; color: #374151;">{texto}</div>
     </div>
     """, unsafe_allow_html=True)
@@ -698,38 +696,15 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
         elif taxa_alcance > 20:
             st.info(f"ℹ️ **Alcance Bom**: {taxa_alcance:.2f}%")
         else:
-            st.warning(f"⚠️ **Alcance Baixo**: {taxa_alcance:.2f}%")
+            st.warning("Alcance Baixo: {:.2f}%".format(taxa_alcance))
     
     with col3:
         if pct_dif_imp >= 0:
-            st.success(f"✅ **Meta de Impressoes**: Superada em {pct_dif_imp:.1f}%")
+            st.success("Meta de Impressoes: Superada em {:.1f}%".format(pct_dif_imp))
         else:
-            st.warning(f"⚠️ **Meta de Impressoes**: Abaixo em {abs(pct_dif_imp):.1f}%")
+            st.warning("Meta de Impressoes: Abaixo em {:.1f}%".format(abs(pct_dif_imp)))
     
-    # Insights manuais
-    st.markdown("---")
-    st.markdown("**Insights Manuais:**")
-    
-    if len(campanhas_list) == 1:
-        insights_config = campanhas_list[0].get('insights_config', {})
-        insights_manuais = insights_config.get('insights_campanha', '')
-        
-        novo_insight = st.text_area(
-            "Adicione suas observacoes sobre a campanha:", 
-            value=insights_manuais, 
-            height=100, 
-            key="insights_manual_pag1"
-        )
-        
-        if st.button("Salvar Insights", key="salvar_insights_pag1"):
-            insights_config['insights_campanha'] = novo_insight
-            data_manager.atualizar_campanha(campanhas_list[0]['id'], {'insights_config': insights_config})
-            st.success("Insights salvos!")
-            st.rerun()
-    else:
-        st.caption("Insights manuais disponiveis apenas para relatorio de campanha unica")
-    
-    # Insights por IA
+    # Insights da campanha (apenas visualizacao)
     if len(campanhas_list) == 1:
         dados_ia = preparar_dados_pagina("big_numbers", campanhas_list, metricas)
         dados_ia["metricas_gerais"] = {
@@ -1077,18 +1052,8 @@ def render_pag4_kpis_influenciador(campanhas_list, cores):
         fig3.update_layout(title='Trafego por Influenciador', height=max(300, len(df) * 25), barmode='group', bargap=0.5)
         st.plotly_chart(fig3, use_container_width=True)
     
-    st.markdown("---")
-    st.subheader("Insights")
-    
+    # Insights da campanha (apenas visualizacao)
     if len(campanhas_list) == 1:
-        insights_texto = st.text_area("Insights:", value=campanhas_list[0].get('insights_config', {}).get('insights_influenciadores', ''), height=100, key="insights_pag4")
-        if st.button("Salvar Insights", key="salvar_insights_pag4"):
-            insights_config = campanhas_list[0].get('insights_config', {})
-            insights_config['insights_influenciadores'] = insights_texto
-            data_manager.atualizar_campanha(campanhas_list[0]['id'], {'insights_config': insights_config})
-            st.success("Insights salvos!")
-        
-        # Insights por IA
         dados_ia = preparar_dados_pagina("kpis_influenciador", campanhas_list)
         dados_ia["top_15_influenciadores"] = dados_inf[:15] if len(dados_inf) > 15 else dados_inf
         render_secao_insights("kpis_influenciador", dados_ia, campanhas_list[0]['id'])
