@@ -1,5 +1,5 @@
 """
-AIR Relatorios v5.0
+AIR Relatorios v7.5
 Sistema Completo de Analise de Campanhas
 """
 
@@ -28,10 +28,9 @@ data_manager.inicializar_session_state()
 data_manager.init_db()
 
 primary_color = st.session_state.primary_color
-secondary_color = st.session_state.secondary_color
 
 # CSS
-funcoes_auxiliares.aplicar_css_global(primary_color, secondary_color)
+funcoes_auxiliares.aplicar_css_global(primary_color)
 
 # Header com navegacao
 col1, col2 = st.columns([1, 4])
@@ -90,7 +89,7 @@ with st.sidebar:
                 aon = "[AON]" if camp.get('is_aon') else ""
                 
                 st.markdown(f"""
-                <div style='background: linear-gradient(135deg, {primary_color}, {secondary_color}); 
+                <div style='background: {primary_color}; 
                             color: white; padding: 1rem; border-radius: 12px; text-align: center; margin: 1rem 0;'>
                     <div style='font-size: 2rem; font-weight: 700;'>{metricas['engajamento_efetivo']}%</div>
                     <div style='font-size: 0.75rem;'>TAXA ENG. {aon}</div>
@@ -135,7 +134,7 @@ with st.sidebar:
         st.rerun()
     
     st.markdown("---")
-    st.caption("v5.0")
+    st.caption("v7.5")
 
 # Roteamento
 if st.session_state.current_page == 'Dashboard':
@@ -157,6 +156,6 @@ elif st.session_state.current_page == 'Configuracoes':
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #9ca3af; padding: 1rem 0; font-size: 0.85rem;'>
-    <strong>air</strong> | Respiramos influencia | v5.0
+    <strong>air</strong> | Respiramos influencia | v7.5
 </div>
 """, unsafe_allow_html=True)

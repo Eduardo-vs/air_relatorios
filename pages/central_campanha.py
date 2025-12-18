@@ -712,44 +712,96 @@ def render_modal_add_influenciador(campanha):
     st.markdown("---")
     st.markdown("#### Adicionar Influenciadores")
     
-    # Influenciadores ja na campanha
-    inf_na_campanha = [inf['id'] for inf in data_manager.get_influenciadores_campanha(campanha['id'])]
+    # Tabs para escolher modo
+    modo = st.radio("Modo:", ["Selecionar da base", "Cadastrar novo"], horizontal=True)
     
-    # Buscar da base
-    todos_inf = data_manager.get_influenciadores()
-    disponiveis = [inf for inf in todos_inf if inf['id'] not in inf_na_campanha]
-    
-    if disponiveis:
-        # Criar opcoes para multiselect
-        opcoes = {f"{inf['nome']} (@{inf['usuario']}) - {inf.get('classificacao', 'N/A')}": inf['id'] for inf in disponiveis}
+    if modo == "Selecionar da base":
+        # Influenciadores ja na campanha
+        inf_na_campanha = [inf['id'] for inf in data_manager.get_influenciadores_campanha(campanha['id'])]
         
-        selecionados = st.multiselect(
-            "Selecione os influenciadores:",
-            list(opcoes.keys()),
-            placeholder="Escolha um ou mais influenciadores..."
-        )
+        # Buscar da base
+        todos_inf = data_manager.get_influenciadores()
+        disponiveis = [inf for inf in todos_inf if inf['id'] not in inf_na_campanha]
         
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if selecionados:
-                if st.button(f"Adicionar {len(selecionados)} influenciador(es)", type="primary", use_container_width=True):
-                    for sel in selecionados:
-                        inf_id = opcoes[sel]
-                        data_manager.adicionar_influenciador_campanha(campanha['id'], inf_id)
+        if disponiveis:
+            # Criar opcoes para multiselect
+            opcoes = {f"{inf['nome']} (@{inf['usuario']}) - {inf.get('classificacao', 'N/A')}": inf['id'] for inf in disponiveis}
+            
+            selecionados = st.multiselect(
+                "Selecione os influenciadores:",
+                list(opcoes.keys()),
+                placeholder="Escolha um ou mais influenciadores..."
+            )
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                if selecionados:
+                    if st.button(f"Adicionar {len(selecionados)} influenciador(es)", type="primary", use_container_width=True):
+                        for sel in selecionados:
+                            inf_id = opcoes[sel]
+                            data_manager.adicionar_influenciador_campanha(campanha['id'], inf_id)
+                        st.session_state.show_add_inf_to_campaign = False
+                        st.success(f"{len(selecionados)} influenciador(es) adicionado(s)!")
+                        st.rerun()
+            
+            with col2:
+                if st.button("Cancelar", use_container_width=True):
                     st.session_state.show_add_inf_to_campaign = False
-                    st.success(f"{len(selecionados)} influenciador(es) adicionado(s)!")
                     st.rerun()
-        
-        with col2:
-            if st.button("Cancelar", use_container_width=True):
+        else:
+            st.info("Todos os influenciadores ja estao na campanha ou nao ha influenciadores cadastrados.")
+            if st.button("Fechar"):
                 st.session_state.show_add_inf_to_campaign = False
                 st.rerun()
-    else:
-        st.info("Todos os influenciadores ja estao na campanha ou nao ha influenciadores cadastrados.")
-        if st.button("Fechar"):
-            st.session_state.show_add_inf_to_campaign = False
-            st.rerun()
+    
+    else:  # Cadastrar novo
+        st.markdown("**Cadastrar novo influenciador:**")
+        
+        with st.form("form_novo_inf_campanha"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                nome = st.text_input("Nome *")
+                usuario = st.text_input("Username *", placeholder="sem @")
+                network = st.selectbox("Rede Social *", ["instagram", "tiktok", "youtube"])
+                seguidores = st.number_input("Seguidores", min_value=0, value=0)
+            
+            with col2:
+                foto = st.text_input("URL da Foto", placeholder="https://...")
+                engagement_rate = st.number_input("Taxa de Engajamento (%)", min_value=0.0, value=0.0, step=0.01)
+                air_score = st.number_input("AIR Score (0-1)", min_value=0.0, max_value=1.0, value=0.0, step=0.01)
+                custo = st.number_input("Custo (R$)", min_value=0.0, value=0.0, step=100.0)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.form_submit_button("Cadastrar e Adicionar", type="primary", use_container_width=True):
+                    if nome and usuario:
+                        # Criar influenciador
+                        novo_inf = data_manager.criar_influenciador({
+                            'nome': nome,
+                            'usuario': usuario.replace('@', ''),
+                            'network': network,
+                            'seguidores': seguidores,
+                            'foto': foto,
+                            'engagement_rate': engagement_rate,
+                            'air_score': air_score,
+                            'classificacao': data_manager.calcular_classificacao(seguidores)
+                        })
+                        
+                        if novo_inf:
+                            # Adicionar a campanha com custo
+                            data_manager.adicionar_influenciador_campanha(campanha['id'], novo_inf, custo=custo)
+                            st.session_state.show_add_inf_to_campaign = False
+                            st.success(f"Influenciador {nome} cadastrado e adicionado!")
+                            st.rerun()
+                    else:
+                        st.error("Preencha nome e username")
+            
+            with col2:
+                if st.form_submit_button("Cancelar", use_container_width=True):
+                    st.session_state.show_add_inf_to_campaign = False
+                    st.rerun()
 
 
 def render_configuracoes_campanha(campanha):

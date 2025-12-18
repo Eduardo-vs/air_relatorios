@@ -31,12 +31,12 @@ def render_aparencia():
     
     with col1:
         nova_primary = st.color_picker("Cor Principal", value=st.session_state.primary_color)
-        nova_secondary = st.color_picker("Cor Secundaria", value=st.session_state.secondary_color)
         
-        if st.button("Aplicar Cores", use_container_width=True):
+        if st.button("Aplicar Cor", use_container_width=True):
             st.session_state.primary_color = nova_primary
-            st.session_state.secondary_color = nova_secondary
-            st.success("Cores aplicadas!")
+            # Salvar no banco para persistir
+            data_manager.salvar_configuracao('primary_color', nova_primary)
+            st.success("Cor aplicada e salva!")
             st.rerun()
     
     with col2:
@@ -46,9 +46,9 @@ def render_aparencia():
                     border-radius: 8px; text-align: center; margin-bottom: 1rem;'>
             Botao Principal
         </div>
-        <div style='background: {nova_secondary}; color: white; padding: 1rem; 
+        <div style='background: {nova_primary}; opacity: 0.7; color: white; padding: 1rem; 
                     border-radius: 8px; text-align: center;'>
-            Elemento Secundario
+            Variacao
         </div>
         """, unsafe_allow_html=True)
 

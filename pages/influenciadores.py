@@ -154,24 +154,41 @@ def render_modal_adicionar():
                         
                         if lista_users:
                             st.session_state.api_preview_list = []
+                            st.session_state.api_not_found = []
                             
                             with st.spinner(f"Buscando {len(lista_users)} perfis..."):
                                 for username in lista_users:
                                     resultado = api_client.buscar_profile_id(username, network)
                                     if resultado.get('success') and resultado.get('data'):
                                         dados = api_client.processar_dados_api(resultado['data'])
-                                        if dados:
+                                        # Validar se perfil tem dados minimos (nome ou usuario preenchido)
+                                        if dados and (dados.get('nome') or dados.get('usuario')) and dados.get('seguidores', 0) > 0:
                                             st.session_state.api_preview_list.append(dados)
+                                        else:
+                                            st.session_state.api_not_found.append(username)
+                                    else:
+                                        st.session_state.api_not_found.append(username)
                             
+                            # Mostrar resultados
                             if st.session_state.api_preview_list:
                                 st.success(f"Encontrados {len(st.session_state.api_preview_list)} de {len(lista_users)} perfis!")
-                            else:
+                            
+                            if st.session_state.api_not_found:
+                                st.error(f"Perfis nao encontrados: {', '.join(st.session_state.api_not_found)}")
+                            
+                            if not st.session_state.api_preview_list and not st.session_state.api_not_found:
                                 st.error("Nenhum perfil encontrado")
+                                
             with col2:
                 if st.button("Cancelar", use_container_width=True):
                     st.session_state.show_add_influenciador = False
                     st.session_state.api_preview_list = []
+                    st.session_state.api_not_found = []
                     st.rerun()
+            
+            # Mostrar perfis nao encontrados
+            if st.session_state.get('api_not_found'):
+                st.warning(f"Nao foi possivel encontrar: {', '.join(st.session_state.api_not_found)}")
             
             # Preview de todos encontrados
             if st.session_state.get('api_preview_list'):
@@ -269,6 +286,76 @@ def render_modal_editar():
     
     with st.container():
         st.subheader(f"Editar: {inf['nome']}")
+        
+        # Secao de vinculacao de contas
+        if inf.get('network') == 'instagram':
+            st.markdown("**Vincular conta TikTok:**")
+            # Buscar influs TikTok disponiveis
+            todos_inf = data_manager.get_influenciadores()
+            tiktok_disponiveis = [i for i in todos_inf if i.get('network') == 'tiktok' and i.get('id') != inf_id]
+            
+            if tiktok_disponiveis:
+                opcoes_vinculo = ["Nenhum"] + [f"{i['nome']} (@{i['usuario']})" for i in tiktok_disponiveis]
+                vinculo_atual = inf.get('vinculo_id')
+                idx_atual = 0
+                if vinculo_atual:
+                    vinculado = next((i for i in tiktok_disponiveis if i['id'] == vinculo_atual), None)
+                    if vinculado:
+                        try:
+                            idx_atual = opcoes_vinculo.index(f"{vinculado['nome']} (@{vinculado['usuario']})")
+                        except:
+                            pass
+                
+                vinculo_sel = st.selectbox("Conta TikTok vinculada:", opcoes_vinculo, index=idx_atual)
+                
+                if vinculo_sel != "Nenhum":
+                    vinculo_inf = next((i for i in tiktok_disponiveis if f"{i['nome']} (@{i['usuario']})" == vinculo_sel), None)
+                    if vinculo_inf and st.button("Salvar Vinculo"):
+                        data_manager.atualizar_influenciador(inf_id, {'vinculo_id': vinculo_inf['id']})
+                        st.success("Vinculo salvo!")
+                        st.rerun()
+                elif vinculo_atual and st.button("Remover Vinculo"):
+                    data_manager.atualizar_influenciador(inf_id, {'vinculo_id': None})
+                    st.success("Vinculo removido!")
+                    st.rerun()
+            else:
+                st.caption("Nenhuma conta TikTok cadastrada para vincular")
+            
+            st.markdown("---")
+        
+        elif inf.get('network') == 'tiktok':
+            st.markdown("**Vincular conta Instagram:**")
+            todos_inf = data_manager.get_influenciadores()
+            insta_disponiveis = [i for i in todos_inf if i.get('network') == 'instagram' and i.get('id') != inf_id]
+            
+            if insta_disponiveis:
+                opcoes_vinculo = ["Nenhum"] + [f"{i['nome']} (@{i['usuario']})" for i in insta_disponiveis]
+                vinculo_atual = inf.get('vinculo_id')
+                idx_atual = 0
+                if vinculo_atual:
+                    vinculado = next((i for i in insta_disponiveis if i['id'] == vinculo_atual), None)
+                    if vinculado:
+                        try:
+                            idx_atual = opcoes_vinculo.index(f"{vinculado['nome']} (@{vinculado['usuario']})")
+                        except:
+                            pass
+                
+                vinculo_sel = st.selectbox("Conta Instagram vinculada:", opcoes_vinculo, index=idx_atual)
+                
+                if vinculo_sel != "Nenhum":
+                    vinculo_inf = next((i for i in insta_disponiveis if f"{i['nome']} (@{i['usuario']})" == vinculo_sel), None)
+                    if vinculo_inf and st.button("Salvar Vinculo"):
+                        data_manager.atualizar_influenciador(inf_id, {'vinculo_id': vinculo_inf['id']})
+                        st.success("Vinculo salvo!")
+                        st.rerun()
+                elif vinculo_atual and st.button("Remover Vinculo"):
+                    data_manager.atualizar_influenciador(inf_id, {'vinculo_id': None})
+                    st.success("Vinculo removido!")
+                    st.rerun()
+            else:
+                st.caption("Nenhuma conta Instagram cadastrada para vincular")
+            
+            st.markdown("---")
         
         with st.form("form_editar_inf"):
             col1, col2 = st.columns(2)

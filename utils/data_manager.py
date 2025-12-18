@@ -203,7 +203,8 @@ def execute_query(query: str, params: tuple = (), fetch: bool = False):
         
         if fetch:
             result = cursor.fetchall()
-            conn.close()
+            if not USING_POSTGRES:
+                conn.close()
             return result
         else:
             conn.commit()
@@ -213,17 +214,18 @@ def execute_query(query: str, params: tuple = (), fetch: bool = False):
                 if USING_POSTGRES:
                     cursor.execute("SELECT lastval()")
                     last_id = cursor.fetchone()
-                    conn.close()
                     return last_id[0] if last_id else None
                 else:
                     last_id = cursor.lastrowid
                     conn.close()
                     return last_id
             
-            conn.close()
+            if not USING_POSTGRES:
+                conn.close()
             return True
     except Exception as e:
-        conn.close()
+        if not USING_POSTGRES:
+            conn.close()
         raise e
 
 
@@ -338,6 +340,7 @@ def init_db():
             total_likes {int_type} DEFAULT 0,
             total_views {int_type} DEFAULT 0,
             total_comments {int_type} DEFAULT 0,
+            vinculo_id {int_type},
             created_at {text_type},
             updated_at {text_type}
         )
@@ -429,7 +432,10 @@ def init_db():
     ''')
     
     conn.commit()
-    conn.close()
+    
+    # Só fecha conexão se for SQLite (PostgreSQL usa conexão compartilhada)
+    if not USING_POSTGRES:
+        conn.close()
 
 
 # ========================================
@@ -443,15 +449,38 @@ def inicializar_session_state():
     if 'current_page' not in st.session_state:
         st.session_state.current_page = 'Dashboard'
     if 'primary_color' not in st.session_state:
-        st.session_state.primary_color = '#7c3aed'
-    if 'secondary_color' not in st.session_state:
-        st.session_state.secondary_color = '#fb923c'
+        # Carregar cor salva do banco
+        cor_salva = get_configuracao('primary_color')
+        st.session_state.primary_color = cor_salva if cor_salva else '#7c3aed'
     if 'modo_relatorio' not in st.session_state:
         st.session_state.modo_relatorio = 'campanha'
     if 'relatorio_cliente_id' not in st.session_state:
         st.session_state.relatorio_cliente_id = None
     if 'relatorio_campanhas_ids' not in st.session_state:
         st.session_state.relatorio_campanhas_ids = []
+
+
+def get_configuracao(chave: str) -> str:
+    """Retorna valor de uma configuracao"""
+    try:
+        row = execute_select_one("SELECT valor FROM configuracoes WHERE chave = ?", (chave,))
+        return row.get('valor') if row else None
+    except:
+        return None
+
+
+def salvar_configuracao(chave: str, valor: str) -> bool:
+    """Salva uma configuracao no banco"""
+    try:
+        # Verificar se ja existe
+        existente = get_configuracao(chave)
+        if existente is not None:
+            execute_update("UPDATE configuracoes SET valor = ? WHERE chave = ?", (valor, chave))
+        else:
+            execute_insert("INSERT INTO configuracoes (chave, valor) VALUES (?, ?)", (chave, valor))
+        return True
+    except:
+        return False
 
 
 def get_faixas_classificacao() -> Dict:

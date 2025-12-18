@@ -314,11 +314,10 @@ def exportar_csv_balizadores(campanha: dict, influenciadores_data: list) -> str:
 # CSS GLOBAL
 # ========================================
 
-def aplicar_css_global(primary_color, secondary_color):
+def aplicar_css_global(primary_color):
     """Aplica CSS global do sistema"""
     
     text_color_primary = get_text_color(primary_color)
-    text_color_secondary = get_text_color(secondary_color)
     
     st.markdown(f"""
     <style>

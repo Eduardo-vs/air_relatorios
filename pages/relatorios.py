@@ -705,26 +705,53 @@ def render_pag2_analise_geral(campanhas_list, metricas, cores):
     
     with col1:
         st.markdown("**Grafico 1: Comparativo por Formato**")
-        kpi1 = st.selectbox("KPI Barras:", ["Impressoes", "Alcance", "Interacoes", "Impressoes"], key="kpi1_pag2")
-        kpi2 = st.selectbox("KPI Linha:", ["Taxa Eng. Efetivo", "Taxa Alcance", "Interacoes", "Impressoes"], key="kpi2_pag2")
+        kpi1 = st.selectbox("KPI Barras:", ["Impressoes", "Alcance", "Interacoes", "Interacoes Qualificadas"], key="kpi1_pag2")
+        kpi2 = st.selectbox("KPI Linha:", ["Taxa Eng. Efetivo", "Taxa Alcance", "Taxa Interacoes Qualif.", "Interacoes", "Impressoes"], key="kpi2_pag2")
         
         dados = coletar_dados_formato(campanhas_list)
         if dados:
             df = pd.DataFrame(dados)
-            kpi_map = {'Views': 'views', 'Alcance': 'alcance', 'Interacoes': 'interacoes', 'Impressoes': 'impressoes'}
-            campo1 = kpi_map.get(kpi1, 'views')
             
-            df_agg = df.groupby('formato').agg({'views': 'sum', 'alcance': 'sum', 'interacoes': 'sum', 'impressoes': 'sum'}).reset_index()
+            # Calcular interacoes qualificadas (interacoes - curtidas)
+            df['interacoes_qualif'] = df['interacoes'] - df.get('curtidas', 0)
+            df['interacoes_qualif'] = df['interacoes_qualif'].clip(lower=0)
+            
+            df_agg = df.groupby('formato').agg({
+                'views': 'sum', 
+                'alcance': 'sum', 
+                'interacoes': 'sum', 
+                'impressoes': 'sum',
+                'curtidas': 'sum',
+                'interacoes_qualif': 'sum'
+            }).reset_index()
+            
             df_agg['taxa_eng'] = (df_agg['interacoes'] / df_agg['views'] * 100).round(2).fillna(0)
             df_agg['taxa_alcance'] = (df_agg['alcance'] / metricas['total_seguidores'] * 100).round(2) if metricas['total_seguidores'] > 0 else 0
+            # Taxa de interacoes qualificadas = (interacoes - curtidas) / interacoes
+            df_agg['taxa_interacoes_qualif'] = ((df_agg['interacoes'] - df_agg['curtidas']) / df_agg['interacoes'] * 100).round(2).fillna(0)
+            
+            kpi_map = {
+                'Views': 'views', 
+                'Alcance': 'alcance', 
+                'Interacoes': 'interacoes', 
+                'Impressoes': 'impressoes',
+                'Interacoes Qualificadas': 'interacoes_qualif'
+            }
+            campo1 = kpi_map.get(kpi1, 'impressoes')
             
             fig = go.Figure()
-            fig.add_trace(go.Bar(x=df_agg['formato'], y=df_agg[campo1], name=kpi1, marker_color=cores[0], text=[funcoes_auxiliares.formatar_numero(v) for v in df_agg[campo1]], textposition='outside'))
+            
+            # Barras com percentual
+            total_campo = df_agg[campo1].sum()
+            textos = [f"{funcoes_auxiliares.formatar_numero(v)}<br>({v/total_campo*100:.1f}%)" if total_campo > 0 else funcoes_auxiliares.formatar_numero(v) for v in df_agg[campo1]]
+            fig.add_trace(go.Bar(x=df_agg['formato'], y=df_agg[campo1], name=kpi1, marker_color=cores[0], text=textos, textposition='outside'))
             
             if kpi2 == "Taxa Eng. Efetivo":
                 y2 = df_agg['taxa_eng']
             elif kpi2 == "Taxa Alcance":
                 y2 = df_agg['taxa_alcance']
+            elif kpi2 == "Taxa Interacoes Qualif.":
+                y2 = df_agg['taxa_interacoes_qualif']
             else:
                 y2 = df_agg[kpi_map.get(kpi2, 'interacoes')]
             
@@ -734,30 +761,57 @@ def render_pag2_analise_geral(campanhas_list, metricas, cores):
     
     with col2:
         st.markdown("**Grafico 2: Desempenho por Classificacao**")
-        kpi3 = st.selectbox("KPI Barras:", ["Impressoes", "Alcance", "Interacoes", "Impressoes"], key="kpi3_pag2")
-        kpi4 = st.selectbox("KPI Linha:", ["Qtd Influenciadores", "Taxa Eng. Media", "Posts"], key="kpi4_pag2")
+        kpi3 = st.selectbox("KPI Barras:", ["Impressoes", "Alcance", "Interacoes", "Interacoes Qualificadas"], key="kpi3_pag2")
+        kpi4 = st.selectbox("KPI Linha:", ["Qtd Influenciadores", "Taxa Eng. Media", "Taxa Interacoes Qualif.", "Posts"], key="kpi4_pag2")
         
         dados_class = coletar_dados_classificacao_completo(campanhas_list)
         if dados_class:
             df = pd.DataFrame(dados_class)
-            kpi_map = {'Views': 'views', 'Alcance': 'alcance', 'Interacoes': 'interacoes', 'Impressoes': 'impressoes'}
-            campo3 = kpi_map.get(kpi3, 'views')
             
-            df_agg = df.groupby('classificacao').agg({'views': 'sum', 'alcance': 'sum', 'interacoes': 'sum', 'impressoes': 'sum', 'influenciador': 'nunique', 'post_id': 'count'}).reset_index()
-            df_agg.columns = ['classificacao', 'views', 'alcance', 'interacoes', 'impressoes', 'qtd_influs', 'posts']
+            # Calcular interacoes qualificadas
+            df['interacoes_qualif'] = df['interacoes'] - df.get('curtidas', 0)
+            df['interacoes_qualif'] = df['interacoes_qualif'].clip(lower=0)
+            
+            df_agg = df.groupby('classificacao').agg({
+                'views': 'sum', 
+                'alcance': 'sum', 
+                'interacoes': 'sum', 
+                'impressoes': 'sum', 
+                'curtidas': 'sum',
+                'interacoes_qualif': 'sum',
+                'influenciador': 'nunique', 
+                'post_id': 'count'
+            }).reset_index()
+            df_agg.columns = ['classificacao', 'views', 'alcance', 'interacoes', 'impressoes', 'curtidas', 'interacoes_qualif', 'qtd_influs', 'posts']
             df_agg['taxa_eng_media'] = (df_agg['interacoes'] / df_agg['views'] * 100).round(2).fillna(0)
+            df_agg['taxa_interacoes_qualif'] = ((df_agg['interacoes'] - df_agg['curtidas']) / df_agg['interacoes'] * 100).round(2).fillna(0)
             
             ordem = ['Nano', 'Micro', 'Mid', 'Macro', 'Mega']
             df_agg['ordem'] = df_agg['classificacao'].apply(lambda x: ordem.index(x) if x in ordem else 99)
             df_agg = df_agg.sort_values('ordem')
             
+            kpi_map = {
+                'Views': 'views', 
+                'Alcance': 'alcance', 
+                'Interacoes': 'interacoes', 
+                'Impressoes': 'impressoes',
+                'Interacoes Qualificadas': 'interacoes_qualif'
+            }
+            campo3 = kpi_map.get(kpi3, 'impressoes')
+            
             fig = go.Figure()
-            fig.add_trace(go.Bar(x=df_agg['classificacao'], y=df_agg[campo3], name=kpi3, marker_color=cores[2], text=[funcoes_auxiliares.formatar_numero(v) for v in df_agg[campo3]], textposition='outside'))
+            
+            # Barras com percentual
+            total_campo = df_agg[campo3].sum()
+            textos = [f"{funcoes_auxiliares.formatar_numero(v)}<br>({v/total_campo*100:.1f}%)" if total_campo > 0 else funcoes_auxiliares.formatar_numero(v) for v in df_agg[campo3]]
+            fig.add_trace(go.Bar(x=df_agg['classificacao'], y=df_agg[campo3], name=kpi3, marker_color=cores[2], text=textos, textposition='outside'))
             
             if kpi4 == "Qtd Influenciadores":
                 y4 = df_agg['qtd_influs']
             elif kpi4 == "Taxa Eng. Media":
                 y4 = df_agg['taxa_eng_media']
+            elif kpi4 == "Taxa Interacoes Qualif.":
+                y4 = df_agg['taxa_interacoes_qualif']
             else:
                 y4 = df_agg['posts']
             
@@ -793,7 +847,7 @@ def render_pag3_visao_aon(campanhas_list, metricas, cores, cliente=None):
     with col2:
         filtro_taxa = st.selectbox("Taxa:", ["Taxa Eng. Efetivo", "Taxa Alcance"], key="aon_taxa")
     with col3:
-        data_ini = st.date_input("De:", value=datetime.now() - timedelta(days=90), key="aon_di")
+        data_ini = st.date_input("De:", value=datetime.now() - timedelta(days=180), key="aon_di")
     with col4:
         data_fim = st.date_input("Ate:", value=datetime.now(), key="aon_df")
     
@@ -807,29 +861,38 @@ def render_pag3_visao_aon(campanhas_list, metricas, cores, cliente=None):
     
     df = pd.DataFrame(dados_tempo)
     df['mes'] = pd.to_datetime(df['data']).dt.to_period('M').astype(str)
+    df['mes_nome'] = pd.to_datetime(df['data']).dt.strftime('%b/%Y')
     
     metrica_map = {'Impressoes': 'impressoes', 'Alcance': 'alcance', 'Interacoes': 'interacoes'}
     campo = metrica_map.get(filtro_metrica, 'impressoes')
     
-    df_tempo = df.groupby('data').agg({campo: 'sum', 'views': 'sum', 'alcance': 'sum', 'interacoes': 'sum', 'seguidores': 'sum'}).reset_index()
-    df_tempo = df_tempo.sort_values('data')
+    # Agrupar por MES (eixo X mensal)
+    df_tempo = df.groupby(['mes', 'mes_nome']).agg({
+        campo: 'sum', 
+        'views': 'sum', 
+        'alcance': 'sum', 
+        'interacoes': 'sum',
+        'impressoes': 'sum',
+        'seguidores': 'sum'
+    }).reset_index()
+    df_tempo = df_tempo.sort_values('mes')
     df_tempo['taxa_eng'] = (df_tempo['interacoes'] / df_tempo['views'] * 100).round(2).fillna(0)
     df_tempo['taxa_alcance'] = (df_tempo['alcance'] / df_tempo['seguidores'] * 100).round(2).fillna(0)
     
     fig = go.Figure()
     fig.add_trace(go.Bar(
-        x=df_tempo['data'], 
+        x=df_tempo['mes_nome'], 
         y=df_tempo[campo], 
         name=filtro_metrica, 
         marker_color=cores[0],
         text=[funcoes_auxiliares.formatar_numero(v) for v in df_tempo[campo]],
         textposition='outside',
-        width=0.5  # Barras mais finas
+        width=0.6
     ))
     
     taxa_campo = 'taxa_eng' if filtro_taxa == "Taxa Eng. Efetivo" else 'taxa_alcance'
     fig.add_trace(go.Scatter(
-        x=df_tempo['data'], 
+        x=df_tempo['mes_nome'], 
         y=df_tempo[taxa_campo], 
         name=filtro_taxa, 
         mode='lines+markers+text',
@@ -837,31 +900,69 @@ def render_pag3_visao_aon(campanhas_list, metricas, cores, cliente=None):
         textposition='top center',
         yaxis='y2', 
         line=dict(color=cores[1], width=3), 
-        marker=dict(size=8)
+        marker=dict(size=10)
     ))
     
     fig.update_layout(
-        title=f'Evolucao de {filtro_metrica}', 
+        title=f'Evolucao Mensal de {filtro_metrica}', 
+        xaxis=dict(title='Mes', tickangle=-45),
         yaxis=dict(title=filtro_metrica), 
         yaxis2=dict(title=filtro_taxa, overlaying='y', side='right'), 
         height=450, 
         legend=dict(orientation='h', yanchor='bottom', y=1.02),
-        bargap=0.3  # Espacamento entre barras
+        bargap=0.3
     )
     st.plotly_chart(fig, use_container_width=True)
     
     st.markdown("---")
     st.subheader("Resumo Mensal")
     
-    df_mensal = df.groupby('mes').agg({'influenciador': 'nunique', 'seguidores': lambda x: x.drop_duplicates().sum(), 'views': 'sum', 'alcance': 'sum', 'interacoes': 'sum', 'impressoes': 'sum'}).reset_index()
+    # Criar resumo mensal
+    df_mensal = df.groupby('mes').agg({
+        'influenciador': 'nunique', 
+        'seguidores': lambda x: x.drop_duplicates().sum(), 
+        'views': 'sum', 
+        'alcance': 'sum', 
+        'interacoes': 'sum', 
+        'impressoes': 'sum'
+    }).reset_index()
     df_mensal.columns = ['Mes', 'Qtd Influs', 'Seguidores', 'Views', 'Alcance', 'Interacoes', 'Impressoes']
+    df_mensal = df_mensal.sort_values('Mes')
     
-    # Formatar numeros com ponto nas centenas
-    df_mensal_fmt = df_mensal.copy()
-    for col in ['Seguidores', 'Views', 'Alcance', 'Interacoes', 'Impressoes']:
-        df_mensal_fmt[col] = df_mensal_fmt[col].apply(lambda x: f"{x:,.0f}".replace(",", "."))
+    # Adicionar taxa de engajamento
+    df_mensal['Taxa Eng.'] = (df_mensal['Interacoes'] / df_mensal['Views'] * 100).round(2).fillna(0)
     
-    st.dataframe(df_mensal_fmt, use_container_width=True, hide_index=True)
+    # TRANSPOR: Categorias na primeira coluna, meses nas outras colunas
+    categorias = ['Qtd Influs', 'Seguidores', 'Views', 'Alcance', 'Interacoes', 'Impressoes', 'Taxa Eng.']
+    
+    # Criar DataFrame transposto
+    df_transposto = pd.DataFrame({'Metrica': categorias})
+    
+    for _, row in df_mensal.iterrows():
+        mes_nome = row['Mes']
+        valores = []
+        for cat in categorias:
+            if cat == 'Taxa Eng.':
+                valores.append(f"{row[cat]:.2f}%")
+            elif cat in ['Seguidores', 'Views', 'Alcance', 'Interacoes', 'Impressoes']:
+                valores.append(funcoes_auxiliares.formatar_numero(row[cat]))
+            else:
+                valores.append(str(int(row[cat])))
+        df_transposto[mes_nome] = valores
+    
+    # Adicionar coluna de TOTAL
+    totais = []
+    for cat in categorias:
+        if cat == 'Taxa Eng.':
+            taxa_total = (df_mensal['Interacoes'].sum() / df_mensal['Views'].sum() * 100) if df_mensal['Views'].sum() > 0 else 0
+            totais.append(f"{taxa_total:.2f}%")
+        elif cat == 'Qtd Influs':
+            totais.append(str(df_mensal[cat].max()))  # Maximo de influs
+        else:
+            totais.append(funcoes_auxiliares.formatar_numero(df_mensal[cat].sum()))
+    df_transposto['TOTAL'] = totais
+    
+    st.dataframe(df_transposto, use_container_width=True, hide_index=True)
     
     # Insights por IA
     if len(campanhas_list) == 1:
@@ -1110,7 +1211,7 @@ def render_pag6_lista_influenciadores(campanhas_list, cores):
     with col1:
         filtro_class = st.multiselect("Classificacao:", ["Nano", "Micro", "Mid", "Macro", "Mega"], key="class_pag6")
     with col2:
-        ordenar = st.selectbox("Ordenar:", ["Impressoes", "Alcance", "Interacoes", "Taxa Eng.", "Investimento"], key="ord_pag6")
+        ordenar = st.selectbox("Ordenar:", ["Impressoes", "Alcance Total", "Interacoes", "Taxa Eng.", "Investimento"], key="ord_pag6")
     
     dados = coletar_dados_influenciadores(campanhas_list)
     
@@ -1123,20 +1224,20 @@ def render_pag6_lista_influenciadores(campanhas_list, cores):
     if filtro_class:
         df = df[df['classificacao'].isin(filtro_class)]
     
-    ordem_map = {"Impressoes": "impressoes", "Alcance": "alcance", "Interacoes": "interacoes", "Taxa Eng.": "taxa_eng", "Investimento": "custo"}
+    ordem_map = {"Impressoes": "impressoes", "Alcance Total": "alcance_total", "Interacoes": "interacoes", "Taxa Eng.": "taxa_eng", "Investimento": "custo"}
     df = df.sort_values(ordem_map.get(ordenar, 'impressoes'), ascending=False)
     
     # Preparar dataframe para exibicao com formatacao
-    df_exibir = df[['nome', 'usuario', 'classificacao', 'seguidores', 'posts', 'impressoes', 'alcance', 'interacoes', 'custo', 'taxa_eng', 'taxa_alcance']].copy()
-    df_exibir.columns = ['Nome', 'Usuario', 'Classe', 'Seguidores', 'Posts', 'Impressoes', 'Alcance', 'Interacoes', 'Investimento (R$)', 'Taxa Eng. %', 'Taxa Alc. %']
+    df_exibir = df[['nome', 'usuario', 'classificacao', 'seguidores', 'posts', 'impressoes', 'alcance_total', 'interacoes', 'custo', 'taxa_eng', 'taxa_alcance']].copy()
+    df_exibir.columns = ['Nome', 'Usuario', 'Classe', 'Seguidores', 'Posts', 'Impressoes', 'Alcance Total', 'Interacoes', 'Invest. (R$)', 'Tx Eng. %', 'Tx Alc. %']
     
     # Formatar numeros com ponto nas centenas
-    for col in ['Seguidores', 'Impressoes', 'Alcance', 'Interacoes']:
+    for col in ['Seguidores', 'Impressoes', 'Alcance Total', 'Interacoes']:
         df_exibir[col] = df_exibir[col].apply(lambda x: f"{x:,.0f}".replace(",", "."))
     
-    df_exibir['Investimento (R$)'] = df_exibir['Investimento (R$)'].apply(lambda x: f"{x:,.0f}".replace(",", "."))
-    df_exibir['Taxa Eng. %'] = df_exibir['Taxa Eng. %'].apply(lambda x: f"{x:.2f}")
-    df_exibir['Taxa Alc. %'] = df_exibir['Taxa Alc. %'].apply(lambda x: f"{x:.2f}")
+    df_exibir['Invest. (R$)'] = df_exibir['Invest. (R$)'].apply(lambda x: f"{x:,.0f}".replace(",", "."))
+    df_exibir['Tx Eng. %'] = df_exibir['Tx Eng. %'].apply(lambda x: f"{x:.2f}")
+    df_exibir['Tx Alc. %'] = df_exibir['Tx Alc. %'].apply(lambda x: f"{x:.2f}")
     
     st.dataframe(df_exibir, use_container_width=True, hide_index=True)
 
@@ -1187,12 +1288,64 @@ def coletar_dados_radar_formato(campanhas_list):
 
 
 def coletar_dados_formato(campanhas_list):
-    dados = []
+    """Coleta dados por formato. Stories do mesmo influ/data sao agregados."""
+    dados_raw = []
+    stories_por_influ_data = {}  # Chave: (influ_id, data) -> lista de posts
+    
     for camp in campanhas_list:
         for camp_inf in camp.get('influenciadores', []):
+            inf_id = camp_inf.get('influenciador_id')
             for post in camp_inf.get('posts', []):
-                dados.append({'formato': post.get('formato', 'Outro'), 'views': post.get('views', 0), 'alcance': post.get('alcance', 0), 'interacoes': post.get('interacoes', 0), 'impressoes': post.get('impressoes', 0)})
-    return dados
+                formato = post.get('formato', 'Outro')
+                
+                if formato == 'Stories':
+                    # Agregar Stories do mesmo influenciador/data
+                    data_post = post.get('data_publicacao', '')
+                    chave = (inf_id, data_post)
+                    
+                    if chave not in stories_por_influ_data:
+                        stories_por_influ_data[chave] = {
+                            'views': 0,
+                            'alcance': 0,
+                            'alcance_max': 0,  # Para pegar o maior alcance
+                            'interacoes': 0,
+                            'impressoes': 0,
+                            'curtidas': 0
+                        }
+                    
+                    # Somar views e interacoes
+                    stories_por_influ_data[chave]['views'] += post.get('views', 0)
+                    stories_por_influ_data[chave]['interacoes'] += post.get('interacoes', 0)
+                    stories_por_influ_data[chave]['impressoes'] += post.get('impressoes', 0)
+                    stories_por_influ_data[chave]['curtidas'] += post.get('curtidas', 0)
+                    # Alcance = pegar o maior
+                    stories_por_influ_data[chave]['alcance_max'] = max(
+                        stories_por_influ_data[chave]['alcance_max'],
+                        post.get('alcance', 0)
+                    )
+                else:
+                    # Outros formatos: adicionar normalmente
+                    dados_raw.append({
+                        'formato': formato, 
+                        'views': post.get('views', 0), 
+                        'alcance': post.get('alcance', 0), 
+                        'interacoes': post.get('interacoes', 0), 
+                        'impressoes': post.get('impressoes', 0),
+                        'curtidas': post.get('curtidas', 0)
+                    })
+    
+    # Adicionar Stories agregados
+    for chave, dados_story in stories_por_influ_data.items():
+        dados_raw.append({
+            'formato': 'Stories',
+            'views': dados_story['views'],
+            'alcance': dados_story['alcance_max'],  # Maior alcance
+            'interacoes': dados_story['interacoes'],
+            'impressoes': dados_story['impressoes'],
+            'curtidas': dados_story['curtidas']
+        })
+    
+    return dados_raw
 
 
 def coletar_dados_classificacao_completo(campanhas_list):
@@ -1204,7 +1357,16 @@ def coletar_dados_classificacao_completo(campanhas_list):
                 continue
             classificacao = camp_inf.get('snapshot_dados', {}).get('classificacao', inf.get('classificacao', 'Desconhecido'))
             for post in camp_inf.get('posts', []):
-                dados.append({'classificacao': classificacao, 'influenciador': inf['nome'], 'post_id': post.get('id', 0), 'views': post.get('views', 0), 'alcance': post.get('alcance', 0), 'interacoes': post.get('interacoes', 0), 'impressoes': post.get('impressoes', 0)})
+                dados.append({
+                    'classificacao': classificacao, 
+                    'influenciador': inf['nome'], 
+                    'post_id': post.get('id', 0), 
+                    'views': post.get('views', 0), 
+                    'alcance': post.get('alcance', 0), 
+                    'interacoes': post.get('interacoes', 0), 
+                    'impressoes': post.get('impressoes', 0),
+                    'curtidas': post.get('curtidas', 0)
+                })
     return dados
 
 
@@ -1220,7 +1382,15 @@ def coletar_dados_temporais(campanhas_list, data_ini, data_fim):
                 try:
                     data_post = datetime.strptime(post.get('data_publicacao', ''), '%d/%m/%Y')
                     if data_ini <= data_post.date() <= data_fim:
-                        dados.append({'data': data_post, 'influenciador': inf['nome'], 'seguidores': seguidores, 'views': post.get('views', 0), 'alcance': post.get('alcance', 0), 'interacoes': post.get('interacoes', 0), 'impressoes': post.get('impressoes', 0)})
+                        dados.append({
+                            'data': data_post, 
+                            'influenciador': inf['nome'], 
+                            'seguidores': seguidores, 
+                            'views': post.get('views', 0), 
+                            'alcance': post.get('alcance', 0), 
+                            'interacoes': post.get('interacoes', 0), 
+                            'impressoes': post.get('impressoes', 0)
+                        })
                 except:
                     pass
     return dados
@@ -1235,12 +1405,29 @@ def coletar_dados_influenciadores(campanhas_list):
                 continue
             inf_id = inf['id']
             if inf_id not in dados_inf:
-                dados_inf[inf_id] = {'id': inf_id, 'nome': inf['nome'], 'usuario': inf['usuario'], 'foto': inf.get('foto', ''), 'classificacao': inf.get('classificacao', 'Desconhecido'), 'seguidores': inf.get('seguidores', 0), 'impressoes': 0, 'alcance': 0, 'interacoes': 0, 'custo': 0, 'cliques_link': 0, 'cliques_arroba': 0, 'posts': 0}
-            dados_inf[inf_id]['custo'] += camp_inf.get('custo', 0)  # Custo por influenciador
+                dados_inf[inf_id] = {
+                    'id': inf_id, 
+                    'nome': inf['nome'], 
+                    'usuario': inf['usuario'], 
+                    'foto': inf.get('foto', ''), 
+                    'classificacao': inf.get('classificacao', 'Desconhecido'), 
+                    'seguidores': inf.get('seguidores', 0), 
+                    'impressoes': 0, 
+                    'alcance': 0, 
+                    'alcance_total': 0,  # Novo: soma de todos os alcances
+                    'interacoes': 0, 
+                    'custo': 0, 
+                    'cliques_link': 0, 
+                    'cliques_arroba': 0, 
+                    'posts': 0
+                }
+            dados_inf[inf_id]['custo'] += camp_inf.get('custo', 0)
             for post in camp_inf.get('posts', []):
                 # Impressoes = views + impressoes (combinados)
                 dados_inf[inf_id]['impressoes'] += post.get('views', 0) + post.get('impressoes', 0)
-                dados_inf[inf_id]['alcance'] += post.get('alcance', 0)
+                post_alcance = post.get('alcance', 0)
+                dados_inf[inf_id]['alcance'] = max(dados_inf[inf_id]['alcance'], post_alcance)  # Maior alcance
+                dados_inf[inf_id]['alcance_total'] += post_alcance  # Soma de alcances
                 dados_inf[inf_id]['interacoes'] += post.get('interacoes', 0)
                 dados_inf[inf_id]['cliques_link'] += post.get('clique_link', 0)
                 dados_inf[inf_id]['cliques_arroba'] += post.get('clique_arroba', 0) or post.get('cliques_arroba', 0) or 0
