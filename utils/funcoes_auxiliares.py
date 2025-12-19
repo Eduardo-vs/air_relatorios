@@ -428,7 +428,7 @@ def aplicar_css_global(primary_color):
         
         /* AIR SCORE CARD */
         .air-score-card {{
-            background: linear-gradient(135deg, {primary_color}, {secondary_color});
+            background: {primary_color};
             color: white;
             padding: 1.5rem;
             border-radius: 16px;
