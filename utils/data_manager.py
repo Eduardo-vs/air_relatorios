@@ -1686,7 +1686,7 @@ def adicionar_insight(campanha_id: int, pagina: str, insight: Dict, fonte: str =
         now
     ))
     
-    invalidate_cache()
+    invalidar_cache()
     return insight_id
 
 
@@ -1720,7 +1720,7 @@ def atualizar_insight(insight_id: int, dados: Dict) -> bool:
     
     query = f"UPDATE insights_campanha SET {', '.join(campos)} WHERE id = ?"
     execute_update(query, tuple(valores))
-    invalidate_cache()
+    invalidar_cache()
     return True
 
 
@@ -1730,7 +1730,7 @@ def excluir_insight(insight_id: int, soft_delete: bool = True) -> bool:
         return atualizar_insight(insight_id, {'ativo': 0})
     else:
         execute_update("DELETE FROM insights_campanha WHERE id = ?", (insight_id,))
-        invalidate_cache()
+        invalidar_cache()
         return True
 
 
@@ -1741,7 +1741,7 @@ def reordenar_insights(campanha_id: int, pagina: str, ordem_ids: List[int]) -> b
             "UPDATE insights_campanha SET ordem = ? WHERE id = ? AND campanha_id = ?",
             (idx + 1, insight_id, campanha_id)
         )
-    invalidate_cache()
+    invalidar_cache()
     return True
 
 
@@ -1814,7 +1814,7 @@ def restaurar_insights_historico(historico_id: int) -> bool:
     for insight in insights:
         adicionar_insight(campanha_id, pagina, insight, fonte='historico')
     
-    invalidate_cache()
+    invalidar_cache()
     return True
 
 
@@ -1827,7 +1827,7 @@ def limpar_insights_pagina(campanha_id: int, pagina: str, salvar_historico: bool
         "UPDATE insights_campanha SET ativo = 0 WHERE campanha_id = ? AND pagina = ?",
         (campanha_id, pagina)
     )
-    invalidate_cache()
+    invalidar_cache()
     return True
 
 
@@ -1852,7 +1852,7 @@ def atualizar_insights_ia(campanha_id: int, pagina: str, novos_insights: List[Di
     for insight in novos_insights:
         adicionar_insight(campanha_id, pagina, insight, fonte='ia')
     
-    invalidate_cache()
+    invalidar_cache()
     return True
 
 
@@ -1901,7 +1901,7 @@ def salvar_comentarios(campanha_id: int, post_url: str, comentarios: List[Dict],
         except Exception as e:
             print(f"Erro ao salvar comentario: {e}")
     
-    invalidate_cache()
+    invalidar_cache()
     return count
 
 
@@ -1984,7 +1984,7 @@ def atualizar_classificacao_comentario(comment_id: int, classificacao: Dict) -> 
             comment_id
         )
     )
-    invalidate_cache()
+    invalidar_cache()
     return True
 
 
@@ -1994,7 +1994,7 @@ def excluir_comentarios_post(post_url: str) -> bool:
         "DELETE FROM comentarios_posts WHERE post_url = ?",
         (post_url,)
     )
-    invalidate_cache()
+    invalidar_cache()
     return True
 
 
@@ -2004,5 +2004,5 @@ def excluir_comentarios_campanha(campanha_id: int) -> bool:
         "DELETE FROM comentarios_posts WHERE campanha_id = ?",
         (campanha_id,)
     )
-    invalidate_cache()
+    invalidar_cache()
     return True
