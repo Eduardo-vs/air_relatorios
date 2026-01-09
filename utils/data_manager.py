@@ -409,6 +409,24 @@ def init_db():
         )
     ''')
     
+    # Tabela de tokens para compartilhamento de relatorios
+    cursor.execute(f'''
+        CREATE TABLE IF NOT EXISTS tokens_compartilhamento (
+            id {pk_type},
+            token {text_type} UNIQUE NOT NULL,
+            campanha_id {int_type} NOT NULL,
+            cliente_id {int_type},
+            titulo {text_type},
+            paginas_permitidas {text_type},
+            expira_em {text_type},
+            visualizacoes {int_type} DEFAULT 0,
+            max_visualizacoes {int_type},
+            ativo {int_type} DEFAULT 1,
+            created_at {text_type},
+            updated_at {text_type}
+        )
+    ''')
+    
     # Tabela de comentarios extraidos e classificados
     cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS comentarios_posts (
@@ -2005,4 +2023,134 @@ def excluir_comentarios_campanha(campanha_id: int) -> bool:
         (campanha_id,)
     )
     invalidar_cache()
+    return True
+
+
+# ========================================
+# TOKENS DE COMPARTILHAMENTO
+# ========================================
+
+def gerar_token_compartilhamento(
+    campanha_id: int, 
+    cliente_id: int = None,
+    titulo: str = None,
+    paginas_permitidas: List[str] = None,
+    dias_expiracao: int = 30,
+    max_visualizacoes: int = None
+) -> Dict:
+    """
+    Gera um token unico para compartilhar relatorio
+    
+    Args:
+        campanha_id: ID da campanha
+        cliente_id: ID do cliente (opcional)
+        titulo: Titulo personalizado do link
+        paginas_permitidas: Lista de paginas que podem ser visualizadas
+        dias_expiracao: Dias ate expirar (0 = sem expiracao)
+        max_visualizacoes: Maximo de visualizacoes (None = ilimitado)
+    
+    Returns:
+        Dict com token e informacoes
+    """
+    import secrets
+    
+    # Gerar token unico
+    token = secrets.token_urlsafe(16)
+    
+    now = datetime.now()
+    expira_em = None
+    if dias_expiracao > 0:
+        expira_em = (now + timedelta(days=dias_expiracao)).isoformat()
+    
+    paginas_json = json.dumps(paginas_permitidas) if paginas_permitidas else None
+    
+    token_id = execute_insert(
+        """INSERT INTO tokens_compartilhamento 
+           (token, campanha_id, cliente_id, titulo, paginas_permitidas, 
+            expira_em, max_visualizacoes, ativo, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)""",
+        (token, campanha_id, cliente_id, titulo, paginas_json, 
+         expira_em, max_visualizacoes, now.isoformat(), now.isoformat())
+    )
+    
+    return {
+        'id': token_id,
+        'token': token,
+        'campanha_id': campanha_id,
+        'expira_em': expira_em,
+        'max_visualizacoes': max_visualizacoes
+    }
+
+
+def validar_token(token: str) -> Optional[Dict]:
+    """
+    Valida um token e retorna informacoes se valido
+    
+    Returns:
+        Dict com informacoes do token ou None se invalido/expirado
+    """
+    row = execute_select_one(
+        "SELECT * FROM tokens_compartilhamento WHERE token = ? AND ativo = 1",
+        (token,)
+    )
+    
+    if not row:
+        return None
+    
+    token_info = dict(row)
+    
+    # Verificar expiracao
+    if token_info.get('expira_em'):
+        expira = datetime.fromisoformat(token_info['expira_em'])
+        if datetime.now() > expira:
+            return None
+    
+    # Verificar max visualizacoes
+    if token_info.get('max_visualizacoes'):
+        if token_info.get('visualizacoes', 0) >= token_info['max_visualizacoes']:
+            return None
+    
+    # Parse paginas permitidas
+    if token_info.get('paginas_permitidas'):
+        try:
+            token_info['paginas_permitidas'] = json.loads(token_info['paginas_permitidas'])
+        except:
+            token_info['paginas_permitidas'] = None
+    
+    return token_info
+
+
+def registrar_visualizacao_token(token: str) -> bool:
+    """Incrementa contador de visualizacoes do token"""
+    execute_update(
+        "UPDATE tokens_compartilhamento SET visualizacoes = visualizacoes + 1, updated_at = ? WHERE token = ?",
+        (datetime.now().isoformat(), token)
+    )
+    return True
+
+
+def get_tokens_campanha(campanha_id: int) -> List[Dict]:
+    """Retorna todos os tokens de uma campanha"""
+    rows = execute_select(
+        "SELECT * FROM tokens_compartilhamento WHERE campanha_id = ? ORDER BY created_at DESC",
+        (campanha_id,)
+    )
+    return [dict(row) for row in rows]
+
+
+def desativar_token(token_id: int) -> bool:
+    """Desativa um token"""
+    execute_update(
+        "UPDATE tokens_compartilhamento SET ativo = 0, updated_at = ? WHERE id = ?",
+        (datetime.now().isoformat(), token_id)
+    )
+    return True
+
+
+def excluir_token(token_id: int) -> bool:
+    """Exclui um token"""
+    execute_update(
+        "DELETE FROM tokens_compartilhamento WHERE id = ?",
+        (token_id,)
+    )
     return True

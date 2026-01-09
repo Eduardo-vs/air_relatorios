@@ -372,7 +372,8 @@ def render_relatorio(campanhas_list, cliente=None):
             "4. Top Performance",
             "5. Lista Influs",
             "Comentarios",
-            "Glossario"
+            "Glossario",
+            "Compartilhar"
         ])
     else:
         tabs = st.tabs([
@@ -381,7 +382,8 @@ def render_relatorio(campanhas_list, cliente=None):
             "3. Top Performance",
             "4. Lista Influs",
             "Comentarios",
-            "Glossario"
+            "Glossario",
+            "Compartilhar"
         ])
     
     tab_idx = 0
@@ -420,6 +422,12 @@ def render_relatorio(campanhas_list, cliente=None):
     # TAB 7: Glossario
     with tabs[tab_idx]:
         render_glossario()
+    tab_idx += 1
+    
+    # TAB 8: Compartilhar (apenas para campanha unica)
+    if len(campanhas_list) == 1:
+        with tabs[tab_idx]:
+            render_compartilhar(campanhas_list[0])
 
 
 def render_pag1_big_numbers(campanhas_list, metricas, cores):
@@ -1490,3 +1498,177 @@ def render_glossario():
     for termo, definicao in glossario.items():
         with st.expander(termo):
             st.write(definicao)
+
+
+def render_compartilhar(campanha):
+    """Aba de compartilhamento - gerar link e exportar PDF"""
+    
+    st.subheader("Compartilhar Relatorio")
+    
+    campanha_id = campanha['id']
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("### 🔗 Link Compartilhavel")
+        st.caption("Gere um link para o cliente visualizar o relatorio sem precisar de login")
+        
+        # Configuracoes do link
+        with st.form("form_gerar_link"):
+            titulo_link = st.text_input(
+                "Titulo do link (opcional)", 
+                value=campanha['nome'],
+                placeholder="Ex: Relatorio Campanha X"
+            )
+            
+            col_a, col_b = st.columns(2)
+            with col_a:
+                dias_expiracao = st.number_input(
+                    "Expira em (dias)", 
+                    min_value=0, 
+                    max_value=365, 
+                    value=30,
+                    help="0 = sem expiracao"
+                )
+            with col_b:
+                max_views = st.number_input(
+                    "Max visualizacoes", 
+                    min_value=0, 
+                    max_value=1000, 
+                    value=0,
+                    help="0 = ilimitado"
+                )
+            
+            st.markdown("**Paginas visiveis:**")
+            col_a, col_b = st.columns(2)
+            with col_a:
+                inc_big_numbers = st.checkbox("Resumo (Big Numbers)", value=True)
+                inc_analise = st.checkbox("Analise Geral", value=True)
+                inc_kpis = st.checkbox("KPIs por Influenciador", value=True)
+            with col_b:
+                inc_top = st.checkbox("Top Posts", value=True)
+                inc_lista = st.checkbox("Lista Influenciadores", value=True)
+            
+            if st.form_submit_button("Gerar Link", type="primary", use_container_width=True):
+                # Montar lista de paginas
+                paginas = []
+                if inc_big_numbers: paginas.append('big_numbers')
+                if inc_analise: paginas.append('analise_geral')
+                if inc_kpis: paginas.append('kpis_influenciador')
+                if inc_top: paginas.append('top_performance')
+                if inc_lista: paginas.append('lista_influenciadores')
+                
+                # Gerar token
+                token_info = data_manager.gerar_token_compartilhamento(
+                    campanha_id=campanha_id,
+                    cliente_id=campanha.get('cliente_id'),
+                    titulo=titulo_link,
+                    paginas_permitidas=paginas if len(paginas) < 5 else None,
+                    dias_expiracao=dias_expiracao,
+                    max_visualizacoes=max_views if max_views > 0 else None
+                )
+                
+                st.session_state['ultimo_token_gerado'] = token_info['token']
+                st.success("Link gerado com sucesso!")
+                st.rerun()
+        
+        # Mostrar ultimo link gerado
+        if st.session_state.get('ultimo_token_gerado'):
+            token = st.session_state['ultimo_token_gerado']
+            # Montar URL base
+            base_url = st.query_params.get('base_url', 'https://seu-app.streamlit.app')
+            link_completo = f"{base_url}?t={token}"
+            
+            st.markdown("---")
+            st.markdown("**Link gerado:**")
+            st.code(link_completo, language=None)
+            
+            st.markdown(f"""
+            <div style='background: #ecfdf5; padding: 1rem; border-radius: 8px; margin-top: 0.5rem;'>
+                <strong>✅ Copie e envie este link para o cliente</strong><br>
+                <small>O cliente podera visualizar o relatorio sem precisar de conta</small>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Links existentes
+        st.markdown("---")
+        st.markdown("**Links gerados anteriormente:**")
+        
+        tokens_existentes = data_manager.get_tokens_campanha(campanha_id)
+        
+        if tokens_existentes:
+            for tk in tokens_existentes[:5]:  # Mostrar apenas os 5 mais recentes
+                status = "🟢 Ativo" if tk.get('ativo') else "🔴 Inativo"
+                views = tk.get('visualizacoes', 0)
+                
+                with st.expander(f"{tk.get('titulo', 'Link')} - {status} ({views} views)"):
+                    st.code(f"?t={tk['token']}", language=None)
+                    
+                    if tk.get('expira_em'):
+                        st.caption(f"Expira em: {tk['expira_em'][:10]}")
+                    
+                    if tk.get('ativo') and st.button("Desativar", key=f"desativar_{tk['id']}"):
+                        data_manager.desativar_token(tk['id'])
+                        st.success("Link desativado")
+                        st.rerun()
+        else:
+            st.caption("Nenhum link gerado ainda")
+    
+    with col2:
+        st.markdown("### 📄 Exportar PDF")
+        st.caption("Baixe o relatorio em formato PDF para envio offline")
+        
+        st.markdown("**Paginas a incluir no PDF:**")
+        
+        pdf_big_numbers = st.checkbox("Resumo (Big Numbers)", value=True, key="pdf_bn")
+        pdf_analise = st.checkbox("Analise por Formato/Classificacao", value=True, key="pdf_an")
+        pdf_influs = st.checkbox("Lista de Influenciadores", value=True, key="pdf_inf")
+        pdf_posts = st.checkbox("Top Posts", value=True, key="pdf_posts")
+        
+        st.markdown("---")
+        
+        if st.button("📥 Gerar e Baixar PDF", type="primary", use_container_width=True):
+            try:
+                from utils import pdf_exporter
+                
+                # Montar lista de paginas
+                paginas_pdf = []
+                if pdf_big_numbers: paginas_pdf.append('big_numbers')
+                if pdf_analise: paginas_pdf.append('analise_geral')
+                if pdf_influs: paginas_pdf.append('influenciadores')
+                if pdf_posts: paginas_pdf.append('top_posts')
+                
+                with st.spinner("Gerando PDF..."):
+                    pdf_bytes = pdf_exporter.gerar_pdf_relatorio(campanha_id, paginas_pdf)
+                
+                # Nome do arquivo
+                nome_arquivo = f"relatorio_{campanha['nome'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.pdf"
+                
+                st.download_button(
+                    label="⬇️ Clique para baixar o PDF",
+                    data=pdf_bytes,
+                    file_name=nome_arquivo,
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+                
+                st.success("PDF gerado com sucesso!")
+                
+            except ImportError as e:
+                st.error("WeasyPrint nao instalado")
+                st.info("Para habilitar a exportacao PDF, instale: `pip install weasyprint`")
+                st.caption(f"Erro: {str(e)}")
+            except Exception as e:
+                st.error(f"Erro ao gerar PDF: {str(e)}")
+        
+        st.markdown("---")
+        st.markdown("**Dica:**")
+        st.info("""
+        O PDF gerado contem:
+        - Metricas principais
+        - Insights da IA
+        - Tabelas de performance
+        - Formatacao profissional
+        
+        Ideal para apresentacoes e envio por email.
+        """)

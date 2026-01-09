@@ -1449,6 +1449,22 @@ def render_comentarios(campanha):
     # Buscar influenciadores e posts da campanha
     influenciadores = data_manager.get_influenciadores_campanha(campanha_id)
     
+    # DEBUG: Mostrar estrutura dos posts para diagnóstico
+    debug_info = []
+    for inf in influenciadores:
+        for post in inf.get('posts', []):
+            debug_info.append({
+                'inf': inf.get('nome', ''),
+                'keys': list(post.keys()),
+                'link': post.get('link', ''),
+                'link_post': post.get('link_post', ''),
+                'permalink': post.get('permalink', ''),
+                'url': post.get('url', '')
+            })
+    
+    with st.expander("Debug: Estrutura dos posts (clique para ver)"):
+        st.json(debug_info)
+    
     # Coletar todos os posts com links
     posts_campanha = []
     for inf in influenciadores:
