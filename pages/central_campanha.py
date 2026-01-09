@@ -682,7 +682,7 @@ def render_form_post_manual(campanha, inf):
                 'formato': formato,
                 'plataforma': plataforma,
                 'data_publicacao': data_pub.strftime('%d/%m/%Y'),
-                'link_post': link_post,
+                'link': link_post,
                 'views': views,
                 'alcance': alcance,
                 'interacoes': interacoes,
@@ -1453,8 +1453,11 @@ def render_comentarios(campanha):
     posts_campanha = []
     for inf in influenciadores:
         for idx, post in enumerate(inf.get('posts', [])):
-            link = post.get('link', '')
-            if link and ('instagram.com' in link):
+            # Verificar todos os campos possíveis de link
+            link = post.get('link', '') or post.get('link_post', '') or post.get('permalink', '') or post.get('url', '') or ''
+            
+            # Aceitar links do Instagram e TikTok
+            if link and ('instagram.com' in link or 'tiktok.com' in link):
                 posts_campanha.append({
                     'influenciador': inf.get('nome', ''),
                     'influenciador_id': inf.get('id'),
@@ -1468,7 +1471,7 @@ def render_comentarios(campanha):
                 })
     
     if not posts_campanha:
-        st.warning("Nenhum post com link do Instagram encontrado na campanha.")
+        st.warning("Nenhum post com link do Instagram ou TikTok encontrado na campanha.")
         st.caption("Adicione links aos posts dos influenciadores para extrair comentarios.")
         return
     
