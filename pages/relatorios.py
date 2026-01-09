@@ -424,10 +424,13 @@ def render_relatorio(campanhas_list, cliente=None):
         render_glossario()
     tab_idx += 1
     
-    # TAB 8: Compartilhar (apenas para campanha unica)
-    if len(campanhas_list) == 1:
-        with tabs[tab_idx]:
+    # TAB 8: Compartilhar
+    with tabs[tab_idx]:
+        if len(campanhas_list) == 1:
             render_compartilhar(campanhas_list[0])
+        else:
+            st.info("Compartilhamento disponivel apenas para relatorios de campanha unica.")
+            st.caption("Selecione uma campanha especifica para gerar links ou exportar PDF.")
 
 
 def render_pag1_big_numbers(campanhas_list, metricas, cores):
