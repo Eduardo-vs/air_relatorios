@@ -416,21 +416,30 @@ def render_relatorio(campanhas_list, cliente=None):
     
     # TAB 6: Comentarios
     with tabs[tab_idx]:
-        render_comentarios(campanhas_list, cores)
+        try:
+            render_comentarios(campanhas_list, cores)
+        except Exception as e:
+            st.error(f"Erro em Comentarios: {str(e)}")
     tab_idx += 1
     
     # TAB 7: Glossario
     with tabs[tab_idx]:
-        render_glossario()
+        try:
+            render_glossario()
+        except Exception as e:
+            st.error(f"Erro em Glossario: {str(e)}")
     tab_idx += 1
     
     # TAB 8: Compartilhar
     with tabs[tab_idx]:
-        if len(campanhas_list) == 1:
-            render_compartilhar(campanhas_list[0])
-        else:
-            st.info("Compartilhamento disponivel apenas para relatorios de campanha unica.")
-            st.caption("Selecione uma campanha especifica para gerar links ou exportar PDF.")
+        try:
+            if len(campanhas_list) == 1:
+                render_compartilhar(campanhas_list[0])
+            else:
+                st.info("Compartilhamento disponivel apenas para relatorios de campanha unica.")
+                st.caption("Selecione uma campanha especifica para gerar links ou exportar PDF.")
+        except Exception as e:
+            st.error(f"Erro em Compartilhar: {str(e)}")
 
 
 def render_pag1_big_numbers(campanhas_list, metricas, cores):

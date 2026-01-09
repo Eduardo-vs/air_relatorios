@@ -3,7 +3,7 @@ Data Manager - Gerenciamento de dados com SQLite local ou PostgreSQL
 """
 
 import streamlit as st
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 import json
 import sqlite3
