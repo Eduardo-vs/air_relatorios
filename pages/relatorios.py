@@ -14,7 +14,65 @@ import base64
 import requests
 import json
 import time
+import copy
 from utils import data_manager, funcoes_auxiliares
+
+
+def filtrar_campanhas_por_periodo(campanhas_list: List[Dict], data_inicio: str, data_fim: str) -> List[Dict]:
+    """
+    Filtra posts das campanhas por periodo
+    
+    Args:
+        campanhas_list: Lista de campanhas
+        data_inicio: Data inicio no formato dd/mm/yyyy
+        data_fim: Data fim no formato dd/mm/yyyy
+    
+    Returns:
+        Lista de campanhas com posts filtrados
+    """
+    try:
+        dt_inicio = datetime.strptime(data_inicio, '%d/%m/%Y')
+        dt_fim = datetime.strptime(data_fim, '%d/%m/%Y')
+    except:
+        return campanhas_list
+    
+    campanhas_filtradas = []
+    
+    for camp in campanhas_list:
+        # Fazer copia profunda para nao modificar original
+        camp_filtrada = copy.deepcopy(camp)
+        
+        influenciadores_filtrados = []
+        for inf_camp in camp_filtrada.get('influenciadores', []):
+            posts_filtrados = []
+            
+            for post in inf_camp.get('posts', []):
+                data_post_str = post.get('data_publicacao', '')
+                
+                try:
+                    if '/' in data_post_str:
+                        data_post = datetime.strptime(data_post_str, '%d/%m/%Y')
+                    elif '-' in data_post_str:
+                        data_post = datetime.strptime(data_post_str[:10], '%Y-%m-%d')
+                    else:
+                        # Se nao conseguir parsear, incluir o post
+                        posts_filtrados.append(post)
+                        continue
+                    
+                    if dt_inicio <= data_post <= dt_fim:
+                        posts_filtrados.append(post)
+                except:
+                    # Se der erro no parse, incluir o post
+                    posts_filtrados.append(post)
+            
+            inf_camp['posts'] = posts_filtrados
+            influenciadores_filtrados.append(inf_camp)
+        
+        camp_filtrada['influenciadores'] = influenciadores_filtrados
+        campanhas_filtradas.append(camp_filtrada)
+    
+    return campanhas_filtradas
+
 
 # ========================================
 # INSIGHTS POR IA - COM PERSISTENCIA
@@ -356,11 +414,62 @@ def render_relatorio(campanhas_list, cliente=None):
                 st.session_state.current_page = 'Clientes'
             st.rerun()
     
+    # Filtro de data
+    with st.expander("📅 Filtrar por Periodo", expanded=False):
+        col1, col2, col3 = st.columns([1, 1, 1])
+        
+        with col1:
+            # Usar data da campanha como default
+            try:
+                if len(campanhas_list) == 1:
+                    data_inicio_default = datetime.strptime(campanhas_list[0].get('data_inicio', ''), '%d/%m/%Y')
+                else:
+                    data_inicio_default = datetime.now() - timedelta(days=90)
+            except:
+                data_inicio_default = datetime.now() - timedelta(days=90)
+            
+            filtro_data_inicio = st.date_input(
+                "Data Inicio", 
+                value=data_inicio_default,
+                key="rel_filtro_inicio"
+            )
+        
+        with col2:
+            try:
+                if len(campanhas_list) == 1:
+                    data_fim_default = datetime.strptime(campanhas_list[0].get('data_fim', ''), '%d/%m/%Y')
+                else:
+                    data_fim_default = datetime.now()
+            except:
+                data_fim_default = datetime.now()
+            
+            filtro_data_fim = st.date_input(
+                "Data Fim", 
+                value=data_fim_default,
+                key="rel_filtro_fim"
+            )
+        
+        with col3:
+            st.markdown("<br>", unsafe_allow_html=True)
+            aplicar_filtro = st.checkbox("Aplicar filtro de data", value=False, key="rel_aplicar_filtro")
+        
+        if aplicar_filtro:
+            st.info(f"Filtrando posts de {filtro_data_inicio.strftime('%d/%m/%Y')} a {filtro_data_fim.strftime('%d/%m/%Y')}")
+            # Filtrar posts das campanhas
+            campanhas_list = filtrar_campanhas_por_periodo(
+                campanhas_list, 
+                filtro_data_inicio.strftime('%d/%m/%Y'),
+                filtro_data_fim.strftime('%d/%m/%Y')
+            )
+            # Recalcular metricas com dados filtrados
+            metricas = data_manager.calcular_metricas_multiplas_campanhas(campanhas_list)
+    
     # Verificar se tem AON
     has_aon = any(c.get('is_aon') for c in campanhas_list)
     
-    # Calcular metricas
-    metricas = data_manager.calcular_metricas_multiplas_campanhas(campanhas_list)
+    # Calcular metricas (se nao foi filtrado)
+    if not st.session_state.get('rel_aplicar_filtro', False):
+        metricas = data_manager.calcular_metricas_multiplas_campanhas(campanhas_list)
     cores = funcoes_auxiliares.get_cores_graficos()
     
     # Definir tabs

@@ -93,10 +93,7 @@ def render():
             col1, col2, col3, col4, col5, col6, col7, col8 = st.columns([0.6, 2, 1, 1, 1, 1, 1, 0.8])
             
             with col1:
-                if inf.get('foto'):
-                    st.image(inf['foto'], width=40)
-                else:
-                    st.write("-")
+                funcoes_auxiliares.exibir_foto_influenciador(inf.get('foto'), inf.get('nome', ''), 40)
             
             with col2:
                 st.write(f"**{inf['nome']}**")

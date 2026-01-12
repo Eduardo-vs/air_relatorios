@@ -516,3 +516,46 @@ def aplicar_css_global(primary_color):
         }}
     </style>
     """, unsafe_allow_html=True)
+
+
+def exibir_foto_influenciador(foto_url: str, nome: str, width: int = 40):
+    """
+    Exibe foto do influenciador com fallback para avatar com iniciais
+    
+    Args:
+        foto_url: URL da foto
+        nome: Nome do influenciador (para gerar iniciais)
+        width: Largura da imagem
+    """
+    # Gerar iniciais
+    iniciais = ''.join([p[0].upper() for p in nome.split()[:2]]) if nome else '?'
+    
+    # Cores baseadas no nome
+    cores = ['#7c3aed', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6']
+    cor_idx = sum(ord(c) for c in nome) % len(cores) if nome else 0
+    cor = cores[cor_idx]
+    
+    if foto_url:
+        # Tentar mostrar a foto
+        try:
+            st.image(foto_url, width=width)
+        except:
+            # Se falhar, mostrar avatar
+            st.markdown(f"""
+            <div style='width: {width}px; height: {width}px; background: {cor}; 
+                        border-radius: 50%; display: flex; align-items: center; 
+                        justify-content: center; color: white; font-weight: 600;
+                        font-size: {width//3}px;'>
+                {iniciais}
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        # Sem foto, mostrar avatar
+        st.markdown(f"""
+        <div style='width: {width}px; height: {width}px; background: {cor}; 
+                    border-radius: 50%; display: flex; align-items: center; 
+                    justify-content: center; color: white; font-weight: 600;
+                    font-size: {width//3}px;'>
+            {iniciais}
+        </div>
+        """, unsafe_allow_html=True)

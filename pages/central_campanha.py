@@ -80,6 +80,16 @@ def render_influenciadores_posts(campanha):
     
     st.subheader("Influenciadores da Campanha")
     
+    # Mostrar classificacoes especificas se existirem
+    class_especificas = campanha.get('classificacoes_especificas', {})
+    if class_especificas:
+        with st.expander("📋 Classificacoes Especificas da Campanha", expanded=False):
+            for i in range(1, 4):
+                nome = class_especificas.get(f'nome{i}', '')
+                valores = class_especificas.get(f'valores{i}', '')
+                if nome and valores:
+                    st.write(f"**{nome}:** {valores}")
+    
     if st.button("+ Adicionar Influenciador", use_container_width=False):
         st.session_state.show_add_inf_to_campaign = True
     
@@ -132,6 +142,40 @@ def render_influenciadores_posts(campanha):
                         )
                         st.success("Custo salvo!")
                         st.rerun()
+            
+            # Classificacoes especificas do influenciador nesta campanha
+            if class_especificas:
+                st.markdown("**Classificacoes Especificas:**")
+                cols = st.columns(3)
+                
+                # Buscar classificacoes atuais do influenciador na campanha
+                class_inf = inf.get('classificacoes_especificas', {}) or {}
+                
+                for i in range(1, 4):
+                    nome_class = class_especificas.get(f'nome{i}', '')
+                    valores_class = class_especificas.get(f'valores{i}', '')
+                    
+                    if nome_class and valores_class:
+                        with cols[i-1]:
+                            opcoes = [''] + [v.strip() for v in valores_class.split(',')]
+                            valor_atual = class_inf.get(f'class{i}', '')
+                            idx = opcoes.index(valor_atual) if valor_atual in opcoes else 0
+                            
+                            novo_valor = st.selectbox(
+                                nome_class,
+                                opcoes,
+                                index=idx,
+                                key=f"class_esp_{inf['id']}_{i}"
+                            )
+                            
+                            if novo_valor != valor_atual:
+                                if st.button("Salvar", key=f"salvar_class_{inf['id']}_{i}"):
+                                    class_inf[f'class{i}'] = novo_valor
+                                    data_manager.atualizar_classificacoes_influenciador_campanha(
+                                        campanha['id'], inf['id'], class_inf
+                                    )
+                                    st.success("Salvo!")
+                                    st.rerun()
             
             st.markdown("---")
             st.markdown("**Posts:**")
@@ -1304,8 +1348,13 @@ def render_card_insight_editavel(insight: dict, campanha_id: int, pagina: str):
         st.markdown("")  # Espaçamento
 
 
-def preparar_dados_para_ia(campanha: dict) -> dict:
-    """Prepara todos os dados da campanha para enviar à IA"""
+def preparar_dados_para_ia(campanha: dict, filtro_periodo: dict = None) -> dict:
+    """Prepara todos os dados da campanha para enviar à IA
+    
+    Args:
+        campanha: dados da campanha
+        filtro_periodo: dict com data_inicio e data_fim no formato dd/mm/yyyy
+    """
     campanha_id = campanha['id']
     
     # Buscar influenciadores e posts
@@ -1325,6 +1374,16 @@ def preparar_dados_para_ia(campanha: dict) -> dict:
     dados_influenciadores = []
     dados_posts = []
     
+    # Parse das datas do filtro
+    filtro_inicio = None
+    filtro_fim = None
+    if filtro_periodo:
+        try:
+            filtro_inicio = datetime.strptime(filtro_periodo.get('data_inicio', ''), '%d/%m/%Y')
+            filtro_fim = datetime.strptime(filtro_periodo.get('data_fim', ''), '%d/%m/%Y')
+        except:
+            pass
+    
     for inf in influenciadores:
         posts = inf.get('posts', [])
         inf_impressoes = 0
@@ -1332,6 +1391,22 @@ def preparar_dados_para_ia(campanha: dict) -> dict:
         inf_interacoes = 0
         
         for post in posts:
+            # Aplicar filtro de periodo se definido
+            if filtro_inicio and filtro_fim:
+                data_post_str = post.get('data_publicacao', '')
+                try:
+                    if '/' in data_post_str:
+                        data_post = datetime.strptime(data_post_str, '%d/%m/%Y')
+                    elif '-' in data_post_str:
+                        data_post = datetime.strptime(data_post_str[:10], '%Y-%m-%d')
+                    else:
+                        data_post = None
+                    
+                    if data_post and (data_post < filtro_inicio or data_post > filtro_fim):
+                        continue  # Pular post fora do periodo
+                except:
+                    pass  # Se nao conseguir parsear, inclui o post
+            
             total_posts += 1
             impressoes = post.get('impressoes', 0) or 0
             alcance = post.get('alcance', 0) or 0
