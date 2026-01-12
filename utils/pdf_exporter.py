@@ -1,14 +1,12 @@
 """
 Modulo: Exportacao de Relatorios em PDF
-Gera PDF estatico com graficos e mesma estetica do relatorio online
+Gera PDF estatico com visual profissional usando barras CSS
 """
 
 import io
 import base64
 from datetime import datetime
 import re
-import plotly.graph_objects as go
-import plotly.io as pio
 
 # WeasyPrint para conversao HTML -> PDF
 try:
@@ -20,16 +18,9 @@ except ImportError:
 from utils import data_manager, funcoes_auxiliares
 
 
-def fig_to_base64(fig, width=800, height=400):
-    """Converte figura Plotly para base64 PNG"""
-    img_bytes = pio.to_image(fig, format='png', width=width, height=height, scale=2)
-    b64 = base64.b64encode(img_bytes).decode()
-    return f"data:image/png;base64,{b64}"
-
-
 def gerar_pdf_relatorio(campanha_id: int, incluir_paginas: list = None) -> bytes:
     """
-    Gera PDF do relatorio da campanha com graficos
+    Gera PDF do relatorio da campanha
     
     Args:
         campanha_id: ID da campanha
@@ -69,7 +60,7 @@ def gerar_pdf_relatorio(campanha_id: int, incluir_paginas: list = None) -> bytes
 
 
 def gerar_html_relatorio(campanha, cliente, metricas, primary_color, incluir_paginas=None):
-    """Gera HTML completo do relatorio com graficos"""
+    """Gera HTML completo do relatorio"""
     
     paginas_default = ['big_numbers', 'analise_geral', 'influenciadores', 'top_posts']
     paginas = incluir_paginas or paginas_default
@@ -79,32 +70,38 @@ def gerar_html_relatorio(campanha, cliente, metricas, primary_color, incluir_pag
     @page {{
         size: A4;
         margin: 1.5cm;
+        @bottom-center {{
+            content: "Pagina " counter(page) " de " counter(pages);
+            font-size: 9pt;
+            color: #9ca3af;
+        }}
     }}
     
     * {{
         box-sizing: border-box;
-    }}
-    
-    body {{
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        font-size: 11pt;
-        line-height: 1.5;
-        color: #1a1a1a;
         margin: 0;
         padding: 0;
     }}
     
+    body {{
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: 10pt;
+        line-height: 1.4;
+        color: #1f2937;
+    }}
+    
     .header {{
         text-align: center;
-        padding: 20px 0;
-        border-bottom: 3px solid {primary_color};
-        margin-bottom: 30px;
+        padding: 20px 0 15px 0;
+        border-bottom: 4px solid {primary_color};
+        margin-bottom: 20px;
     }}
     
     .header h1 {{
         color: {primary_color};
-        margin: 0 0 10px 0;
-        font-size: 24pt;
+        font-size: 22pt;
+        font-weight: 700;
+        margin-bottom: 8px;
     }}
     
     .header .subtitle {{
@@ -113,133 +110,206 @@ def gerar_html_relatorio(campanha, cliente, metricas, primary_color, incluir_pag
     }}
     
     .section {{
-        margin-bottom: 30px;
-        page-break-inside: avoid;
+        margin-bottom: 25px;
     }}
     
     .section-title {{
         color: {primary_color};
-        font-size: 14pt;
-        font-weight: 600;
+        font-size: 13pt;
+        font-weight: 700;
+        padding-bottom: 8px;
         border-bottom: 2px solid {primary_color};
-        padding-bottom: 5px;
         margin-bottom: 15px;
     }}
     
-    .metrics-grid {{
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-bottom: 20px;
-    }}
-    
-    .metric-card {{
-        background: #f9fafb;
-        border-radius: 8px;
-        padding: 12px;
-        text-align: center;
-        flex: 1;
-        min-width: 100px;
-        border: 1px solid #e5e7eb;
-    }}
-    
-    .metric-value {{
-        font-size: 16pt;
-        font-weight: 700;
-        color: {primary_color};
-    }}
-    
-    .metric-label {{
-        font-size: 8pt;
-        color: #6b7280;
-        text-transform: uppercase;
-    }}
-    
-    .big-metric {{
-        background: {primary_color};
+    /* Big Numbers Grid */
+    .big-number-highlight {{
+        background: linear-gradient(135deg, {primary_color}, #a78bfa);
         color: white;
-        padding: 20px;
+        padding: 25px;
         border-radius: 12px;
         text-align: center;
         margin-bottom: 20px;
     }}
     
-    .big-metric .value {{
-        font-size: 36pt;
-        font-weight: 700;
+    .big-number-highlight .value {{
+        font-size: 42pt;
+        font-weight: 800;
     }}
     
-    .big-metric .label {{
-        font-size: 10pt;
+    .big-number-highlight .label {{
+        font-size: 11pt;
         opacity: 0.9;
+        text-transform: uppercase;
+        letter-spacing: 1px;
     }}
     
-    .insight-box {{
-        background: #f5f3ff;
-        border-left: 4px solid {primary_color};
+    .metrics-row {{
+        display: flex;
+        gap: 12px;
+        margin-bottom: 15px;
+    }}
+    
+    .metric-card {{
+        flex: 1;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 15px;
+        text-align: center;
+    }}
+    
+    .metric-card .value {{
+        font-size: 18pt;
+        font-weight: 700;
+        color: {primary_color};
+    }}
+    
+    .metric-card .label {{
+        font-size: 8pt;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-top: 4px;
+    }}
+    
+    /* Insights */
+    .insight-card {{
+        background: #f0fdf4;
+        border-left: 4px solid #22c55e;
         padding: 12px 15px;
         margin-bottom: 10px;
         border-radius: 0 8px 8px 0;
     }}
     
-    .insight-box.destaque {{ background: #eff6ff; border-color: #3b82f6; }}
-    .insight-box.sucesso {{ background: #ecfdf5; border-color: #10b981; }}
-    .insight-box.alerta {{ background: #fffbeb; border-color: #f59e0b; }}
-    .insight-box.critico {{ background: #fef2f2; border-color: #ef4444; }}
+    .insight-card.alerta {{
+        background: #fffbeb;
+        border-color: #f59e0b;
+    }}
+    
+    .insight-card.destaque {{
+        background: #eff6ff;
+        border-color: #3b82f6;
+    }}
+    
+    .insight-card.info {{
+        background: #f5f3ff;
+        border-color: {primary_color};
+    }}
     
     .insight-title {{
         font-weight: 600;
-        margin-bottom: 5px;
+        font-size: 10pt;
+        margin-bottom: 4px;
     }}
     
     .insight-text {{
-        font-size: 10pt;
+        font-size: 9pt;
         color: #374151;
     }}
     
+    /* Graficos em CSS */
     .chart-container {{
-        text-align: center;
-        margin: 20px 0;
+        margin: 15px 0;
     }}
     
-    .chart-container img {{
-        max-width: 100%;
-        height: auto;
+    .bar-chart {{
+        margin: 10px 0;
     }}
     
+    .bar-item {{
+        display: flex;
+        align-items: center;
+        margin-bottom: 8px;
+    }}
+    
+    .bar-label {{
+        width: 100px;
+        font-size: 9pt;
+        color: #374151;
+        text-align: right;
+        padding-right: 10px;
+    }}
+    
+    .bar-container {{
+        flex: 1;
+        background: #e5e7eb;
+        height: 24px;
+        border-radius: 4px;
+        overflow: hidden;
+        position: relative;
+    }}
+    
+    .bar-fill {{
+        height: 100%;
+        background: linear-gradient(90deg, {primary_color}, #a78bfa);
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        padding-right: 8px;
+    }}
+    
+    .bar-value {{
+        font-size: 8pt;
+        font-weight: 600;
+        color: white;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }}
+    
+    .bar-value-outside {{
+        font-size: 8pt;
+        color: #374151;
+        margin-left: 8px;
+        min-width: 60px;
+    }}
+    
+    /* Tabelas */
     table {{
         width: 100%;
         border-collapse: collapse;
-        margin-top: 10px;
+        margin: 10px 0;
         font-size: 9pt;
-    }}
-    
-    th, td {{
-        padding: 8px 10px;
-        text-align: left;
-        border-bottom: 1px solid #e5e7eb;
     }}
     
     th {{
         background: {primary_color};
         color: white;
+        padding: 10px 8px;
+        text-align: left;
         font-weight: 600;
+        font-size: 8pt;
+        text-transform: uppercase;
     }}
     
     td {{
-        font-size: 9pt;
+        padding: 10px 8px;
+        border-bottom: 1px solid #e5e7eb;
     }}
     
     tr:nth-child(even) {{
-        background: #f9fafb;
+        background: #f8fafc;
     }}
     
+    tr:hover {{
+        background: #f1f5f9;
+    }}
+    
+    .text-right {{
+        text-align: right;
+    }}
+    
+    .text-center {{
+        text-align: center;
+    }}
+    
+    /* Footer */
     .footer {{
         text-align: center;
         color: #9ca3af;
-        font-size: 9pt;
-        margin-top: 30px;
+        font-size: 8pt;
         padding-top: 20px;
+        margin-top: 30px;
         border-top: 1px solid #e5e7eb;
     }}
     
@@ -247,13 +317,14 @@ def gerar_html_relatorio(campanha, cliente, metricas, primary_color, incluir_pag
         page-break-before: always;
     }}
     
-    .two-col {{
-        display: flex;
-        gap: 20px;
-    }}
-    
-    .two-col > div {{
-        flex: 1;
+    /* Mini bar para tabelas */
+    .mini-bar {{
+        display: inline-block;
+        height: 8px;
+        background: {primary_color};
+        border-radius: 4px;
+        margin-right: 6px;
+        vertical-align: middle;
     }}
     """
     
@@ -274,7 +345,7 @@ def gerar_html_relatorio(campanha, cliente, metricas, primary_color, incluir_pag
         <div class="header">
             <h1>{campanha['nome']}</h1>
             <div class="subtitle">
-                {nome_cliente} | {data_inicio} - {data_fim}
+                {nome_cliente} &bull; {data_inicio} a {data_fim}
             </div>
         </div>
     """
@@ -283,9 +354,9 @@ def gerar_html_relatorio(campanha, cliente, metricas, primary_color, incluir_pag
     if 'big_numbers' in paginas:
         html += gerar_secao_big_numbers(metricas, campanha, primary_color)
     
-    # Analise Geral com Graficos
+    # Analise Geral
     if 'analise_geral' in paginas:
-        html += gerar_secao_analise_graficos(campanha, metricas, primary_color)
+        html += gerar_secao_analise(campanha, metricas, primary_color)
     
     # Influenciadores
     if 'influenciadores' in paginas:
@@ -293,12 +364,12 @@ def gerar_html_relatorio(campanha, cliente, metricas, primary_color, incluir_pag
     
     # Top Posts
     if 'top_posts' in paginas:
-        html += gerar_secao_top_posts(campanha)
+        html += gerar_secao_top_posts(campanha, primary_color)
     
     # Footer
     html += f"""
         <div class="footer">
-            Relatorio gerado por <strong>AIR</strong> em {datetime.now().strftime('%d/%m/%Y %H:%M')}
+            Relatorio gerado automaticamente por <strong>AIR</strong> em {datetime.now().strftime('%d/%m/%Y as %H:%M')}
         </div>
     </body>
     </html>
@@ -313,69 +384,76 @@ def gerar_secao_big_numbers(metricas, campanha, primary_color):
     # Taxa de engajamento destacada
     html = f"""
     <div class="section">
-        <div class="section-title">Resumo da Campanha</div>
+        <div class="section-title">Resumo Executivo</div>
         
-        <div class="big-metric">
+        <div class="big-number-highlight">
             <div class="value">{metricas['engajamento_efetivo']:.2f}%</div>
-            <div class="label">TAXA DE ENGAJAMENTO EFETIVO</div>
+            <div class="label">Taxa de Engajamento Efetivo</div>
         </div>
         
-        <div class="metrics-grid">
+        <div class="metrics-row">
+            <div class="metric-card">
+                <div class="value">{metricas['total_influenciadores']}</div>
+                <div class="label">Influenciadores</div>
+            </div>
+            <div class="metric-card">
+                <div class="value">{metricas['total_posts']}</div>
+                <div class="label">Posts</div>
+            </div>
+            <div class="metric-card">
+                <div class="value">{funcoes_auxiliares.formatar_numero(metricas['total_views'] + metricas['total_impressoes'])}</div>
+                <div class="label">Impressoes</div>
+            </div>
+            <div class="metric-card">
+                <div class="value">{funcoes_auxiliares.formatar_numero(metricas['total_alcance'])}</div>
+                <div class="label">Alcance</div>
+            </div>
+        </div>
+        
+        <div class="metrics-row">
+            <div class="metric-card">
+                <div class="value">{funcoes_auxiliares.formatar_numero(metricas['total_interacoes'])}</div>
+                <div class="label">Interacoes</div>
+            </div>
+            <div class="metric-card">
+                <div class="value">{funcoes_auxiliares.formatar_numero(metricas['total_curtidas'])}</div>
+                <div class="label">Curtidas</div>
+            </div>
+            <div class="metric-card">
+                <div class="value">{funcoes_auxiliares.formatar_numero(metricas['total_comentarios'])}</div>
+                <div class="label">Comentarios</div>
+            </div>
+            <div class="metric-card">
+                <div class="value">{metricas['taxa_alcance']:.1f}%</div>
+                <div class="label">Taxa Alcance</div>
+            </div>
+        </div>
     """
-    
-    cards = [
-        ("Influenciadores", str(metricas['total_influenciadores'])),
-        ("Posts", str(metricas['total_posts'])),
-        ("Impressoes", funcoes_auxiliares.formatar_numero(metricas['total_views'] + metricas['total_impressoes'])),
-        ("Alcance", funcoes_auxiliares.formatar_numero(metricas['total_alcance'])),
-    ]
-    
-    for label, value in cards:
-        html += f"""
-            <div class="metric-card">
-                <div class="metric-value">{value}</div>
-                <div class="metric-label">{label}</div>
-            </div>
-        """
-    
-    html += "</div><div class='metrics-grid'>"
-    
-    cards2 = [
-        ("Interacoes", funcoes_auxiliares.formatar_numero(metricas['total_interacoes'])),
-        ("Curtidas", funcoes_auxiliares.formatar_numero(metricas['total_curtidas'])),
-        ("Comentarios", funcoes_auxiliares.formatar_numero(metricas['total_comentarios'])),
-        ("Taxa Alcance", f"{metricas['taxa_alcance']:.2f}%"),
-    ]
-    
-    for label, value in cards2:
-        html += f"""
-            <div class="metric-card">
-                <div class="metric-value">{value}</div>
-                <div class="metric-label">{label}</div>
-            </div>
-        """
-    
-    html += "</div>"
     
     # Investimento se houver
     if metricas.get('total_custo', 0) > 0:
         custo = metricas['total_custo']
-        cpm = (custo / (metricas['total_views'] + metricas['total_impressoes']) * 1000) if (metricas['total_views'] + metricas['total_impressoes']) > 0 else 0
+        total_imp = metricas['total_views'] + metricas['total_impressoes']
+        cpm = (custo / total_imp * 1000) if total_imp > 0 else 0
         cpe = (custo / metricas['total_interacoes']) if metricas['total_interacoes'] > 0 else 0
         
         html += f"""
-        <div class="metrics-grid">
+        <div class="metrics-row">
             <div class="metric-card">
-                <div class="metric-value">R$ {custo:,.0f}</div>
-                <div class="metric-label">Investimento</div>
+                <div class="value">R$ {custo:,.0f}</div>
+                <div class="label">Investimento</div>
             </div>
             <div class="metric-card">
-                <div class="metric-value">R$ {cpm:,.2f}</div>
-                <div class="metric-label">CPM</div>
+                <div class="value">R$ {cpm:,.2f}</div>
+                <div class="label">CPM</div>
             </div>
             <div class="metric-card">
-                <div class="metric-value">R$ {cpe:,.2f}</div>
-                <div class="metric-label">CPE</div>
+                <div class="value">R$ {cpe:,.2f}</div>
+                <div class="label">CPE</div>
+            </div>
+            <div class="metric-card">
+                <div class="value">&nbsp;</div>
+                <div class="label">&nbsp;</div>
             </div>
         </div>
         """.replace(",", ".")
@@ -384,20 +462,18 @@ def gerar_secao_big_numbers(metricas, campanha, primary_color):
     insights = data_manager.get_insights_campanha(campanha['id'], 'big_numbers')
     
     if insights:
-        html += '<div class="section-title" style="margin-top: 20px;">Insights</div>'
+        html += '<div class="section-title" style="margin-top: 25px;">Insights</div>'
         
-        for insight in insights[:5]:
+        for insight in insights[:4]:
             tipo = insight.get('tipo', 'info')
-            icone = insight.get('icone', '💡')
             titulo = insight.get('titulo', '')
             texto = insight.get('texto', '')
-            
-            texto_html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', texto)
+            texto = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', texto)
             
             html += f"""
-            <div class="insight-box {tipo}">
-                <div class="insight-title">{icone} {titulo}</div>
-                <div class="insight-text">{texto_html}</div>
+            <div class="insight-card {tipo}">
+                <div class="insight-title">{titulo}</div>
+                <div class="insight-text">{texto}</div>
             </div>
             """
     
@@ -405,8 +481,8 @@ def gerar_secao_big_numbers(metricas, campanha, primary_color):
     return html
 
 
-def gerar_secao_analise_graficos(campanha, metricas, primary_color):
-    """Gera secao de analise com graficos"""
+def gerar_secao_analise(campanha, metricas, primary_color):
+    """Gera secao de analise com graficos em CSS"""
     
     html = """
     <div class="section page-break">
@@ -419,7 +495,7 @@ def gerar_secao_analise_graficos(campanha, metricas, primary_color):
     
     for inf_camp in campanha.get('influenciadores', []):
         inf = data_manager.get_influenciador(inf_camp.get('influenciador_id'))
-        classe = inf.get('classificacao', 'Desconhecido') if inf else 'Desconhecido'
+        classe = inf.get('classificacao', 'Outro') if inf else 'Outro'
         
         if classe not in classificacoes:
             classificacoes[classe] = {'impressoes': 0, 'interacoes': 0, 'qtd': 0}
@@ -430,121 +506,104 @@ def gerar_secao_analise_graficos(campanha, metricas, primary_color):
             if formato not in formatos:
                 formatos[formato] = {'impressoes': 0, 'alcance': 0, 'interacoes': 0}
             
-            imp = post.get('views', 0) + post.get('impressoes', 0)
+            imp = (post.get('views', 0) or 0) + (post.get('impressoes', 0) or 0)
             formatos[formato]['impressoes'] += imp
-            formatos[formato]['alcance'] += post.get('alcance', 0)
-            formatos[formato]['interacoes'] += post.get('interacoes', 0)
+            formatos[formato]['alcance'] += post.get('alcance', 0) or 0
+            formatos[formato]['interacoes'] += post.get('interacoes', 0) or 0
             classificacoes[classe]['impressoes'] += imp
-            classificacoes[classe]['interacoes'] += post.get('interacoes', 0)
+            classificacoes[classe]['interacoes'] += post.get('interacoes', 0) or 0
     
-    # Grafico por Formato
+    # Grafico por Formato (barras CSS)
     if formatos:
-        try:
-            fig = go.Figure()
+        max_imp = max(f['impressoes'] for f in formatos.values()) if formatos else 1
+        
+        html += """
+        <h3 style="font-size: 11pt; margin: 20px 0 10px 0; color: #374151;">Impressoes por Formato</h3>
+        <div class="bar-chart">
+        """
+        
+        for formato, dados in sorted(formatos.items(), key=lambda x: x[1]['impressoes'], reverse=True):
+            pct = (dados['impressoes'] / max_imp * 100) if max_imp > 0 else 0
+            pct = max(pct, 5)  # Minimo 5% para visibilidade
             
-            nomes = list(formatos.keys())
-            valores = [formatos[f]['impressoes'] for f in nomes]
-            
-            fig.add_trace(go.Bar(
-                x=nomes,
-                y=valores,
-                marker_color=primary_color,
-                text=[funcoes_auxiliares.formatar_numero(v) for v in valores],
-                textposition='outside'
-            ))
-            
-            fig.update_layout(
-                title='Impressoes por Formato',
-                showlegend=False,
-                height=350,
-                margin=dict(t=50, b=50, l=50, r=50),
-                plot_bgcolor='white'
-            )
-            
-            img_b64 = fig_to_base64(fig, width=700, height=350)
-            html += f'<div class="chart-container"><img src="{img_b64}" /></div>'
-        except Exception as e:
-            # Se falhar o grafico, mostrar tabela
-            html += """
-            <h3 style="font-size: 12pt;">Por Formato</h3>
-            <table>
-                <tr><th>Formato</th><th>Impressoes</th><th>Alcance</th><th>Interacoes</th></tr>
+            html += f"""
+            <div class="bar-item">
+                <div class="bar-label">{formato}</div>
+                <div class="bar-container">
+                    <div class="bar-fill" style="width: {pct}%;">
+                        <span class="bar-value">{funcoes_auxiliares.formatar_numero(dados['impressoes'])}</span>
+                    </div>
+                </div>
+            </div>
             """
-            for formato, dados in sorted(formatos.items(), key=lambda x: x[1]['impressoes'], reverse=True):
-                html += f"""
-                <tr>
-                    <td>{formato}</td>
-                    <td>{funcoes_auxiliares.formatar_numero(dados['impressoes'])}</td>
-                    <td>{funcoes_auxiliares.formatar_numero(dados['alcance'])}</td>
-                    <td>{funcoes_auxiliares.formatar_numero(dados['interacoes'])}</td>
-                </tr>
-                """
-            html += "</table>"
-    
-    # Grafico por Classificacao
-    if classificacoes:
-        try:
-            fig2 = go.Figure()
-            
-            ordem = ['Nano', 'Micro', 'Mid', 'Macro', 'Mega']
-            nomes_ord = [c for c in ordem if c in classificacoes]
-            valores_ord = [classificacoes[c]['impressoes'] for c in nomes_ord]
-            
-            cores = ['#8b5cf6', '#a78bfa', '#c4b5fd', '#ddd6fe', '#ede9fe']
-            
-            fig2.add_trace(go.Bar(
-                x=nomes_ord,
-                y=valores_ord,
-                marker_color=cores[:len(nomes_ord)],
-                text=[funcoes_auxiliares.formatar_numero(v) for v in valores_ord],
-                textposition='outside'
-            ))
-            
-            fig2.update_layout(
-                title='Impressoes por Classificacao',
-                showlegend=False,
-                height=350,
-                margin=dict(t=50, b=50, l=50, r=50),
-                plot_bgcolor='white'
-            )
-            
-            img_b64_2 = fig_to_base64(fig2, width=700, height=350)
-            html += f'<div class="chart-container"><img src="{img_b64_2}" /></div>'
-        except:
-            pass
-    
-    # Tabela resumo
-    html += """
-    <h3 style="font-size: 12pt; margin-top: 20px;">Resumo por Classificacao</h3>
-    <table>
-        <tr><th>Classificacao</th><th>Qtd Influs</th><th>Impressoes</th><th>Interacoes</th><th>Taxa Eng.</th></tr>
-    """
-    
-    ordem = ['Nano', 'Micro', 'Mid', 'Macro', 'Mega']
-    for classe in ordem:
-        if classe in classificacoes:
-            dados = classificacoes[classe]
+        
+        html += "</div>"
+        
+        # Tabela de formatos
+        html += """
+        <table style="margin-top: 15px;">
+            <tr>
+                <th>Formato</th>
+                <th class="text-right">Impressoes</th>
+                <th class="text-right">Alcance</th>
+                <th class="text-right">Interacoes</th>
+                <th class="text-right">Taxa Eng.</th>
+            </tr>
+        """
+        
+        for formato, dados in sorted(formatos.items(), key=lambda x: x[1]['impressoes'], reverse=True):
             taxa = (dados['interacoes'] / dados['impressoes'] * 100) if dados['impressoes'] > 0 else 0
             html += f"""
             <tr>
-                <td>{classe}</td>
-                <td>{dados['qtd']}</td>
-                <td>{funcoes_auxiliares.formatar_numero(dados['impressoes'])}</td>
-                <td>{funcoes_auxiliares.formatar_numero(dados['interacoes'])}</td>
-                <td>{taxa:.2f}%</td>
+                <td>{formato}</td>
+                <td class="text-right">{funcoes_auxiliares.formatar_numero(dados['impressoes'])}</td>
+                <td class="text-right">{funcoes_auxiliares.formatar_numero(dados['alcance'])}</td>
+                <td class="text-right">{funcoes_auxiliares.formatar_numero(dados['interacoes'])}</td>
+                <td class="text-right">{taxa:.2f}%</td>
             </tr>
             """
+        
+        html += "</table>"
     
-    html += "</table></div>"
+    # Grafico por Classificacao
+    if classificacoes:
+        max_imp_class = max(c['impressoes'] for c in classificacoes.values()) if classificacoes else 1
+        
+        html += """
+        <h3 style="font-size: 11pt; margin: 25px 0 10px 0; color: #374151;">Impressoes por Classificacao</h3>
+        <div class="bar-chart">
+        """
+        
+        ordem = ['Nano', 'Micro', 'Mid', 'Macro', 'Mega']
+        for classe in ordem:
+            if classe in classificacoes:
+                dados = classificacoes[classe]
+                pct = (dados['impressoes'] / max_imp_class * 100) if max_imp_class > 0 else 0
+                pct = max(pct, 5)
+                
+                html += f"""
+                <div class="bar-item">
+                    <div class="bar-label">{classe}</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: {pct}%;">
+                            <span class="bar-value">{funcoes_auxiliares.formatar_numero(dados['impressoes'])}</span>
+                        </div>
+                    </div>
+                </div>
+                """
+        
+        html += "</div>"
+    
+    html += "</div>"
     return html
 
 
 def gerar_secao_influenciadores(campanha, primary_color):
-    """Gera secao com lista de influenciadores e grafico"""
+    """Gera secao com lista de influenciadores"""
     
     html = """
     <div class="section page-break">
-        <div class="section-title">Influenciadores</div>
+        <div class="section-title">Performance por Influenciador</div>
     """
     
     dados_inf = []
@@ -558,8 +617,8 @@ def gerar_secao_influenciadores(campanha, primary_color):
         posts = inf_camp.get('posts', [])
         
         for post in posts:
-            impressoes += post.get('views', 0) + post.get('impressoes', 0)
-            interacoes += post.get('interacoes', 0)
+            impressoes += (post.get('views', 0) or 0) + (post.get('impressoes', 0) or 0)
+            interacoes += post.get('interacoes', 0) or 0
         
         taxa = (interacoes / impressoes * 100) if impressoes > 0 else 0
         
@@ -573,48 +632,46 @@ def gerar_secao_influenciadores(campanha, primary_color):
             'taxa': taxa
         })
     
-    # Ordenar por impressoes
     dados_inf.sort(key=lambda x: x['impressoes'], reverse=True)
     
-    # Grafico top 10
+    # Top 10 em barras
     if dados_inf:
-        try:
-            top10 = dados_inf[:10]
+        max_imp = dados_inf[0]['impressoes'] if dados_inf else 1
+        
+        html += """
+        <h3 style="font-size: 11pt; margin: 10px 0; color: #374151;">Top 10 por Impressoes</h3>
+        <div class="bar-chart">
+        """
+        
+        for d in dados_inf[:10]:
+            pct = (d['impressoes'] / max_imp * 100) if max_imp > 0 else 0
+            pct = max(pct, 5)
             
-            fig = go.Figure()
-            fig.add_trace(go.Bar(
-                y=[d['nome'] for d in top10],
-                x=[d['impressoes'] for d in top10],
-                orientation='h',
-                marker_color=primary_color,
-                text=[funcoes_auxiliares.formatar_numero(d['impressoes']) for d in top10],
-                textposition='outside'
-            ))
-            
-            fig.update_layout(
-                title='Top 10 Influenciadores por Impressoes',
-                height=400,
-                margin=dict(t=50, b=30, l=150, r=80),
-                yaxis=dict(autorange='reversed'),
-                plot_bgcolor='white'
-            )
-            
-            img_b64 = fig_to_base64(fig, width=700, height=400)
-            html += f'<div class="chart-container"><img src="{img_b64}" /></div>'
-        except:
-            pass
+            html += f"""
+            <div class="bar-item">
+                <div class="bar-label" style="width: 120px;">{d['nome'][:15]}</div>
+                <div class="bar-container">
+                    <div class="bar-fill" style="width: {pct}%;">
+                        <span class="bar-value">{funcoes_auxiliares.formatar_numero(d['impressoes'])}</span>
+                    </div>
+                </div>
+            </div>
+            """
+        
+        html += "</div>"
     
-    # Tabela
+    # Tabela completa
     html += """
+    <h3 style="font-size: 11pt; margin: 25px 0 10px 0; color: #374151;">Lista Completa</h3>
     <table>
         <tr>
-            <th>Nome</th>
-            <th>Classe</th>
-            <th>Seguidores</th>
-            <th>Posts</th>
-            <th>Impressoes</th>
-            <th>Interacoes</th>
-            <th>Taxa Eng.</th>
+            <th>Influenciador</th>
+            <th class="text-center">Classe</th>
+            <th class="text-right">Seguidores</th>
+            <th class="text-center">Posts</th>
+            <th class="text-right">Impressoes</th>
+            <th class="text-right">Interacoes</th>
+            <th class="text-right">Taxa Eng.</th>
         </tr>
     """
     
@@ -622,12 +679,12 @@ def gerar_secao_influenciadores(campanha, primary_color):
         html += f"""
         <tr>
             <td>{d['nome']}</td>
-            <td>{d['classe']}</td>
-            <td>{funcoes_auxiliares.formatar_numero(d['seguidores'])}</td>
-            <td>{d['posts']}</td>
-            <td>{funcoes_auxiliares.formatar_numero(d['impressoes'])}</td>
-            <td>{funcoes_auxiliares.formatar_numero(d['interacoes'])}</td>
-            <td>{d['taxa']:.2f}%</td>
+            <td class="text-center">{d['classe']}</td>
+            <td class="text-right">{funcoes_auxiliares.formatar_numero(d['seguidores'])}</td>
+            <td class="text-center">{d['posts']}</td>
+            <td class="text-right">{funcoes_auxiliares.formatar_numero(d['impressoes'])}</td>
+            <td class="text-right">{funcoes_auxiliares.formatar_numero(d['interacoes'])}</td>
+            <td class="text-right">{d['taxa']:.2f}%</td>
         </tr>
         """
     
@@ -635,7 +692,7 @@ def gerar_secao_influenciadores(campanha, primary_color):
     return html
 
 
-def gerar_secao_top_posts(campanha):
+def gerar_secao_top_posts(campanha, primary_color):
     """Gera secao com top posts"""
     
     html = """
@@ -645,11 +702,11 @@ def gerar_secao_top_posts(campanha):
             <tr>
                 <th>Influenciador</th>
                 <th>Formato</th>
-                <th>Data</th>
-                <th>Impressoes</th>
-                <th>Alcance</th>
-                <th>Interacoes</th>
-                <th>Taxa Eng.</th>
+                <th class="text-center">Data</th>
+                <th class="text-right">Impressoes</th>
+                <th class="text-right">Alcance</th>
+                <th class="text-right">Interacoes</th>
+                <th class="text-right">Taxa Eng.</th>
             </tr>
     """
     
@@ -660,8 +717,8 @@ def gerar_secao_top_posts(campanha):
             continue
         
         for post in inf_camp.get('posts', []):
-            imp = post.get('views', 0) + post.get('impressoes', 0)
-            inter = post.get('interacoes', 0)
+            imp = (post.get('views', 0) or 0) + (post.get('impressoes', 0) or 0)
+            inter = post.get('interacoes', 0) or 0
             taxa = (inter / imp * 100) if imp > 0 else 0
             
             posts.append({
@@ -669,32 +726,25 @@ def gerar_secao_top_posts(campanha):
                 'formato': post.get('formato', '-'),
                 'data': post.get('data_publicacao', '-'),
                 'impressoes': imp,
-                'alcance': post.get('alcance', 0),
+                'alcance': post.get('alcance', 0) or 0,
                 'interacoes': inter,
                 'taxa': taxa
             })
     
-    # Ordenar por impressoes e pegar top 15
     posts.sort(key=lambda x: x['impressoes'], reverse=True)
     
-    for post in posts[:15]:
+    for post in posts[:20]:
         html += f"""
         <tr>
             <td>{post['influenciador']}</td>
             <td>{post['formato']}</td>
-            <td>{post['data']}</td>
-            <td>{funcoes_auxiliares.formatar_numero(post['impressoes'])}</td>
-            <td>{funcoes_auxiliares.formatar_numero(post['alcance'])}</td>
-            <td>{funcoes_auxiliares.formatar_numero(post['interacoes'])}</td>
-            <td>{post['taxa']:.2f}%</td>
+            <td class="text-center">{post['data']}</td>
+            <td class="text-right">{funcoes_auxiliares.formatar_numero(post['impressoes'])}</td>
+            <td class="text-right">{funcoes_auxiliares.formatar_numero(post['alcance'])}</td>
+            <td class="text-right">{funcoes_auxiliares.formatar_numero(post['interacoes'])}</td>
+            <td class="text-right">{post['taxa']:.2f}%</td>
         </tr>
         """
     
     html += "</table></div>"
     return html
-
-
-def get_pdf_download_link(pdf_bytes: bytes, filename: str = "relatorio.pdf") -> str:
-    """Gera link de download para o PDF"""
-    b64 = base64.b64encode(pdf_bytes).decode()
-    return f'<a href="data:application/pdf;base64,{b64}" download="{filename}">📥 Baixar PDF</a>'

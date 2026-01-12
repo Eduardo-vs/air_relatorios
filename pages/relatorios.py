@@ -203,13 +203,50 @@ def regenerar_insight_ia(pagina: str, dados: dict, campanha_id: int, insight_atu
         return None
 
 
-def render_secao_insights(pagina: str, dados: dict, campanha_id: int):
+def render_secao_insights(pagina: str, dados: dict, campanha_id: int, filtro_data_inicio: str = None, filtro_data_fim: str = None):
     """
     Renderiza seção de insights (apenas visualização)
     A edição é feita na Central da Campanha
+    
+    Args:
+        pagina: nome da pagina
+        dados: dados para contexto
+        campanha_id: ID da campanha
+        filtro_data_inicio: data inicio para filtrar insights (dd/mm/yyyy)
+        filtro_data_fim: data fim para filtrar insights (dd/mm/yyyy)
     """
     # Buscar insights salvos do banco
     insights = data_manager.get_insights_campanha(campanha_id, pagina, apenas_ativos=True)
+    
+    if not insights:
+        return
+    
+    # Filtrar insights por data de criacao se filtro ativo
+    if filtro_data_inicio and filtro_data_fim:
+        try:
+            dt_inicio = datetime.strptime(filtro_data_inicio, '%d/%m/%Y')
+            dt_fim = datetime.strptime(filtro_data_fim, '%d/%m/%Y')
+            
+            insights_filtrados = []
+            for insight in insights:
+                created_at = insight.get('created_at', '')
+                if created_at:
+                    try:
+                        if 'T' in created_at:
+                            dt_insight = datetime.fromisoformat(created_at.replace('Z', '+00:00').split('+')[0])
+                        else:
+                            dt_insight = datetime.strptime(created_at[:10], '%Y-%m-%d')
+                        
+                        if dt_inicio <= dt_insight <= dt_fim:
+                            insights_filtrados.append(insight)
+                    except:
+                        insights_filtrados.append(insight)  # Se nao conseguir parsear, inclui
+                else:
+                    insights_filtrados.append(insight)
+            
+            insights = insights_filtrados
+        except:
+            pass
     
     if not insights:
         return
@@ -453,8 +490,11 @@ def render_relatorio(campanhas_list, cliente=None):
             st.markdown("<br>", unsafe_allow_html=True)
             aplicar_filtro = st.checkbox("Aplicar filtro de data", value=False, key="rel_aplicar_filtro")
         
+        # Armazenar filtro para usar nos insights
         if aplicar_filtro:
-            st.info(f"Filtrando posts de {filtro_data_inicio.strftime('%d/%m/%Y')} a {filtro_data_fim.strftime('%d/%m/%Y')}")
+            st.session_state['filtro_insights_inicio'] = filtro_data_inicio.strftime('%d/%m/%Y')
+            st.session_state['filtro_insights_fim'] = filtro_data_fim.strftime('%d/%m/%Y')
+            st.info(f"Filtrando dados de {filtro_data_inicio.strftime('%d/%m/%Y')} a {filtro_data_fim.strftime('%d/%m/%Y')}")
             # Filtrar posts das campanhas
             campanhas_list = filtrar_campanhas_por_periodo(
                 campanhas_list, 
@@ -463,6 +503,9 @@ def render_relatorio(campanhas_list, cliente=None):
             )
             # Recalcular metricas com dados filtrados
             metricas = data_manager.calcular_metricas_multiplas_campanhas(campanhas_list)
+        else:
+            st.session_state['filtro_insights_inicio'] = None
+            st.session_state['filtro_insights_fim'] = None
     
     # Verificar se tem AON
     has_aon = any(c.get('is_aon') for c in campanhas_list)
@@ -471,6 +514,10 @@ def render_relatorio(campanhas_list, cliente=None):
     if not st.session_state.get('rel_aplicar_filtro', False):
         metricas = data_manager.calcular_metricas_multiplas_campanhas(campanhas_list)
     cores = funcoes_auxiliares.get_cores_graficos()
+    
+    # Obter filtro de insights do session_state
+    filtro_ins_inicio = st.session_state.get('filtro_insights_inicio')
+    filtro_ins_fim = st.session_state.get('filtro_insights_fim')
     
     # Definir tabs
     if has_aon:
@@ -499,23 +546,23 @@ def render_relatorio(campanhas_list, cliente=None):
     
     # TAB 1: BIG NUMBERS
     with tabs[tab_idx]:
-        render_pag1_big_numbers(campanhas_list, metricas, cores)
+        render_pag1_big_numbers(campanhas_list, metricas, cores, filtro_ins_inicio, filtro_ins_fim)
     tab_idx += 1
     
     # TAB 2: VISAO AON (se aplicavel)
     if has_aon:
         with tabs[tab_idx]:
-            render_pag3_visao_aon(campanhas_list, metricas, cores, cliente)
+            render_pag3_visao_aon(campanhas_list, metricas, cores, cliente, filtro_ins_inicio, filtro_ins_fim)
         tab_idx += 1
     
     # TAB 3: KPIs por Influenciador
     with tabs[tab_idx]:
-        render_pag4_kpis_influenciador(campanhas_list, cores)
+        render_pag4_kpis_influenciador(campanhas_list, cores, filtro_ins_inicio, filtro_ins_fim)
     tab_idx += 1
     
     # TAB 4: Top Performance
     with tabs[tab_idx]:
-        render_pag5_top_performance(campanhas_list, cores)
+        render_pag5_top_performance(campanhas_list, cores, filtro_ins_inicio, filtro_ins_fim)
     tab_idx += 1
     
     # TAB 5: Lista Influenciadores
@@ -551,7 +598,7 @@ def render_relatorio(campanhas_list, cliente=None):
             st.error(f"Erro em Compartilhar: {str(e)}")
 
 
-def render_pag1_big_numbers(campanhas_list, metricas, cores):
+def render_pag1_big_numbers(campanhas_list, metricas, cores, filtro_inicio=None, filtro_fim=None):
     """Pagina 1 - Big Numbers conforme layout especificado"""
     
     primary_color = st.session_state.get('primary_color', '#7c3aed')
@@ -822,7 +869,7 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
             "pct_meta_alcance": pct_dif_alcance,
             "air_score_medio": air_score_medio
         }
-        render_secao_insights("big_numbers", dados_ia, campanhas_list[0]['id'])
+        render_secao_insights("big_numbers", dados_ia, campanhas_list[0]['id'], filtro_inicio, filtro_fim)
 
 
 def render_pag2_analise_geral(campanhas_list, metricas, cores):
@@ -965,7 +1012,7 @@ def render_pag2_analise_geral(campanhas_list, metricas, cores):
             st.info(f"Alcance Bom: {metricas['taxa_alcance']:.2f}%")
 
 
-def render_pag3_visao_aon(campanhas_list, metricas, cores, cliente=None):
+def render_pag3_visao_aon(campanhas_list, metricas, cores, cliente=None, filtro_inicio=None, filtro_fim=None):
     """Pagina 3 - Visao AON"""
     
     st.subheader("Visao AON - Evolucao Temporal")
@@ -1098,10 +1145,10 @@ def render_pag3_visao_aon(campanhas_list, metricas, cores, cliente=None):
         dados_ia = preparar_dados_pagina("visao_aon", campanhas_list)
         dados_ia["resumo_mensal"] = df_mensal.to_dict('records') if not df_mensal.empty else []
         dados_ia["evolucao_temporal"] = df_tempo.to_dict('records') if not df_tempo.empty else []
-        render_secao_insights("visao_aon", dados_ia, campanhas_list[0]['id'])
+        render_secao_insights("visao_aon", dados_ia, campanhas_list[0]['id'], filtro_inicio, filtro_fim)
 
 
-def render_pag4_kpis_influenciador(campanhas_list, cores):
+def render_pag4_kpis_influenciador(campanhas_list, cores, filtro_inicio=None, filtro_fim=None):
     """Pagina 4 - KPIs por Influenciador (Top 15)"""
     
     st.subheader("KPIs por Influenciador (Top 15)")
@@ -1260,10 +1307,10 @@ def render_pag4_kpis_influenciador(campanhas_list, cores):
     if len(campanhas_list) == 1:
         dados_ia = preparar_dados_pagina("kpis_influenciador", campanhas_list)
         dados_ia["top_15_influenciadores"] = dados_inf[:15] if len(dados_inf) > 15 else dados_inf
-        render_secao_insights("kpis_influenciador", dados_ia, campanhas_list[0]['id'])
+        render_secao_insights("kpis_influenciador", dados_ia, campanhas_list[0]['id'], filtro_inicio, filtro_fim)
 
 
-def render_pag5_top_performance(campanhas_list, cores):
+def render_pag5_top_performance(campanhas_list, cores, filtro_inicio=None, filtro_fim=None):
     """Pagina 5 - Top Performance"""
     
     st.subheader("Top Performance")
@@ -1328,7 +1375,7 @@ def render_pag5_top_performance(campanhas_list, cores):
     if len(campanhas_list) == 1:
         dados_ia = preparar_dados_pagina("top_performance", campanhas_list)
         dados_ia["top_performance"] = df_filtrado.to_dict('records') if not df_filtrado.empty else []
-        render_secao_insights("top_performance", dados_ia, campanhas_list[0]['id'])
+        render_secao_insights("top_performance", dados_ia, campanhas_list[0]['id'], filtro_inicio, filtro_fim)
 
 
 def render_pag6_lista_influenciadores(campanhas_list, cores):
