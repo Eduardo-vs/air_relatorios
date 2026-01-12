@@ -1,6 +1,7 @@
 """
-AIR Relatorios v8.2
+AIR Relatorios v8.8
 Sistema Completo de Analise de Campanhas
+Com autenticacao por login
 """
 
 import streamlit as st
@@ -11,7 +12,7 @@ root_dir = Path(__file__).parent
 sys.path.insert(0, str(root_dir))
 
 from pages import dashboard, clientes, influenciadores, campanhas, configuracoes, relatorios, central_campanha
-from pages import relatorio_publico
+from pages import relatorio_publico, auth
 from utils import funcoes_auxiliares, data_manager
 
 # Configuracao
@@ -22,22 +23,24 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Inicializacao
-data_manager.inicializar_session_state()
-
 # Inicializar banco de dados
 data_manager.init_db()
 
-# Verificar se e acesso publico via token
-query_params = st.query_params
-token = query_params.get('t', None) or query_params.get('token', None)
+# Criar admin inicial se necessario
+auth.criar_admin_inicial()
 
-if token:
-    # ========================================
-    # MODO PUBLICO - Link compartilhavel
-    # ========================================
-    
-    # Aplicar CSS
+# Inicializacao
+data_manager.inicializar_session_state()
+
+# Verificar query params
+query_params = st.query_params
+
+# ========================================
+# MODO 1: ACESSO PUBLICO - Link compartilhavel de relatorio
+# ========================================
+token_relatorio = query_params.get('t', None) or query_params.get('token', None)
+
+if token_relatorio:
     primary_color = '#7c3aed'
     try:
         cfg = data_manager.get_configuracao('primary_color')
@@ -47,24 +50,39 @@ if token:
         pass
     
     funcoes_auxiliares.aplicar_css_global(primary_color)
-    
-    # Renderizar pagina publica
-    relatorio_publico.render_publico(token)
-    
-    # Parar execucao - nao mostrar mais nada
+    relatorio_publico.render_publico(token_relatorio)
     st.stop()
 
 # ========================================
-# MODO NORMAL - Com navegacao
+# MODO 2: CONVITE PARA CRIAR CONTA
+# ========================================
+token_convite = query_params.get('convite', None)
+
+if token_convite:
+    st.session_state.token_convite = token_convite
+
+# ========================================
+# MODO 3: APP NORMAL - Requer login
 # ========================================
 
+# Verificar se usuario esta logado
+if not auth.verificar_autenticacao():
+    # Mostrar tela de login
+    auth.render_login()
+    st.stop()
+
+# ========================================
+# USUARIO AUTENTICADO - App completo
+# ========================================
+
+usuario = st.session_state.get('usuario_logado', {})
 primary_color = st.session_state.primary_color
 
 # CSS
 funcoes_auxiliares.aplicar_css_global(primary_color)
 
 # Header com navegacao
-col1, col2 = st.columns([1, 4])
+col1, col2, col3 = st.columns([1, 4, 1])
 
 with col1:
     st.markdown("""
@@ -76,8 +94,15 @@ with col1:
 
 with col2:
     st.markdown('<div class="nav-btn-container">', unsafe_allow_html=True)
-    cols = st.columns(6)
+    
+    # Paginas disponiveis
     pages = ['Dashboard', 'Clientes', 'Influenciadores', 'Campanhas', 'Relatorios', 'Ajustes']
+    
+    # Admin tem acesso a Usuarios
+    if usuario.get('role') == 'admin':
+        pages.append('Usuarios')
+    
+    cols = st.columns(len(pages))
     
     for idx, page in enumerate(pages):
         with cols[idx]:
@@ -88,6 +113,17 @@ with col2:
                     st.session_state.current_page = page
                 st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
+
+with col3:
+    # Menu do usuario
+    st.markdown(f"""
+    <div style="text-align: right; padding-top: 10px;">
+        <span style="color: #6b7280; font-size: 0.85rem;">👤 {usuario.get('nome', 'Usuario')}</span>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    if st.button("Sair", key="btn_logout", use_container_width=True):
+        auth.fazer_logout()
 
 st.markdown('<div style="margin-bottom: 1.5rem;"></div>', unsafe_allow_html=True)
 
@@ -165,7 +201,7 @@ with st.sidebar:
         st.rerun()
     
     st.markdown("---")
-    st.caption("v8.2")
+    st.caption(f"v8.8 | {usuario.get('role', 'user')}")
 
 # Roteamento
 if st.session_state.current_page == 'Dashboard':
@@ -182,11 +218,16 @@ elif st.session_state.current_page == 'Relatorios':
     relatorios.render()
 elif st.session_state.current_page == 'Configuracoes':
     configuracoes.render()
+elif st.session_state.current_page == 'Usuarios':
+    if usuario.get('role') == 'admin':
+        auth.render_gerenciar_usuarios()
+    else:
+        st.warning("Acesso restrito")
 
 # Footer
 st.markdown("---")
-st.markdown("""
+st.markdown(f"""
 <div style='text-align: center; color: #9ca3af; padding: 1rem 0; font-size: 0.85rem;'>
-    <strong>air</strong> | Respiramos influencia | v8.2
+    <strong>air</strong> | Respiramos influencia | v8.8
 </div>
 """, unsafe_allow_html=True)

@@ -450,6 +450,34 @@ def init_db():
         )
     ''')
     
+    # Tabela de usuarios
+    cursor.execute(f'''
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id {pk_type},
+            email {text_type} UNIQUE NOT NULL,
+            nome {text_type} NOT NULL,
+            senha_hash {text_type} NOT NULL,
+            role {text_type} DEFAULT 'user',
+            ativo {int_type} DEFAULT 1,
+            created_at {text_type},
+            last_login {text_type}
+        )
+    ''')
+    
+    # Tabela de convites para criacao de conta
+    cursor.execute(f'''
+        CREATE TABLE IF NOT EXISTS convites (
+            id {pk_type},
+            token {text_type} UNIQUE NOT NULL,
+            email_convidado {text_type},
+            criado_por {int_type},
+            usado {int_type} DEFAULT 0,
+            usado_por {int_type},
+            expira_em {text_type},
+            created_at {text_type}
+        )
+    ''')
+    
     conn.commit()
     
     # Só fecha conexão se for SQLite (PostgreSQL usa conexão compartilhada)
@@ -2177,3 +2205,171 @@ def excluir_token(token_id: int) -> bool:
         (token_id,)
     )
     return True
+
+
+# ========================================
+# USUARIOS E AUTENTICACAO
+# ========================================
+
+import hashlib
+import secrets
+
+def hash_senha(senha: str) -> str:
+    """Gera hash da senha"""
+    return hashlib.sha256(senha.encode()).hexdigest()
+
+
+def criar_usuario(email: str, nome: str, senha: str, role: str = 'user') -> Optional[int]:
+    """Cria novo usuario"""
+    try:
+        user_id = execute_insert('''
+            INSERT INTO usuarios (email, nome, senha_hash, role, ativo, created_at)
+            VALUES (?, ?, ?, ?, 1, ?)
+        ''', (
+            email.lower().strip(),
+            nome.strip(),
+            hash_senha(senha),
+            role,
+            datetime.now().isoformat()
+        ))
+        return user_id
+    except Exception as e:
+        print(f"Erro ao criar usuario: {e}")
+        return None
+
+
+def autenticar_usuario(email: str, senha: str) -> Optional[Dict]:
+    """Autentica usuario por email e senha"""
+    row = execute_select_one(
+        "SELECT * FROM usuarios WHERE email = ? AND senha_hash = ? AND ativo = 1",
+        (email.lower().strip(), hash_senha(senha))
+    )
+    
+    if row:
+        # Atualizar last_login
+        execute_update(
+            "UPDATE usuarios SET last_login = ? WHERE id = ?",
+            (datetime.now().isoformat(), row['id'])
+        )
+        return dict(row)
+    return None
+
+
+def get_usuario(user_id: int) -> Optional[Dict]:
+    """Busca usuario por ID"""
+    row = execute_select_one("SELECT * FROM usuarios WHERE id = ?", (user_id,))
+    return dict(row) if row else None
+
+
+def get_usuario_por_email(email: str) -> Optional[Dict]:
+    """Busca usuario por email"""
+    row = execute_select_one("SELECT * FROM usuarios WHERE email = ?", (email.lower().strip(),))
+    return dict(row) if row else None
+
+
+def get_usuarios() -> List[Dict]:
+    """Lista todos os usuarios"""
+    rows = execute_select("SELECT * FROM usuarios ORDER BY nome")
+    return [dict(row) for row in rows]
+
+
+def atualizar_usuario(user_id: int, dados: Dict) -> bool:
+    """Atualiza dados do usuario"""
+    if 'senha' in dados and dados['senha']:
+        execute_update(
+            "UPDATE usuarios SET nome = ?, email = ?, role = ?, senha_hash = ? WHERE id = ?",
+            (dados.get('nome'), dados.get('email', '').lower(), dados.get('role', 'user'), hash_senha(dados['senha']), user_id)
+        )
+    else:
+        execute_update(
+            "UPDATE usuarios SET nome = ?, email = ?, role = ? WHERE id = ?",
+            (dados.get('nome'), dados.get('email', '').lower(), dados.get('role', 'user'), user_id)
+        )
+    return True
+
+
+def desativar_usuario(user_id: int) -> bool:
+    """Desativa usuario"""
+    execute_update("UPDATE usuarios SET ativo = 0 WHERE id = ?", (user_id,))
+    return True
+
+
+def contar_usuarios() -> int:
+    """Conta usuarios ativos"""
+    row = execute_select_one("SELECT COUNT(*) as total FROM usuarios WHERE ativo = 1")
+    return row['total'] if row else 0
+
+
+# ========================================
+# CONVITES
+# ========================================
+
+def gerar_convite(criado_por: int, email_convidado: str = None, dias_validade: int = 7) -> str:
+    """Gera token de convite para criar conta"""
+    token = secrets.token_urlsafe(32)
+    
+    expira_em = None
+    if dias_validade > 0:
+        expira_em = (datetime.now() + timedelta(days=dias_validade)).isoformat()
+    
+    execute_insert('''
+        INSERT INTO convites (token, email_convidado, criado_por, expira_em, created_at)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (
+        token,
+        email_convidado.lower().strip() if email_convidado else None,
+        criado_por,
+        expira_em,
+        datetime.now().isoformat()
+    ))
+    
+    return token
+
+
+def validar_convite(token: str) -> Optional[Dict]:
+    """Valida token de convite"""
+    row = execute_select_one(
+        "SELECT * FROM convites WHERE token = ? AND usado = 0",
+        (token,)
+    )
+    
+    if not row:
+        return None
+    
+    convite = dict(row)
+    
+    # Verificar expiracao
+    if convite.get('expira_em'):
+        expira = datetime.fromisoformat(convite['expira_em'])
+        if datetime.now() > expira:
+            return None
+    
+    return convite
+
+
+def usar_convite(token: str, user_id: int) -> bool:
+    """Marca convite como usado"""
+    execute_update(
+        "UPDATE convites SET usado = 1, usado_por = ? WHERE token = ?",
+        (user_id, token)
+    )
+    return True
+
+
+def get_convites(criado_por: int = None) -> List[Dict]:
+    """Lista convites"""
+    if criado_por:
+        rows = execute_select(
+            "SELECT * FROM convites WHERE criado_por = ? ORDER BY created_at DESC",
+            (criado_por,)
+        )
+    else:
+        rows = execute_select("SELECT * FROM convites ORDER BY created_at DESC")
+    return [dict(row) for row in rows]
+
+
+def excluir_convite(convite_id: int) -> bool:
+    """Exclui convite"""
+    execute_update("DELETE FROM convites WHERE id = ?", (convite_id,))
+    return True
+
