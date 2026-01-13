@@ -1693,7 +1693,7 @@ def render_compartilhar(campanha):
         if st.session_state.get('ultimo_token_gerado'):
             token = st.session_state['ultimo_token_gerado']
             # Montar URL base
-            base_url = st.query_params.get('base_url', 'https://seu-app.streamlit.app')
+            base_url = st.session_state.get('app_url', 'https://airrelatoriosgit-csve5an6pncvhztci8rbn9.streamlit.app')
             link_completo = f"{base_url}?t={token}"
             
             st.markdown("---")

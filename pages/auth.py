@@ -189,7 +189,7 @@ def render_gerenciar_usuarios():
             )
             
             # Gerar link
-            base_url = st.session_state.get('app_url', 'https://seu-app.streamlit.app')
+            base_url = st.session_state.get('app_url', 'https://airrelatoriosgit-csve5an6pncvhztci8rbn9.streamlit.app')
             link = f"{base_url}?convite={token}"
             
             st.success("Convite gerado!")
@@ -255,7 +255,7 @@ def render_gerenciar_usuarios():
                 st.caption(f"Expira: {conv.get('expira_em', '-')[:10] if conv.get('expira_em') else 'Nunca'}")
             
             with col2:
-                base_url = st.session_state.get('app_url', 'https://seu-app.streamlit.app')
+                base_url = st.session_state.get('app_url', 'https://airrelatoriosgit-csve5an6pncvhztci8rbn9.streamlit.app')
                 link = f"{base_url}?convite={conv['token']}"
                 st.code(conv['token'][:20] + "...")
             

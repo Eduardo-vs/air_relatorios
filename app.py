@@ -1,7 +1,7 @@
 """
-AIR Relatorios v8.8
+AIR Relatorios v8.9
 Sistema Completo de Analise de Campanhas
-Com autenticacao por login
+Com autenticacao por login - Sem sidebar
 """
 
 import streamlit as st
@@ -15,13 +15,43 @@ from pages import dashboard, clientes, influenciadores, campanhas, configuracoes
 from pages import relatorio_publico, auth
 from utils import funcoes_auxiliares, data_manager
 
-# Configuracao
+# URL base do app
+APP_URL = "https://airrelatoriosgit-csve5an6pncvhztci8rbn9.streamlit.app"
+
+# Configuracao - sidebar sempre escondida
 st.set_page_config(
     page_title="AIR Relatorios",
     page_icon="",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+# CSS para esconder sidebar completamente
+st.markdown("""
+<style>
+    [data-testid="stSidebar"] {
+        display: none;
+    }
+    [data-testid="stSidebarNav"] {
+        display: none;
+    }
+    .css-1d391kg {
+        display: none;
+    }
+    [data-testid="collapsedControl"] {
+        display: none;
+    }
+    section[data-testid="stSidebar"] {
+        display: none !important;
+    }
+    button[kind="header"] {
+        display: none;
+    }
+    .st-emotion-cache-1gwvy71 {
+        display: none;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # Inicializar banco de dados
 data_manager.init_db()
@@ -31,6 +61,9 @@ auth.criar_admin_inicial()
 
 # Inicializacao
 data_manager.inicializar_session_state()
+
+# Salvar URL do app no session_state
+st.session_state['app_url'] = APP_URL
 
 # Verificar query params
 query_params = st.query_params
@@ -49,6 +82,7 @@ if token_relatorio:
     except:
         pass
     
+    st.session_state.primary_color = primary_color
     funcoes_auxiliares.aplicar_css_global(primary_color)
     relatorio_publico.render_publico(token_relatorio)
     st.stop()
@@ -82,7 +116,7 @@ primary_color = st.session_state.primary_color
 funcoes_auxiliares.aplicar_css_global(primary_color)
 
 # Header com navegacao
-col1, col2, col3 = st.columns([1, 4, 1])
+col1, col2, col3 = st.columns([1, 5, 1])
 
 with col1:
     st.markdown("""
@@ -106,7 +140,15 @@ with col2:
     
     for idx, page in enumerate(pages):
         with cols[idx]:
-            if st.button(page, key=f"nav_{page}", use_container_width=True):
+            is_active = False
+            current = st.session_state.current_page
+            if page == 'Ajustes' and current == 'Configuracoes':
+                is_active = True
+            elif current == page:
+                is_active = True
+            
+            btn_type = "primary" if is_active else "secondary"
+            if st.button(page, key=f"nav_{page}", use_container_width=True, type=btn_type):
                 if page == 'Ajustes':
                     st.session_state.current_page = 'Configuracoes'
                 else:
@@ -117,91 +159,53 @@ with col2:
 with col3:
     # Menu do usuario
     st.markdown(f"""
-    <div style="text-align: right; padding-top: 10px;">
-        <span style="color: #6b7280; font-size: 0.85rem;">👤 {usuario.get('nome', 'Usuario')}</span>
+    <div style="text-align: right; padding-top: 5px;">
+        <span style="color: #6b7280; font-size: 0.8rem;">👤 {usuario.get('nome', 'Usuario')}</span>
     </div>
     """, unsafe_allow_html=True)
     
     if st.button("Sair", key="btn_logout", use_container_width=True):
         auth.fazer_logout()
 
-st.markdown('<div style="margin-bottom: 1.5rem;"></div>', unsafe_allow_html=True)
-
-# Sidebar
-with st.sidebar:
-    st.markdown("### Campanha Ativa")
-    
-    campanhas_list = data_manager.get_campanhas()
-    
-    if campanhas_list:
-        opcoes = ["Selecione..."] + [c['nome'] for c in campanhas_list]
+# Campanha ativa (mini card)
+campanhas_list = data_manager.get_campanhas()
+if campanhas_list and st.session_state.current_page not in ['Relatorios', 'Central']:
+    with st.expander("📊 Campanha Ativa", expanded=False):
+        col1, col2 = st.columns([3, 1])
         
-        current_idx = 0
-        if st.session_state.campanha_atual_id:
-            camp_atual = data_manager.get_campanha(st.session_state.campanha_atual_id)
-            if camp_atual:
-                try:
-                    current_idx = opcoes.index(camp_atual['nome'])
-                except:
-                    pass
+        with col1:
+            opcoes = ["Selecione uma campanha..."] + [c['nome'] for c in campanhas_list]
+            
+            current_idx = 0
+            if st.session_state.campanha_atual_id:
+                camp_atual = data_manager.get_campanha(st.session_state.campanha_atual_id)
+                if camp_atual:
+                    try:
+                        current_idx = opcoes.index(camp_atual['nome'])
+                    except:
+                        pass
+            
+            sel = st.selectbox("Campanha", opcoes, index=current_idx, label_visibility="collapsed")
+            
+            if sel != "Selecione uma campanha...":
+                camp = next((c for c in campanhas_list if c['nome'] == sel), None)
+                if camp:
+                    st.session_state.campanha_atual_id = camp['id']
         
-        sel = st.selectbox("Campanha", opcoes, index=current_idx, label_visibility="collapsed")
-        
-        if sel != "Selecione...":
-            camp = next((c for c in campanhas_list if c['nome'] == sel), None)
-            if camp:
-                st.session_state.campanha_atual_id = camp['id']
-                
-                metricas = data_manager.calcular_metricas_campanha(camp)
-                aon = "[AON]" if camp.get('is_aon') else ""
-                
-                st.markdown(f"""
-                <div style='background: {primary_color}; 
-                            color: white; padding: 1rem; border-radius: 12px; text-align: center; margin: 1rem 0;'>
-                    <div style='font-size: 2rem; font-weight: 700;'>{metricas['engajamento_efetivo']}%</div>
-                    <div style='font-size: 0.75rem;'>TAXA ENG. {aon}</div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                st.caption(f"{camp.get('cliente_nome', '')}")
-                st.caption(f"{metricas['total_influenciadores']} influs | {metricas['total_posts']} posts")
-                st.caption(f"{funcoes_auxiliares.formatar_numero(metricas['total_views'])} views")
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("Central", key="sb_central", use_container_width=True):
+        with col2:
+            if st.session_state.campanha_atual_id:
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    if st.button("Central", key="mini_central"):
                         st.session_state.current_page = 'Central'
                         st.rerun()
-                with col2:
-                    if st.button("Relatorio", key="sb_rel", use_container_width=True):
+                with col_b:
+                    if st.button("Relatorio", key="mini_rel"):
                         st.session_state.modo_relatorio = 'campanha'
                         st.session_state.current_page = 'Relatorios'
                         st.rerun()
-        else:
-            st.session_state.campanha_atual_id = None
-    else:
-        st.info("Sem campanhas")
-    
-    st.markdown("---")
-    st.markdown("**Atalhos**")
-    
-    if st.button("+ Nova Campanha", key="s1", use_container_width=True):
-        st.session_state.current_page = 'Campanhas'
-        st.session_state.show_new_campaign = True
-        st.rerun()
-    
-    if st.button("+ Novo Cliente", key="s2", use_container_width=True):
-        st.session_state.current_page = 'Clientes'
-        st.session_state.show_new_cliente = True
-        st.rerun()
-    
-    if st.button("+ Novo Influenciador", key="s3", use_container_width=True):
-        st.session_state.current_page = 'Influenciadores'
-        st.session_state.show_add_influenciador = True
-        st.rerun()
-    
-    st.markdown("---")
-    st.caption(f"v8.8 | {usuario.get('role', 'user')}")
+
+st.markdown('<div style="margin-bottom: 1rem;"></div>', unsafe_allow_html=True)
 
 # Roteamento
 if st.session_state.current_page == 'Dashboard':
@@ -227,7 +231,7 @@ elif st.session_state.current_page == 'Usuarios':
 # Footer
 st.markdown("---")
 st.markdown(f"""
-<div style='text-align: center; color: #9ca3af; padding: 1rem 0; font-size: 0.85rem;'>
-    <strong>air</strong> | Respiramos influencia | v8.8
+<div style='text-align: center; color: #9ca3af; padding: 0.5rem 0; font-size: 0.8rem;'>
+    <strong>air</strong> | Respiramos influencia | v8.9
 </div>
 """, unsafe_allow_html=True)
