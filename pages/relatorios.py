@@ -677,7 +677,7 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
         
         kpi_barra = st.selectbox(
             "KPI:",
-            ["Impressoes", "Alcance", "Interacoes", "Impressoes", "Likes", "Comentarios", "Saves"],
+            ["Impressoes", "Alcance", "Interacoes", "Interacoes Qualificadas", "Likes", "Comentarios", "Saves"],
             key="kpi_barra_pag1"
         )
         
@@ -698,8 +698,10 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
                     valor = post.get('alcance', 0) or 0
                 elif kpi_barra == "Interacoes":
                     valor = post.get('interacoes', 0) or 0
-                elif kpi_barra == "Impressoes":
-                    valor = post.get('views', 0) or 0
+                elif kpi_barra == "Interacoes Qualificadas":
+                    inter = post.get('interacoes', 0) or 0
+                    curt = post.get('curtidas', 0) or 0
+                    valor = max(0, inter - curt)
                 elif kpi_barra == "Likes":
                     valor = post.get('curtidas', 0) or 0
                 elif kpi_barra == "Comentarios":
@@ -838,14 +840,14 @@ def render_pag2_analise_geral(campanhas_list, metricas, cores):
     with col1:
         st.markdown("**Grafico 1: Comparativo por Formato**")
         kpi1 = st.selectbox("KPI Barras:", ["Impressoes", "Alcance", "Interacoes", "Interacoes Qualificadas"], key="kpi1_pag2")
-        kpi2 = st.selectbox("KPI Linha:", ["Taxa Eng. Efetivo", "Taxa Alcance", "Taxa Interacoes Qualif.", "Interacoes", "Impressoes"], key="kpi2_pag2")
+        kpi2 = st.selectbox("KPI Linha:", ["Taxa Eng. Efetivo", "Taxa Alcance", "Taxa de Interacoes Qualificadas", "Interacoes", "Impressoes"], key="kpi2_pag2")
         
         dados = coletar_dados_formato(campanhas_list)
         if dados:
             df = pd.DataFrame(dados)
             
             # Calcular interacoes qualificadas (interacoes - curtidas)
-            df['interacoes_qualif'] = df['interacoes'] - df.get('curtidas', 0)
+            df['interacoes_qualif'] = df['interacoes'] - df['curtidas']
             df['interacoes_qualif'] = df['interacoes_qualif'].clip(lower=0)
             
             df_agg = df.groupby('formato').agg({
@@ -859,7 +861,7 @@ def render_pag2_analise_geral(campanhas_list, metricas, cores):
             
             df_agg['taxa_eng'] = (df_agg['interacoes'] / df_agg['views'] * 100).round(2).fillna(0)
             df_agg['taxa_alcance'] = (df_agg['alcance'] / metricas['total_seguidores'] * 100).round(2) if metricas['total_seguidores'] > 0 else 0
-            # Taxa de interacoes qualificadas = (interacoes - curtidas) / interacoes
+            # Taxa de interacoes qualificadas = (interacoes - curtidas) / interacoes * 100
             df_agg['taxa_interacoes_qualif'] = ((df_agg['interacoes'] - df_agg['curtidas']) / df_agg['interacoes'] * 100).round(2).fillna(0)
             
             kpi_map = {
@@ -882,7 +884,7 @@ def render_pag2_analise_geral(campanhas_list, metricas, cores):
                 y2 = df_agg['taxa_eng']
             elif kpi2 == "Taxa Alcance":
                 y2 = df_agg['taxa_alcance']
-            elif kpi2 == "Taxa Interacoes Qualif.":
+            elif kpi2 == "Taxa de Interacoes Qualificadas":
                 y2 = df_agg['taxa_interacoes_qualif']
             else:
                 y2 = df_agg[kpi_map.get(kpi2, 'interacoes')]
@@ -894,14 +896,14 @@ def render_pag2_analise_geral(campanhas_list, metricas, cores):
     with col2:
         st.markdown("**Grafico 2: Desempenho por Classificacao**")
         kpi3 = st.selectbox("KPI Barras:", ["Impressoes", "Alcance", "Interacoes", "Interacoes Qualificadas"], key="kpi3_pag2")
-        kpi4 = st.selectbox("KPI Linha:", ["Qtd Influenciadores", "Taxa Eng. Media", "Taxa Interacoes Qualif.", "Posts"], key="kpi4_pag2")
+        kpi4 = st.selectbox("KPI Linha:", ["Qtd Influenciadores", "Taxa Eng. Media", "Taxa de Interacoes Qualificadas", "Posts"], key="kpi4_pag2")
         
         dados_class = coletar_dados_classificacao_completo(campanhas_list)
         if dados_class:
             df = pd.DataFrame(dados_class)
             
             # Calcular interacoes qualificadas
-            df['interacoes_qualif'] = df['interacoes'] - df.get('curtidas', 0)
+            df['interacoes_qualif'] = df['interacoes'] - df['curtidas']
             df['interacoes_qualif'] = df['interacoes_qualif'].clip(lower=0)
             
             df_agg = df.groupby('classificacao').agg({
@@ -916,6 +918,7 @@ def render_pag2_analise_geral(campanhas_list, metricas, cores):
             }).reset_index()
             df_agg.columns = ['classificacao', 'views', 'alcance', 'interacoes', 'impressoes', 'curtidas', 'interacoes_qualif', 'qtd_influs', 'posts']
             df_agg['taxa_eng_media'] = (df_agg['interacoes'] / df_agg['views'] * 100).round(2).fillna(0)
+            # Taxa de Interacoes Qualificadas = (interacoes - curtidas) / interacoes * 100
             df_agg['taxa_interacoes_qualif'] = ((df_agg['interacoes'] - df_agg['curtidas']) / df_agg['interacoes'] * 100).round(2).fillna(0)
             
             ordem = ['Nano', 'Micro', 'Mid', 'Macro', 'Mega']
@@ -942,7 +945,7 @@ def render_pag2_analise_geral(campanhas_list, metricas, cores):
                 y4 = df_agg['qtd_influs']
             elif kpi4 == "Taxa Eng. Media":
                 y4 = df_agg['taxa_eng_media']
-            elif kpi4 == "Taxa Interacoes Qualif.":
+            elif kpi4 == "Taxa de Interacoes Qualificadas":
                 y4 = df_agg['taxa_interacoes_qualif']
             else:
                 y4 = df_agg['posts']

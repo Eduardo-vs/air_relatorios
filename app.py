@@ -129,12 +129,8 @@ with col1:
 with col2:
     st.markdown('<div class="nav-btn-container">', unsafe_allow_html=True)
     
-    # Paginas disponiveis
-    pages = ['Dashboard', 'Clientes', 'Influenciadores', 'Campanhas', 'Relatorios', 'Ajustes']
-    
-    # Admin tem acesso a Usuarios
-    if usuario.get('role') == 'admin':
-        pages.append('Usuarios')
+    # Paginas disponiveis (sem Relatorios e sem Usuarios separado)
+    pages = ['Dashboard', 'Clientes', 'Influenciadores', 'Campanhas', 'Ajustes']
     
     cols = st.columns(len(pages))
     
@@ -142,7 +138,7 @@ with col2:
         with cols[idx]:
             is_active = False
             current = st.session_state.current_page
-            if page == 'Ajustes' and current == 'Configuracoes':
+            if page == 'Ajustes' and current in ['Configuracoes', 'Usuarios']:
                 is_active = True
             elif current == page:
                 is_active = True
@@ -167,44 +163,6 @@ with col3:
     if st.button("Sair", key="btn_logout", use_container_width=True):
         auth.fazer_logout()
 
-# Campanha ativa (mini card)
-campanhas_list = data_manager.get_campanhas()
-if campanhas_list and st.session_state.current_page not in ['Relatorios', 'Central']:
-    with st.expander("📊 Campanha Ativa", expanded=False):
-        col1, col2 = st.columns([3, 1])
-        
-        with col1:
-            opcoes = ["Selecione uma campanha..."] + [c['nome'] for c in campanhas_list]
-            
-            current_idx = 0
-            if st.session_state.campanha_atual_id:
-                camp_atual = data_manager.get_campanha(st.session_state.campanha_atual_id)
-                if camp_atual:
-                    try:
-                        current_idx = opcoes.index(camp_atual['nome'])
-                    except:
-                        pass
-            
-            sel = st.selectbox("Campanha", opcoes, index=current_idx, label_visibility="collapsed")
-            
-            if sel != "Selecione uma campanha...":
-                camp = next((c for c in campanhas_list if c['nome'] == sel), None)
-                if camp:
-                    st.session_state.campanha_atual_id = camp['id']
-        
-        with col2:
-            if st.session_state.campanha_atual_id:
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    if st.button("Central", key="mini_central"):
-                        st.session_state.current_page = 'Central'
-                        st.rerun()
-                with col_b:
-                    if st.button("Relatorio", key="mini_rel"):
-                        st.session_state.modo_relatorio = 'campanha'
-                        st.session_state.current_page = 'Relatorios'
-                        st.rerun()
-
 st.markdown('<div style="margin-bottom: 1rem;"></div>', unsafe_allow_html=True)
 
 # Roteamento
@@ -220,13 +178,8 @@ elif st.session_state.current_page == 'Central':
     central_campanha.render()
 elif st.session_state.current_page == 'Relatorios':
     relatorios.render()
-elif st.session_state.current_page == 'Configuracoes':
+elif st.session_state.current_page in ['Configuracoes', 'Usuarios']:
     configuracoes.render()
-elif st.session_state.current_page == 'Usuarios':
-    if usuario.get('role') == 'admin':
-        auth.render_gerenciar_usuarios()
-    else:
-        st.warning("Acesso restrito")
 
 # Footer
 st.markdown("---")

@@ -6,12 +6,20 @@ import streamlit as st
 import json
 from datetime import datetime
 from utils import funcoes_auxiliares, data_manager
+from pages import auth
 
 def render():
     st.markdown('<p class="main-header">Ajustes</p>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Personalize o sistema</p>', unsafe_allow_html=True)
     
-    tab1, tab2, tab3 = st.tabs(["Aparencia", "Classificacao de Influenciadores", "Sistema"])
+    # Verificar se usuario e admin para mostrar aba Usuarios
+    usuario = st.session_state.get('usuario_logado', {})
+    is_admin = usuario.get('role') == 'admin'
+    
+    if is_admin:
+        tab1, tab2, tab3, tab4 = st.tabs(["Aparencia", "Classificacao de Influenciadores", "Sistema", "Usuarios"])
+    else:
+        tab1, tab2, tab3 = st.tabs(["Aparencia", "Classificacao de Influenciadores", "Sistema"])
     
     with tab1:
         render_aparencia()
@@ -21,6 +29,10 @@ def render():
     
     with tab3:
         render_sistema()
+    
+    if is_admin:
+        with tab4:
+            auth.render_gerenciar_usuarios()
 
 
 def render_aparencia():
