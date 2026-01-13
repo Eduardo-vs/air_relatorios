@@ -43,21 +43,24 @@ def gerar_pdf_relatorio(campanha_id: int, incluir_paginas: list = None) -> bytes
     except:
         pass
     
-    # Coletar todos os dados
-    influenciadores = data_manager.get_influenciadores_campanha(campanha_id)
-    
+    # Coletar dados DIRETO da campanha (mesma logica de calcular_metricas_campanha)
     todos_posts = []
     dados_por_influ = []
     dados_por_formato = {}
     dados_por_classif = {}
     
-    for inf_camp in influenciadores:
+    influenciadores_campanha = campanha.get('influenciadores', [])
+    
+    for inf_camp in influenciadores_campanha:
+        # Buscar dados do influenciador
         inf = data_manager.get_influenciador(inf_camp.get('influenciador_id'))
-        if not inf:
-            continue
+        
+        nome_inf = inf.get('nome', '') if inf else inf_camp.get('nome', 'Desconhecido')
+        usuario_inf = inf.get('usuario', '') if inf else inf_camp.get('usuario', '')
+        classif = inf.get('classificacao', 'Outro') if inf else 'Outro'
+        seguidores = inf.get('seguidores', 0) if inf else inf_camp.get('seguidores', 0)
         
         posts = inf_camp.get('posts', [])
-        classif = inf.get('classificacao', 'Outro')
         
         inf_impressoes = 0
         inf_alcance = 0
@@ -76,12 +79,14 @@ def gerar_pdf_relatorio(campanha_id: int, incluir_paginas: list = None) -> bytes
             coments = post.get('comentarios', 0)
             if isinstance(coments, list):
                 coments = len(coments)
-            coments = coments or 0
+            coments = (coments or 0) + (post.get('comentarios_qtd', 0) or 0)
             
             saves = post.get('saves', 0) or 0
             compart = post.get('compartilhamentos', 0) or 0
             
             formato = post.get('formato', 'Outro')
+            if not formato:
+                formato = 'Outro'
             
             # Agregar por formato
             if formato not in dados_por_formato:
@@ -93,12 +98,11 @@ def gerar_pdf_relatorio(campanha_id: int, incluir_paginas: list = None) -> bytes
             
             # Agregar por classificacao
             if classif not in dados_por_classif:
-                dados_por_classif[classif] = {'impressoes': 0, 'alcance': 0, 'interacoes': 0, 'posts': 0, 'influenciadores': set()}
+                dados_por_classif[classif] = {'impressoes': 0, 'alcance': 0, 'interacoes': 0, 'posts': 0}
             dados_por_classif[classif]['impressoes'] += imp
             dados_por_classif[classif]['alcance'] += alc
             dados_por_classif[classif]['interacoes'] += inter
             dados_por_classif[classif]['posts'] += 1
-            dados_por_classif[classif]['influenciadores'].add(inf['id'])
             
             # Totais do influenciador
             inf_impressoes += imp
@@ -111,8 +115,8 @@ def gerar_pdf_relatorio(campanha_id: int, incluir_paginas: list = None) -> bytes
             
             # Posts para tabela
             todos_posts.append({
-                'influenciador': inf.get('nome', ''),
-                'usuario': inf.get('usuario', ''),
+                'influenciador': nome_inf,
+                'usuario': usuario_inf,
                 'formato': formato,
                 'data': post.get('data_publicacao', ''),
                 'impressoes': imp,
@@ -126,21 +130,22 @@ def gerar_pdf_relatorio(campanha_id: int, incluir_paginas: list = None) -> bytes
             })
         
         # Dados do influenciador
-        dados_por_influ.append({
-            'nome': inf.get('nome', ''),
-            'usuario': inf.get('usuario', ''),
-            'classificacao': classif,
-            'seguidores': inf.get('seguidores', 0) or 0,
-            'posts': len(posts),
-            'impressoes': inf_impressoes,
-            'alcance': inf_alcance,
-            'interacoes': inf_interacoes,
-            'curtidas': inf_curtidas,
-            'comentarios': inf_comentarios,
-            'saves': inf_saves,
-            'compartilhamentos': inf_compartilhamentos,
-            'taxa': (inf_interacoes / inf_impressoes * 100) if inf_impressoes > 0 else 0
-        })
+        if len(posts) > 0 or inf_impressoes > 0:
+            dados_por_influ.append({
+                'nome': nome_inf,
+                'usuario': usuario_inf,
+                'classificacao': classif,
+                'seguidores': seguidores or 0,
+                'posts': len(posts),
+                'impressoes': inf_impressoes,
+                'alcance': inf_alcance,
+                'interacoes': inf_interacoes,
+                'curtidas': inf_curtidas,
+                'comentarios': inf_comentarios,
+                'saves': inf_saves,
+                'compartilhamentos': inf_compartilhamentos,
+                'taxa': (inf_interacoes / inf_impressoes * 100) if inf_impressoes > 0 else 0
+            })
     
     # Gerar HTML
     html = gerar_html_completo(

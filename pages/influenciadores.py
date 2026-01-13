@@ -196,7 +196,12 @@ def render_modal_adicionar():
                     col1, col2, col3 = st.columns([1, 3, 1])
                     with col1:
                         if dados.get('foto'):
-                            st.image(dados['foto'], width=50)
+                            try:
+                                st.image(dados['foto'], width=50)
+                            except:
+                                st.markdown("👤")
+                        else:
+                            st.markdown("👤")
                     with col2:
                         st.write(f"**{dados['nome']}** (@{dados['usuario']})")
                         st.caption(f"{funcoes_auxiliares.formatar_numero(dados.get('seguidores', 0))} seguidores | AIR Score: {dados.get('air_score', 0):.2f}")

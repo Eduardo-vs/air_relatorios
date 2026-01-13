@@ -205,7 +205,7 @@ def regenerar_insight_ia(pagina: str, dados: dict, campanha_id: int, insight_atu
 
 def render_secao_insights(pagina: str, dados: dict, campanha_id: int):
     """
-    Renderiza seção de insights com filtro de período proprio
+    Renderiza seção de insights com filtro de período direto (sem dropdown)
     """
     # Buscar insights salvos do banco
     insights = data_manager.get_insights_campanha(campanha_id, pagina, apenas_ativos=True)
@@ -216,48 +216,50 @@ def render_secao_insights(pagina: str, dados: dict, campanha_id: int):
     st.markdown("---")
     st.markdown("### Insights")
     
-    # Filtro de periodo para insights
-    with st.expander("📅 Filtrar insights por periodo", expanded=False):
-        col1, col2, col3 = st.columns([1, 1, 1])
+    # Filtro de periodo para insights - DIRETO (sem expander)
+    col1, col2, col3, col4 = st.columns([1, 1, 1, 2])
+    
+    with col1:
+        filtro_inicio = st.date_input(
+            "📅 De:", 
+            value=datetime.now() - timedelta(days=90),
+            key=f"insights_inicio_{pagina}"
+        )
+    with col2:
+        filtro_fim = st.date_input(
+            "Ate:", 
+            value=datetime.now(),
+            key=f"insights_fim_{pagina}"
+        )
+    with col3:
+        st.markdown("<br>", unsafe_allow_html=True)
+        aplicar = st.checkbox("Filtrar por data", key=f"insights_aplicar_{pagina}")
+    
+    if aplicar:
+        # Filtrar insights por data de criacao
+        dt_inicio = datetime.combine(filtro_inicio, datetime.min.time())
+        dt_fim = datetime.combine(filtro_fim, datetime.max.time())
         
-        with col1:
-            filtro_inicio = st.date_input(
-                "De:", 
-                value=datetime.now() - timedelta(days=90),
-                key=f"insights_inicio_{pagina}"
-            )
-        with col2:
-            filtro_fim = st.date_input(
-                "Ate:", 
-                value=datetime.now(),
-                key=f"insights_fim_{pagina}"
-            )
-        with col3:
-            aplicar = st.checkbox("Filtrar", key=f"insights_aplicar_{pagina}")
-        
-        if aplicar:
-            # Filtrar insights por data de criacao
-            dt_inicio = datetime.combine(filtro_inicio, datetime.min.time())
-            dt_fim = datetime.combine(filtro_fim, datetime.max.time())
-            
-            insights_filtrados = []
-            for insight in insights:
-                created_at = insight.get('created_at', '')
-                if created_at:
-                    try:
-                        if 'T' in created_at:
-                            dt_insight = datetime.fromisoformat(created_at.replace('Z', '').split('+')[0])
-                        else:
-                            dt_insight = datetime.strptime(created_at[:10], '%Y-%m-%d')
-                        
-                        if dt_inicio <= dt_insight <= dt_fim:
-                            insights_filtrados.append(insight)
-                    except:
+        insights_filtrados = []
+        for insight in insights:
+            created_at = insight.get('created_at', '')
+            if created_at:
+                try:
+                    if 'T' in created_at:
+                        dt_insight = datetime.fromisoformat(created_at.replace('Z', '').split('+')[0])
+                    else:
+                        dt_insight = datetime.strptime(created_at[:10], '%Y-%m-%d')
+                    
+                    if dt_inicio <= dt_insight <= dt_fim:
                         insights_filtrados.append(insight)
-                else:
+                except:
                     insights_filtrados.append(insight)
-            
-            insights = insights_filtrados
+            else:
+                insights_filtrados.append(insight)
+        
+        insights = insights_filtrados
+        with col4:
+            st.markdown("<br>", unsafe_allow_html=True)
             st.caption(f"Mostrando {len(insights)} insights do periodo")
     
     if not insights:
@@ -738,8 +740,10 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
                 y='Valor',
                 color='Classificacao',
                 color_discrete_map=cores_classif,
-                barmode='stack'
+                barmode='stack',
+                text='Valor'
             )
+            fig_barras.update_traces(texttemplate='%{text:.2s}', textposition='inside')
             fig_barras.update_layout(
                 height=350,
                 xaxis_title="",
@@ -789,7 +793,10 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
                 fill='toself',
                 fillcolor=f'rgba(124, 58, 237, 0.3)',
                 line=dict(color=primary_color, width=2),
-                name='Interacoes'
+                name='Interacoes',
+                text=[funcoes_auxiliares.formatar_numero(v) for v in valores] + [funcoes_auxiliares.formatar_numero(valores[0])],
+                textposition='top center',
+                mode='lines+markers+text'
             ))
             
             fig_radar.update_layout(
@@ -1306,7 +1313,12 @@ def render_pag5_top_performance(campanhas_list, cores):
         col1, col2, col3, col4, col5, col6 = st.columns([0.5, 2, 1.2, 1.2, 1.2, 1.2])
         with col1:
             if row.get('foto'):
-                st.image(row['foto'], width=40)
+                try:
+                    st.image(row['foto'], width=40)
+                except:
+                    st.markdown("👤")
+            else:
+                st.markdown("👤")
         with col2:
             st.write(f"**{row['nome']}**")
             st.caption(f"@{row['usuario']} | {row['classificacao']}")

@@ -110,7 +110,12 @@ def render_influenciadores_posts(campanha):
             
             with col1:
                 if inf.get('foto'):
-                    st.image(inf['foto'], width=80)
+                    try:
+                        st.image(inf['foto'], width=80)
+                    except:
+                        st.markdown("### 👤")
+                else:
+                    st.markdown("### 👤")
             
             with col2:
                 st.write(f"**Seguidores:** {funcoes_auxiliares.formatar_numero(inf['seguidores'])}")
@@ -612,7 +617,12 @@ def render_resultados_api(campanha, inf, buscar_pagina_func):
                 
                 with col_a:
                     if post.get('thumbnail'):
-                        st.image(post['thumbnail'], width=60)
+                        try:
+                            st.image(post['thumbnail'], width=60)
+                        except:
+                            st.markdown("📷")
+                    else:
+                        st.markdown("📷")
                 
                 with col_b:
                     legenda = post.get('caption', '')[:80] + '...' if len(post.get('caption', '')) > 80 else post.get('caption', '')
@@ -644,7 +654,12 @@ def render_resultados_api(campanha, inf, buscar_pagina_func):
                     
                     with col_a:
                         if post.get('thumbnail'):
-                            st.image(post['thumbnail'], width=40)
+                            try:
+                                st.image(post['thumbnail'], width=40)
+                            except:
+                                st.markdown("📷")
+                        else:
+                            st.markdown("📷")
                     
                     with col_b:
                         legenda = post.get('caption', '')[:40] + '...' if len(post.get('caption', '')) > 40 else post.get('caption', '')
