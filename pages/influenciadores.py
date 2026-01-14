@@ -17,16 +17,27 @@ def render():
         if st.button("Atualizar Dados", use_container_width=True):
             with st.spinner("Atualizando via API..."):
                 atualizados = 0
+                erros = 0
                 for inf in data_manager.get_influenciadores():
                     if inf.get('profile_id'):
                         try:
-                            dados = api_client.atualizar_influenciador_api(inf['profile_id'])
-                            if dados:
-                                data_manager.atualizar_influenciador(inf['id'], dados)
+                            resultado = api_client.atualizar_influenciador_api(inf['profile_id'])
+                            if resultado.get('success') and resultado.get('data'):
+                                # Extrair dados do resultado
+                                dados_atualizados = resultado['data']
+                                # Preservar campos que a API nao retorna
+                                dados_atualizados['nicho'] = inf.get('nicho', '')
+                                data_manager.atualizar_influenciador(inf['id'], dados_atualizados)
                                 atualizados += 1
-                        except:
-                            pass
-                st.success(f"{atualizados} influenciadores atualizados!")
+                            else:
+                                erros += 1
+                        except Exception as e:
+                            erros += 1
+                
+                if atualizados > 0:
+                    st.success(f"{atualizados} influenciadores atualizados!")
+                if erros > 0:
+                    st.warning(f"{erros} influenciadores nao puderam ser atualizados")
                 st.rerun()
     
     with col3:

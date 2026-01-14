@@ -1752,10 +1752,12 @@ def render_compartilhar(campanha):
         
         st.markdown("**Paginas a incluir no PDF:**")
         
-        pdf_big_numbers = st.checkbox("Resumo (Big Numbers)", value=True, key="pdf_bn")
-        pdf_analise = st.checkbox("Analise por Formato/Classificacao", value=True, key="pdf_an")
-        pdf_influs = st.checkbox("Lista de Influenciadores", value=True, key="pdf_inf")
-        pdf_posts = st.checkbox("Top Posts", value=True, key="pdf_posts")
+        pdf_big_numbers = st.checkbox("Big Numbers", value=True, key="pdf_bn")
+        pdf_kpis = st.checkbox("KPIs por Influenciador", value=True, key="pdf_kpis")
+        pdf_top = st.checkbox("Top Performance", value=True, key="pdf_top")
+        pdf_lista = st.checkbox("Lista de Influenciadores", value=True, key="pdf_lista")
+        pdf_comentarios = st.checkbox("Comentarios", value=True, key="pdf_com")
+        pdf_glossario = st.checkbox("Glossario", value=True, key="pdf_glos")
         
         st.markdown("---")
         
@@ -1766,25 +1768,30 @@ def render_compartilhar(campanha):
                 # Montar lista de paginas
                 paginas_pdf = []
                 if pdf_big_numbers: paginas_pdf.append('big_numbers')
-                if pdf_analise: paginas_pdf.append('analise_geral')
-                if pdf_influs: paginas_pdf.append('influenciadores')
-                if pdf_posts: paginas_pdf.append('top_posts')
+                if pdf_kpis: paginas_pdf.append('kpis_influenciador')
+                if pdf_top: paginas_pdf.append('top_performance')
+                if pdf_lista: paginas_pdf.append('lista_influenciadores')
+                if pdf_comentarios: paginas_pdf.append('comentarios')
+                if pdf_glossario: paginas_pdf.append('glossario')
                 
-                with st.spinner("Gerando PDF..."):
-                    pdf_bytes = pdf_exporter.gerar_pdf_relatorio(campanha_id, paginas_pdf)
-                
-                # Nome do arquivo
-                nome_arquivo = f"relatorio_{campanha['nome'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.pdf"
-                
-                st.download_button(
-                    label="⬇️ Clique para baixar o PDF",
-                    data=pdf_bytes,
-                    file_name=nome_arquivo,
-                    mime="application/pdf",
-                    use_container_width=True
-                )
-                
-                st.success("PDF gerado com sucesso!")
+                if not paginas_pdf:
+                    st.warning("Selecione pelo menos uma pagina para exportar")
+                else:
+                    with st.spinner("Gerando PDF..."):
+                        pdf_bytes = pdf_exporter.gerar_pdf_relatorio(campanha_id, paginas_pdf)
+                    
+                    # Nome do arquivo
+                    nome_arquivo = f"relatorio_{campanha['nome'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.pdf"
+                    
+                    st.download_button(
+                        label="⬇️ Clique para baixar o PDF",
+                        data=pdf_bytes,
+                        file_name=nome_arquivo,
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+                    
+                    st.success("PDF gerado com sucesso!")
                 
             except ImportError as e:
                 st.error("WeasyPrint nao instalado")
