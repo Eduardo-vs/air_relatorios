@@ -783,30 +783,71 @@ def render_modal_add_influenciador(campanha):
         disponiveis = [inf for inf in todos_inf if inf['id'] not in inf_na_campanha]
         
         if disponiveis:
-            # Criar opcoes para multiselect
-            opcoes = {f"{inf['nome']} (@{inf['usuario']}) - {inf.get('classificacao', 'N/A')}": inf['id'] for inf in disponiveis}
+            # Filtros
+            st.markdown("**Filtrar influenciadores:**")
+            col_f1, col_f2, col_f3 = st.columns(3)
             
-            selecionados = st.multiselect(
-                "Selecione os influenciadores:",
-                list(opcoes.keys()),
-                placeholder="Escolha um ou mais influenciadores..."
-            )
+            with col_f1:
+                # Classificacoes disponiveis
+                classif_disponiveis = sorted(list(set([inf.get('classificacao', 'N/A') for inf in disponiveis])))
+                filtro_classif = st.multiselect(
+                    "Classificacao:",
+                    classif_disponiveis,
+                    placeholder="Todas"
+                )
             
-            col1, col2 = st.columns(2)
+            with col_f2:
+                # Redes disponiveis
+                redes_disponiveis = sorted(list(set([inf.get('network', 'instagram') for inf in disponiveis])))
+                filtro_rede = st.selectbox("Rede:", ["Todas"] + redes_disponiveis)
             
-            with col1:
-                if selecionados:
-                    if st.button(f"Adicionar {len(selecionados)} influenciador(es)", type="primary", use_container_width=True):
-                        for sel in selecionados:
-                            inf_id = opcoes[sel]
-                            data_manager.adicionar_influenciador_campanha(campanha['id'], inf_id)
+            with col_f3:
+                filtro_busca = st.text_input("Buscar:", placeholder="Nome ou usuario...")
+            
+            # Aplicar filtros
+            disponiveis_filtrados = disponiveis.copy()
+            
+            if filtro_classif:
+                disponiveis_filtrados = [inf for inf in disponiveis_filtrados if inf.get('classificacao') in filtro_classif]
+            
+            if filtro_rede != "Todas":
+                disponiveis_filtrados = [inf for inf in disponiveis_filtrados if inf.get('network') == filtro_rede]
+            
+            if filtro_busca:
+                busca = filtro_busca.lower()
+                disponiveis_filtrados = [inf for inf in disponiveis_filtrados if busca in inf['nome'].lower() or busca in inf['usuario'].lower()]
+            
+            st.caption(f"{len(disponiveis_filtrados)} de {len(disponiveis)} influenciadores disponiveis")
+            
+            if disponiveis_filtrados:
+                # Criar opcoes para multiselect
+                opcoes = {f"{inf['nome']} (@{inf['usuario']}) - {inf.get('classificacao', 'N/A')} - {funcoes_auxiliares.formatar_numero(inf.get('seguidores', 0))} seg": inf['id'] for inf in disponiveis_filtrados}
+                
+                selecionados = st.multiselect(
+                    "Selecione os influenciadores:",
+                    list(opcoes.keys()),
+                    placeholder="Escolha um ou mais influenciadores..."
+                )
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if selecionados:
+                        if st.button(f"Adicionar {len(selecionados)} influenciador(es)", type="primary", use_container_width=True):
+                            for sel in selecionados:
+                                inf_id = opcoes[sel]
+                                data_manager.adicionar_influenciador_campanha(campanha['id'], inf_id)
+                            st.session_state.show_add_inf_to_campaign = False
+                            st.success(f"{len(selecionados)} influenciador(es) adicionado(s)!")
+                            st.rerun()
+                
+                with col2:
+                    if st.button("Cancelar", use_container_width=True):
                         st.session_state.show_add_inf_to_campaign = False
-                        st.success(f"{len(selecionados)} influenciador(es) adicionado(s)!")
                         st.rerun()
-            
-            with col2:
-                if st.button("Cancelar", use_container_width=True):
-                    st.session_state.show_add_inf_to_campaign = False
+            else:
+                st.info("Nenhum influenciador encontrado com os filtros selecionados.")
+                if st.button("Limpar Filtros"):
                     st.rerun()
         else:
             st.info("Todos os influenciadores ja estao na campanha ou nao ha influenciadores cadastrados.")

@@ -1125,11 +1125,11 @@ def render_pag4_kpis_influenciador(campanhas_list, cores):
     
     col1, col2 = st.columns(2)
     with col1:
-        kpi_barra = st.selectbox("KPI Barras:", ["Seguidores", "Impressoes", "Alcance", "Interacoes"], key="kpi_barra_pag4")
+        kpi_barra = st.selectbox("KPI Barras:", ["Seguidores", "Impressoes", "Alcance", "Interacoes", "Interacoes Qualificadas"], key="kpi_barra_pag4")
     with col2:
-        kpi_linha = st.selectbox("KPI Linha:", ["Taxa Eng. Efetivo", "Taxa Alcance", "Taxa Visualizacao", "Engajamento Total"], key="kpi_linha_pag4")
+        kpi_linha = st.selectbox("KPI Linha:", ["Taxa Eng. Efetivo", "Taxa Alcance", "Taxa de Interacoes Qualificadas", "Taxa Visualizacao", "Engajamento Total"], key="kpi_linha_pag4")
     
-    kpi_map = {'Seguidores': 'seguidores', 'Impressoes': 'impressoes', 'Alcance': 'alcance', 'Interacoes': 'interacoes'}
+    kpi_map = {'Seguidores': 'seguidores', 'Impressoes': 'impressoes', 'Alcance': 'alcance', 'Interacoes': 'interacoes', 'Interacoes Qualificadas': 'interacoes_qualif'}
     campo_barra = kpi_map.get(kpi_barra, 'seguidores')
     
     # Calcular taxa de visualizacao (impressoes / seguidores)
@@ -1152,6 +1152,8 @@ def render_pag4_kpis_influenciador(campanhas_list, cores):
         y_linha = df_sorted['taxa_eng']
     elif kpi_linha == "Taxa Alcance":
         y_linha = df_sorted['taxa_alcance']
+    elif kpi_linha == "Taxa de Interacoes Qualificadas":
+        y_linha = df_sorted['taxa_interacoes_qualif']
     elif kpi_linha == "Taxa Visualizacao":
         y_linha = df_sorted['taxa_views']
     else:
@@ -1554,8 +1556,9 @@ def coletar_dados_influenciadores(campanhas_list):
                     'seguidores': inf.get('seguidores', 0), 
                     'impressoes': 0, 
                     'alcance': 0, 
-                    'alcance_total': 0,  # Novo: soma de todos os alcances
-                    'interacoes': 0, 
+                    'alcance_total': 0,
+                    'interacoes': 0,
+                    'curtidas': 0,
                     'custo': 0, 
                     'cliques_link': 0, 
                     'cliques_arroba': 0, 
@@ -1563,12 +1566,12 @@ def coletar_dados_influenciadores(campanhas_list):
                 }
             dados_inf[inf_id]['custo'] += camp_inf.get('custo', 0)
             for post in camp_inf.get('posts', []):
-                # Impressoes = views + impressoes (combinados)
                 dados_inf[inf_id]['impressoes'] += post.get('views', 0) + post.get('impressoes', 0)
                 post_alcance = post.get('alcance', 0)
-                dados_inf[inf_id]['alcance'] = max(dados_inf[inf_id]['alcance'], post_alcance)  # Maior alcance
-                dados_inf[inf_id]['alcance_total'] += post_alcance  # Soma de alcances
+                dados_inf[inf_id]['alcance'] = max(dados_inf[inf_id]['alcance'], post_alcance)
+                dados_inf[inf_id]['alcance_total'] += post_alcance
                 dados_inf[inf_id]['interacoes'] += post.get('interacoes', 0)
+                dados_inf[inf_id]['curtidas'] += post.get('curtidas', 0)
                 dados_inf[inf_id]['cliques_link'] += post.get('clique_link', 0)
                 dados_inf[inf_id]['cliques_arroba'] += post.get('clique_arroba', 0) or post.get('cliques_arroba', 0) or 0
                 dados_inf[inf_id]['posts'] += 1
@@ -1577,6 +1580,10 @@ def coletar_dados_influenciadores(campanhas_list):
         d['taxa_eng'] = round((d['interacoes'] / d['impressoes'] * 100), 2) if d['impressoes'] > 0 else 0
         d['taxa_alcance'] = round((d['alcance'] / d['seguidores'] * 100), 2) if d['seguidores'] > 0 else 0
         d['taxa_eng_geral'] = round((d['interacoes'] / d['seguidores'] * 100), 2) if d['seguidores'] > 0 else 0
+        # Interacoes Qualificadas = Interacoes - Curtidas
+        d['interacoes_qualif'] = max(0, d['interacoes'] - d['curtidas'])
+        # Taxa de Interacoes Qualificadas = (Interacoes - Curtidas) / Interacoes * 100
+        d['taxa_interacoes_qualif'] = round((d['interacoes_qualif'] / d['interacoes'] * 100), 2) if d['interacoes'] > 0 else 0
         resultado.append(d)
     return resultado
 
@@ -1750,7 +1757,7 @@ def render_compartilhar(campanha):
         st.markdown("### 📄 Exportar PDF")
         st.caption("Baixe o relatorio em formato PDF para envio offline")
         
-        st.markdown("**Paginas a incluir no PDF:**")
+        st.markdown("**Paginas a incluir:**")
         
         pdf_big_numbers = st.checkbox("Big Numbers", value=True, key="pdf_bn")
         pdf_kpis = st.checkbox("KPIs por Influenciador", value=True, key="pdf_kpis")
@@ -1758,6 +1765,48 @@ def render_compartilhar(campanha):
         pdf_lista = st.checkbox("Lista de Influenciadores", value=True, key="pdf_lista")
         pdf_comentarios = st.checkbox("Comentarios", value=True, key="pdf_com")
         pdf_glossario = st.checkbox("Glossario", value=True, key="pdf_glos")
+        
+        st.markdown("---")
+        st.markdown("**Configurar KPIs dos Graficos:**")
+        
+        # KPIs para Big Numbers
+        with st.expander("📊 Big Numbers - Graficos", expanded=False):
+            kpi_bn_barras = st.selectbox(
+                "Grafico de Barras (por Formato):",
+                ["Impressoes", "Alcance", "Interacoes", "Interacoes Qualificadas"],
+                key="pdf_kpi_bn_barras"
+            )
+            kpi_bn_classif = st.selectbox(
+                "Grafico por Classificacao:",
+                ["Impressoes", "Alcance", "Interacoes", "Interacoes Qualificadas"],
+                key="pdf_kpi_bn_classif"
+            )
+        
+        # KPIs para pagina de Influenciadores
+        with st.expander("👥 KPIs por Influenciador", expanded=False):
+            kpi_inf_barras = st.selectbox(
+                "Ranking (Barras):",
+                ["Impressoes", "Alcance", "Interacoes", "Seguidores"],
+                key="pdf_kpi_inf_barras"
+            )
+            kpi_inf_linha = st.selectbox(
+                "Metrica Secundaria:",
+                ["Taxa Eng. Efetivo", "Taxa Alcance", "Taxa de Interacoes Qualificadas"],
+                key="pdf_kpi_inf_linha"
+            )
+        
+        # KPIs para Top Performance
+        with st.expander("🏆 Top Performance", expanded=False):
+            kpi_top_ordenar = st.selectbox(
+                "Ordenar Ranking por:",
+                ["Interacoes", "Impressoes", "Alcance", "Taxa Eng. Efetivo", "Custo"],
+                key="pdf_kpi_top_ordem"
+            )
+            kpi_top_posts = st.selectbox(
+                "Ordenar Posts por:",
+                ["Impressoes", "Alcance", "Interacoes", "Taxa Eng."],
+                key="pdf_kpi_top_posts"
+            )
         
         st.markdown("---")
         
@@ -1774,11 +1823,27 @@ def render_compartilhar(campanha):
                 if pdf_comentarios: paginas_pdf.append('comentarios')
                 if pdf_glossario: paginas_pdf.append('glossario')
                 
+                # Configuracoes de KPIs
+                config_kpis = {
+                    'big_numbers': {
+                        'barras': kpi_bn_barras,
+                        'classificacao': kpi_bn_classif
+                    },
+                    'kpis_influenciador': {
+                        'barras': kpi_inf_barras,
+                        'linha': kpi_inf_linha
+                    },
+                    'top_performance': {
+                        'ordenar_ranking': kpi_top_ordenar,
+                        'ordenar_posts': kpi_top_posts
+                    }
+                }
+                
                 if not paginas_pdf:
                     st.warning("Selecione pelo menos uma pagina para exportar")
                 else:
                     with st.spinner("Gerando PDF..."):
-                        pdf_bytes = pdf_exporter.gerar_pdf_relatorio(campanha_id, paginas_pdf)
+                        pdf_bytes = pdf_exporter.gerar_pdf_relatorio(campanha_id, paginas_pdf, config_kpis)
                     
                     # Nome do arquivo
                     nome_arquivo = f"relatorio_{campanha['nome'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.pdf"
@@ -1801,13 +1866,4 @@ def render_compartilhar(campanha):
                 st.error(f"Erro ao gerar PDF: {str(e)}")
         
         st.markdown("---")
-        st.markdown("**Dica:**")
-        st.info("""
-        O PDF gerado contem:
-        - Metricas principais
-        - Insights da IA
-        - Tabelas de performance
-        - Formatacao profissional
-        
-        Ideal para apresentacoes e envio por email.
-        """)
+        st.caption("💡 Use os expanders acima para personalizar os KPIs de cada grafico no PDF")

@@ -63,23 +63,6 @@ def render():
                                     help="Habilita graficos de evolucao temporal")
                 objetivo = st.text_area("Objetivo", value=camp_edit.get('objetivo', '') if camp_edit else "", height=100)
             
-            # Classificacoes especificas da campanha
-            st.markdown("**Classificacoes Especificas** (opcional):")
-            st.caption("Adicione classificacoes personalizadas para esta campanha (ex: Tipo de Cabelo, Faixa Etaria)")
-            
-            class_especificas = camp_edit.get('classificacoes_especificas', {}) if camp_edit else {}
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                class_nome1 = st.text_input("Nome da Classificacao 1", value=class_especificas.get('nome1', ''), placeholder="Ex: Tipo de Cabelo")
-                class_valores1 = st.text_input("Valores (separados por virgula)", value=class_especificas.get('valores1', ''), placeholder="Ex: Liso, Ondulado, Cacheado, Crespo", key="class_val1")
-            with col2:
-                class_nome2 = st.text_input("Nome da Classificacao 2", value=class_especificas.get('nome2', ''), placeholder="Ex: Faixa Etaria")
-                class_valores2 = st.text_input("Valores (separados por virgula)", value=class_especificas.get('valores2', ''), placeholder="Ex: 18-24, 25-34, 35-44", key="class_val2")
-            with col3:
-                class_nome3 = st.text_input("Nome da Classificacao 3", value=class_especificas.get('nome3', ''), placeholder="Ex: Regiao")
-                class_valores3 = st.text_input("Valores (separados por virgula)", value=class_especificas.get('valores3', ''), placeholder="Ex: Norte, Sul, Sudeste", key="class_val3")
-            
             st.markdown("**Metricas a Coletar:**")
             metricas_cfg = camp_edit.get('metricas_selecionadas', {}) if camp_edit else {}
             
@@ -107,18 +90,6 @@ def render():
             with col1:
                 if st.form_submit_button("Salvar", use_container_width=True):
                     if nome and cliente_obj:
-                        # Montar classificacoes especificas
-                        classificacoes_esp = {}
-                        if class_nome1 and class_valores1:
-                            classificacoes_esp['nome1'] = class_nome1
-                            classificacoes_esp['valores1'] = class_valores1
-                        if class_nome2 and class_valores2:
-                            classificacoes_esp['nome2'] = class_nome2
-                            classificacoes_esp['valores2'] = class_valores2
-                        if class_nome3 and class_valores3:
-                            classificacoes_esp['nome3'] = class_nome3
-                            classificacoes_esp['valores3'] = class_valores3
-                        
                         dados = {
                             'nome': nome,
                             'cliente_id': cliente_obj['id'],
@@ -128,7 +99,6 @@ def render():
                             'data_fim': data_fim.strftime('%d/%m/%Y'),
                             'tipo_dados': tipo_dados,
                             'is_aon': is_aon,
-                            'classificacoes_especificas': classificacoes_esp,
                             'metricas_selecionadas': {
                                 'views': views, 'alcance': alcance, 'interacoes': interacoes,
                                 'impressoes': impressoes, 'curtidas': curtidas, 'comentarios': comentarios,

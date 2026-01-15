@@ -1,7 +1,6 @@
 """
 Modulo: Exportacao de Relatorios em PDF
-Gera PDF completo identico ao relatorio do site
-Paginas: Big Numbers, KPIs por Influ, Top Performance, Lista Influs, Comentarios, Glossario
+Gera PDF completo com KPIs configuraveis
 """
 
 import io
@@ -20,7 +19,6 @@ from utils import data_manager, funcoes_auxiliares
 
 
 def formatar_numero(valor):
-    """Formata numero para exibicao"""
     if valor is None:
         return "0"
     if valor >= 1000000:
@@ -31,7 +29,6 @@ def formatar_numero(valor):
 
 
 def get_cor_classificacao(classif):
-    """Retorna cor para classificacao"""
     cores = {
         'Nano': '#22c55e', 'Micro': '#3b82f6', 'Inter 1': '#8b5cf6',
         'Inter 2': '#a855f7', 'Macro': '#f97316', 'Mega 1': '#ef4444',
@@ -41,7 +38,6 @@ def get_cor_classificacao(classif):
 
 
 def gerar_barra_horizontal(label, valor, max_valor, total=None, cor='#7c3aed'):
-    """Gera HTML de barra horizontal"""
     pct = (valor / max_valor * 100) if max_valor > 0 else 0
     pct = max(pct, 5)
     pct_total = f'<span class="bar-pct">({valor/total*100:.1f}%)</span>' if total and total > 0 else ""
@@ -49,7 +45,6 @@ def gerar_barra_horizontal(label, valor, max_valor, total=None, cor='#7c3aed'):
 
 
 def gerar_barras_verticais(dados, total=None):
-    """Gera HTML de barras verticais"""
     if not dados:
         return '<p style="text-align:center;color:#9ca3af;">Sem dados</p>'
     max_val = max(d['valor'] for d in dados) if dados else 1
@@ -64,7 +59,6 @@ def gerar_barras_verticais(dados, total=None):
 
 
 def gerar_insights_html(campanha_id, pagina):
-    """Gera HTML dos insights"""
     insights = data_manager.get_insights_campanha(campanha_id, pagina, apenas_ativos=True)
     if not insights:
         return ""
@@ -79,7 +73,6 @@ def gerar_insights_html(campanha_id, pagina):
 
 
 def get_css(primary_color):
-    """CSS completo"""
     return f'''
     @page {{ size: A4; margin: 1.5cm; }}
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
@@ -151,8 +144,35 @@ def get_css(primary_color):
     '''
 
 
-def gerar_pdf_relatorio(campanha_id: int, incluir_paginas: list = None) -> bytes:
-    """Gera PDF completo do relatorio"""
+def get_valor_kpi(dados, kpi_nome):
+    """Retorna o valor do KPI selecionado"""
+    kpi_map = {
+        'Impressoes': 'impressoes',
+        'Alcance': 'alcance',
+        'Interacoes': 'interacoes',
+        'Interacoes Qualificadas': 'interacoes_qualif',
+        'Seguidores': 'seguidores',
+        'Custo': 'custo',
+        'Taxa Eng. Efetivo': 'taxa_eng',
+        'Taxa Alcance': 'taxa_alcance',
+        'Taxa de Interacoes Qualificadas': 'taxa_interacoes_qualif',
+        'Taxa Eng.': 'taxa'
+    }
+    campo = kpi_map.get(kpi_nome, 'impressoes')
+    
+    # Calcular interacoes qualificadas se necessario
+    if campo == 'interacoes_qualif':
+        return max(0, dados.get('interacoes', 0) - dados.get('curtidas', 0))
+    if campo == 'taxa_interacoes_qualif':
+        inter = dados.get('interacoes', 0)
+        curt = dados.get('curtidas', 0)
+        return ((inter - curt) / inter * 100) if inter > 0 else 0
+    
+    return dados.get(campo, 0)
+
+
+def gerar_pdf_relatorio(campanha_id: int, incluir_paginas: list = None, config_kpis: dict = None) -> bytes:
+    """Gera PDF completo do relatorio com KPIs configuraveis"""
     
     if not WEASYPRINT_AVAILABLE:
         raise ImportError("WeasyPrint nao instalado")
@@ -167,6 +187,14 @@ def gerar_pdf_relatorio(campanha_id: int, incluir_paginas: list = None) -> bytes
     
     metricas = data_manager.calcular_metricas_campanha(campanha)
     
+    # Config padrao de KPIs
+    if config_kpis is None:
+        config_kpis = {
+            'big_numbers': {'barras': 'Impressoes', 'classificacao': 'Impressoes'},
+            'kpis_influenciador': {'barras': 'Impressoes', 'linha': 'Taxa Eng. Efetivo'},
+            'top_performance': {'ordenar_ranking': 'Interacoes', 'ordenar_posts': 'Impressoes'}
+        }
+    
     primary_color = '#7c3aed'
     try:
         cfg = data_manager.get_configuracao('primary_color')
@@ -175,7 +203,7 @@ def gerar_pdf_relatorio(campanha_id: int, incluir_paginas: list = None) -> bytes
     except:
         pass
     
-    # Coletar TODOS os dados
+    # Coletar dados
     todos_posts = []
     dados_por_influ = []
     dados_por_formato = {}
@@ -193,7 +221,7 @@ def gerar_pdf_relatorio(campanha_id: int, incluir_paginas: list = None) -> bytes
         posts = inf_camp.get('posts', [])
         
         inf_impressoes = inf_alcance = inf_interacoes = inf_curtidas = 0
-        inf_comentarios = inf_saves = inf_compartilhamentos = inf_cliques = 0
+        inf_comentarios = inf_saves = inf_compartilhamentos = 0
         
         for post in posts:
             views = post.get('views', 0) or 0
@@ -208,7 +236,6 @@ def gerar_pdf_relatorio(campanha_id: int, incluir_paginas: list = None) -> bytes
             coments = (coments or 0) + (post.get('comentarios_qtd', 0) or 0)
             saves = post.get('saves', 0) or 0
             compart = post.get('compartilhamentos', 0) or 0
-            cliques = (post.get('cliques_link', 0) or 0) + (post.get('clique_link', 0) or 0)
             formato = post.get('formato', 'Outro') or 'Outro'
             
             # Por formato
@@ -236,7 +263,6 @@ def gerar_pdf_relatorio(campanha_id: int, incluir_paginas: list = None) -> bytes
             inf_comentarios += coments
             inf_saves += saves
             inf_compartilhamentos += compart
-            inf_cliques += cliques
             
             todos_posts.append({
                 'influenciador': nome_inf, 'usuario': usuario_inf, 'classificacao': classif,
@@ -249,12 +275,15 @@ def gerar_pdf_relatorio(campanha_id: int, incluir_paginas: list = None) -> bytes
         if len(posts) > 0 or inf_impressoes > 0:
             taxa_eng = (inf_interacoes / inf_impressoes * 100) if inf_impressoes > 0 else 0
             taxa_alcance = (inf_alcance / seguidores * 100) if seguidores > 0 else 0
+            taxa_interacoes_qualif = ((inf_interacoes - inf_curtidas) / inf_interacoes * 100) if inf_interacoes > 0 else 0
             dados_por_influ.append({
                 'nome': nome_inf, 'usuario': usuario_inf, 'classificacao': classif,
                 'seguidores': seguidores or 0, 'custo': custo, 'posts': len(posts),
                 'impressoes': inf_impressoes, 'alcance': inf_alcance, 'interacoes': inf_interacoes,
                 'curtidas': inf_curtidas, 'comentarios': inf_comentarios, 'saves': inf_saves,
-                'compartilhamentos': inf_compartilhamentos, 'taxa_eng': taxa_eng, 'taxa_alcance': taxa_alcance
+                'compartilhamentos': inf_compartilhamentos, 'taxa_eng': taxa_eng, 'taxa_alcance': taxa_alcance,
+                'interacoes_qualif': max(0, inf_interacoes - inf_curtidas),
+                'taxa_interacoes_qualif': taxa_interacoes_qualif
             })
     
     comentarios = data_manager.get_comentarios_campanha(campanha_id)
@@ -269,8 +298,11 @@ def gerar_pdf_relatorio(campanha_id: int, incluir_paginas: list = None) -> bytes
     html = f'''<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relatorio - {campanha['nome']}</title><style>{css}</style></head><body>
     <div class="header"><h1>{campanha['nome']}</h1><div class="subtitle">{nome_cliente} | {data_inicio} a {data_fim}</div></div>'''
     
-    # BIG NUMBERS
+    # ========== BIG NUMBERS ==========
     if 'big_numbers' in paginas:
+        kpi_barras = config_kpis.get('big_numbers', {}).get('barras', 'Impressoes')
+        kpi_classif = config_kpis.get('big_numbers', {}).get('classificacao', 'Impressoes')
+        
         total_impressoes = metricas['total_views'] + metricas['total_impressoes']
         html += f'''<div class="section"><div class="section-title">Big Numbers</div>
         <div class="big-number-card"><div class="value">{metricas['engajamento_efetivo']:.2f}%</div><div class="label">Taxa de Engajamento Efetivo</div></div>
@@ -290,21 +322,29 @@ def gerar_pdf_relatorio(campanha_id: int, incluir_paginas: list = None) -> bytes
         </div>
         <div class="subsection-title">Graficos</div><div class="charts-row">'''
         
-        # Grafico formato
-        html += '<div class="chart-box"><div class="chart-title">Impressoes por Formato</div>'
+        # Grafico formato com KPI selecionado
+        html += f'<div class="chart-box"><div class="chart-title">{kpi_barras} por Formato</div>'
         if dados_por_formato:
-            total_fmt = sum(d['impressoes'] for d in dados_por_formato.values())
-            dados_barras = [{'label': f, 'valor': d['impressoes'], 'cor': primary_color} for f, d in sorted(dados_por_formato.items(), key=lambda x: x[1]['impressoes'], reverse=True)]
+            dados_barras = []
+            for f, d in dados_por_formato.items():
+                valor = get_valor_kpi(d, kpi_barras)
+                dados_barras.append({'label': f, 'valor': valor, 'cor': primary_color})
+            dados_barras.sort(key=lambda x: x['valor'], reverse=True)
+            total_fmt = sum(d['valor'] for d in dados_barras)
             html += gerar_barras_verticais(dados_barras, total_fmt)
         else:
             html += '<p style="text-align:center;color:#9ca3af;">Sem dados</p>'
         html += '</div>'
         
-        # Grafico classificacao
-        html += '<div class="chart-box"><div class="chart-title">Impressoes por Classificacao</div>'
+        # Grafico classificacao com KPI selecionado
+        html += f'<div class="chart-box"><div class="chart-title">{kpi_classif} por Classificacao</div>'
         if dados_por_classif:
-            total_class = sum(d['impressoes'] for d in dados_por_classif.values())
-            dados_barras = [{'label': c, 'valor': d['impressoes'], 'cor': get_cor_classificacao(c)} for c, d in sorted(dados_por_classif.items(), key=lambda x: x[1]['impressoes'], reverse=True)]
+            dados_barras = []
+            for c, d in dados_por_classif.items():
+                valor = get_valor_kpi(d, kpi_classif)
+                dados_barras.append({'label': c, 'valor': valor, 'cor': get_cor_classificacao(c)})
+            dados_barras.sort(key=lambda x: x['valor'], reverse=True)
+            total_class = sum(d['valor'] for d in dados_barras)
             html += gerar_barras_verticais(dados_barras, total_class)
         else:
             html += '<p style="text-align:center;color:#9ca3af;">Sem dados</p>'
@@ -312,24 +352,38 @@ def gerar_pdf_relatorio(campanha_id: int, incluir_paginas: list = None) -> bytes
         html += gerar_insights_html(campanha['id'], 'big_numbers')
         html += '</div>'
     
-    # KPIs POR INFLUENCIADOR
+    # ========== KPIs POR INFLUENCIADOR ==========
     if 'kpis_influenciador' in paginas:
-        html += '<div class="section page-break"><div class="section-title">KPIs por Influenciador</div>'
-        top15 = sorted(dados_por_influ, key=lambda x: x['impressoes'], reverse=True)[:15]
+        kpi_barras = config_kpis.get('kpis_influenciador', {}).get('barras', 'Impressoes')
+        kpi_linha = config_kpis.get('kpis_influenciador', {}).get('linha', 'Taxa Eng. Efetivo')
+        
+        html += f'<div class="section page-break"><div class="section-title">KPIs por Influenciador</div>'
+        
+        # Ordenar por KPI selecionado
+        kpi_campo_map = {'Impressoes': 'impressoes', 'Alcance': 'alcance', 'Interacoes': 'interacoes', 'Seguidores': 'seguidores'}
+        campo_ordem = kpi_campo_map.get(kpi_barras, 'impressoes')
+        top15 = sorted(dados_por_influ, key=lambda x: x.get(campo_ordem, 0), reverse=True)[:15]
+        
         if top15:
-            html += '<div class="subsection-title">Top 15 por Impressoes</div><div class="chart-box"><div class="bar-chart">'
-            max_imp = top15[0]['impressoes'] if top15 else 1
-            total_imp = sum(i['impressoes'] for i in top15)
+            html += f'<div class="subsection-title">Top 15 por {kpi_barras}</div><div class="chart-box"><div class="bar-chart">'
+            max_val = top15[0].get(campo_ordem, 1) if top15 else 1
+            total_val = sum(i.get(campo_ordem, 0) for i in top15)
             for inf in top15:
-                html += gerar_barra_horizontal(inf['nome'][:18], inf['impressoes'], max_imp, total_imp, get_cor_classificacao(inf['classificacao']))
+                valor = inf.get(campo_ordem, 0)
+                html += gerar_barra_horizontal(inf['nome'][:18], valor, max_val, total_val, get_cor_classificacao(inf['classificacao']))
             html += '</div></div>'
             
-            html += '<div class="subsection-title">Taxa de Engajamento</div><div class="chart-box"><div class="bar-chart">'
-            top15_eng = sorted(top15, key=lambda x: x['taxa_eng'], reverse=True)
-            max_eng = top15_eng[0]['taxa_eng'] if top15_eng else 1
-            for inf in top15_eng:
-                pct = max((inf['taxa_eng'] / max_eng * 100) if max_eng > 0 else 0, 5)
-                html += f'<div class="bar-row"><div class="bar-label">{inf["nome"][:18]}</div><div class="bar-container"><div class="bar-fill" style="width:{pct}%;background:{get_cor_classificacao(inf["classificacao"])};"><span class="bar-value">{inf["taxa_eng"]:.2f}%</span></div></div></div>'
+            # Grafico secundario com KPI linha
+            kpi_linha_campo = {'Taxa Eng. Efetivo': 'taxa_eng', 'Taxa Alcance': 'taxa_alcance', 'Taxa de Interacoes Qualificadas': 'taxa_interacoes_qualif'}
+            campo_linha = kpi_linha_campo.get(kpi_linha, 'taxa_eng')
+            
+            html += f'<div class="subsection-title">{kpi_linha} por Influenciador</div><div class="chart-box"><div class="bar-chart">'
+            top15_linha = sorted(top15, key=lambda x: x.get(campo_linha, 0), reverse=True)
+            max_linha = top15_linha[0].get(campo_linha, 1) if top15_linha else 1
+            for inf in top15_linha:
+                valor = inf.get(campo_linha, 0)
+                pct = max((valor / max_linha * 100) if max_linha > 0 else 0, 5)
+                html += f'<div class="bar-row"><div class="bar-label">{inf["nome"][:18]}</div><div class="bar-container"><div class="bar-fill" style="width:{pct}%;background:{get_cor_classificacao(inf["classificacao"])};"><span class="bar-value">{valor:.2f}%</span></div></div></div>'
             html += '</div></div>'
         
         html += '''<div class="subsection-title">Detalhamento</div><table><tr><th>Influenciador</th><th class="text-center">Classe</th><th class="text-right">Seguidores</th><th class="text-center">Posts</th><th class="text-right">Impressoes</th><th class="text-right">Alcance</th><th class="text-right">Interacoes</th><th class="text-right">Taxa</th></tr>'''
@@ -339,27 +393,46 @@ def gerar_pdf_relatorio(campanha_id: int, incluir_paginas: list = None) -> bytes
         html += gerar_insights_html(campanha['id'], 'kpis_influenciador')
         html += '</div>'
     
-    # TOP PERFORMANCE
+    # ========== TOP PERFORMANCE ==========
     if 'top_performance' in paginas:
+        kpi_ranking = config_kpis.get('top_performance', {}).get('ordenar_ranking', 'Interacoes')
+        kpi_posts = config_kpis.get('top_performance', {}).get('ordenar_posts', 'Impressoes')
+        
         html += '<div class="section page-break"><div class="section-title">Top Performance</div>'
-        top20 = sorted(dados_por_influ, key=lambda x: x['interacoes'], reverse=True)[:20]
+        
+        # Ordenar ranking pelo KPI selecionado
+        ranking_map = {'Interacoes': 'interacoes', 'Impressoes': 'impressoes', 'Alcance': 'alcance', 'Taxa Eng. Efetivo': 'taxa_eng', 'Custo': 'custo'}
+        campo_ranking = ranking_map.get(kpi_ranking, 'interacoes')
+        top20 = sorted(dados_por_influ, key=lambda x: x.get(campo_ranking, 0), reverse=True)[:20]
+        
         if top20:
-            html += '<div class="subsection-title">Ranking por Interacoes</div>'
+            html += f'<div class="subsection-title">Ranking por {kpi_ranking}</div>'
             for i, inf in enumerate(top20, 1):
                 inicial = inf['nome'][0].upper() if inf['nome'] else '?'
                 custo_fmt = f"R$ {inf.get('custo', 0):,.0f}".replace(",", ".")
+                valor_destaque = inf.get(campo_ranking, 0)
+                if campo_ranking == 'taxa_eng':
+                    valor_fmt = f"{valor_destaque:.2f}%"
+                elif campo_ranking == 'custo':
+                    valor_fmt = custo_fmt
+                else:
+                    valor_fmt = formatar_numero(valor_destaque)
                 html += f'''<div class="influ-card"><div style="font-size:14pt;font-weight:600;color:#6b7280;width:30px;">#{i}</div><div class="influ-avatar">{inicial}</div><div class="influ-info"><div class="influ-name">{inf['nome']}</div><div class="influ-meta">@{inf['usuario']} | {inf['classificacao']} | {formatar_numero(inf['seguidores'])} seg</div></div><div class="influ-metrics"><div class="influ-metric"><div class="influ-metric-value">{custo_fmt}</div><div class="influ-metric-label">Invest.</div></div><div class="influ-metric"><div class="influ-metric-value">{formatar_numero(inf['interacoes'])}</div><div class="influ-metric-label">Interacoes</div></div><div class="influ-metric"><div class="influ-metric-value">{inf['taxa_eng']:.2f}%</div><div class="influ-metric-label">Taxa</div></div><div class="influ-metric"><div class="influ-metric-value">{formatar_numero(inf['impressoes'])}</div><div class="influ-metric-label">Impressoes</div></div></div></div>'''
         
-        top_posts = sorted(todos_posts, key=lambda x: x['impressoes'], reverse=True)[:15]
+        # Ordenar posts pelo KPI selecionado
+        posts_map = {'Impressoes': 'impressoes', 'Alcance': 'alcance', 'Interacoes': 'interacoes', 'Taxa Eng.': 'taxa'}
+        campo_posts = posts_map.get(kpi_posts, 'impressoes')
+        top_posts = sorted(todos_posts, key=lambda x: x.get(campo_posts, 0), reverse=True)[:15]
+        
         if top_posts:
-            html += '''<div class="subsection-title">Top Posts</div><table><tr><th>Influenciador</th><th>Formato</th><th class="text-center">Data</th><th class="text-right">Impressoes</th><th class="text-right">Alcance</th><th class="text-right">Interacoes</th><th class="text-right">Taxa</th></tr>'''
+            html += f'''<div class="subsection-title">Top Posts por {kpi_posts}</div><table><tr><th>Influenciador</th><th>Formato</th><th class="text-center">Data</th><th class="text-right">Impressoes</th><th class="text-right">Alcance</th><th class="text-right">Interacoes</th><th class="text-right">Taxa</th></tr>'''
             for p in top_posts:
                 html += f'<tr><td class="font-bold">{p["influenciador"]}</td><td>{p["formato"]}</td><td class="text-center">{p["data"]}</td><td class="text-right">{formatar_numero(p["impressoes"])}</td><td class="text-right">{formatar_numero(p["alcance"])}</td><td class="text-right">{formatar_numero(p["interacoes"])}</td><td class="text-right">{p["taxa"]:.2f}%</td></tr>'
             html += '</table>'
         html += gerar_insights_html(campanha['id'], 'top_performance')
         html += '</div>'
     
-    # LISTA INFLUENCIADORES
+    # ========== LISTA INFLUENCIADORES ==========
     if 'lista_influenciadores' in paginas:
         html += '''<div class="section page-break"><div class="section-title">Lista de Influenciadores</div><table><tr><th>Influenciador</th><th>Usuario</th><th class="text-center">Classe</th><th class="text-right">Seguidores</th><th class="text-right">Custo</th><th class="text-center">Posts</th><th class="text-right">Impressoes</th><th class="text-right">Alcance</th><th class="text-right">Interacoes</th><th class="text-right">Taxa</th></tr>'''
         for inf in sorted(dados_por_influ, key=lambda x: x['impressoes'], reverse=True):
@@ -367,7 +440,7 @@ def gerar_pdf_relatorio(campanha_id: int, incluir_paginas: list = None) -> bytes
             html += f'<tr><td class="font-bold">{inf["nome"]}</td><td>@{inf["usuario"]}</td><td class="text-center">{inf["classificacao"]}</td><td class="text-right">{formatar_numero(inf["seguidores"])}</td><td class="text-right">{custo_fmt}</td><td class="text-center">{inf["posts"]}</td><td class="text-right">{formatar_numero(inf["impressoes"])}</td><td class="text-right">{formatar_numero(inf["alcance"])}</td><td class="text-right">{formatar_numero(inf["interacoes"])}</td><td class="text-right">{inf["taxa_eng"]:.2f}%</td></tr>'
         html += '</table></div>'
     
-    # COMENTARIOS
+    # ========== COMENTARIOS ==========
     if 'comentarios' in paginas:
         html += '<div class="section page-break"><div class="section-title">Comentarios</div>'
         if comentarios:
@@ -384,14 +457,16 @@ def gerar_pdf_relatorio(campanha_id: int, incluir_paginas: list = None) -> bytes
             html += '<p style="text-align:center;color:#9ca3af;padding:30px;">Nenhum comentario registrado</p>'
         html += '</div>'
     
-    # GLOSSARIO
+    # ========== GLOSSARIO ==========
     if 'glossario' in paginas:
         glossario = [
             ("Impressoes", "Numero total de vezes que o conteudo foi exibido"),
             ("Alcance", "Numero de contas unicas que visualizaram o conteudo"),
             ("Interacoes", "Soma de curtidas, comentarios, compartilhamentos e saves"),
+            ("Interacoes Qualificadas", "Interacoes excluindo curtidas (comentarios + compartilhamentos + saves)"),
             ("Taxa de Engajamento Efetivo", "Interacoes / Impressoes x 100"),
             ("Taxa de Alcance", "Alcance / Seguidores x 100"),
+            ("Taxa de Interacoes Qualificadas", "(Interacoes - Curtidas) / Interacoes x 100"),
             ("Classificacao", "Categoria do influenciador baseada no numero de seguidores"),
         ]
         html += '<div class="section page-break"><div class="section-title">Glossario</div>'

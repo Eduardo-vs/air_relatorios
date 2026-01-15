@@ -842,16 +842,15 @@ def criar_campanha(dados: Dict) -> Dict:
     metricas_json = json.dumps(dados.get('metricas_selecionadas', []))
     insights_json = json.dumps(dados.get('insights_config', {}))
     categorias_json = json.dumps(dados.get('categorias_comentarios', []))
-    classificacoes_json = json.dumps(dados.get('classificacoes_especificas', {}))
     influenciadores_json = json.dumps(dados.get('influenciadores', []))
     
     camp_id = execute_insert('''
         INSERT INTO campanhas (
             nome, cliente_id, cliente_nome, objetivo, data_inicio, data_fim,
             tipo_dados, is_aon, status, metricas_selecionadas, insights_config,
-            categorias_comentarios, classificacoes_especificas, notas, influenciadores, estimativa_alcance,
+            categorias_comentarios, notas, influenciadores, estimativa_alcance,
             estimativa_impressoes, investimento_total, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
         dados.get('nome', ''),
         dados.get('cliente_id'),
@@ -865,7 +864,6 @@ def criar_campanha(dados: Dict) -> Dict:
         metricas_json,
         insights_json,
         categorias_json,
-        classificacoes_json,
         dados.get('notas', ''),
         influenciadores_json,
         dados.get('estimativa_alcance', 0),
@@ -887,12 +885,12 @@ def get_campanha(camp_id: int) -> Optional[Dict]:
     if row:
         camp = dict(row)
         # Parse JSON fields
-        for field in ['metricas_selecionadas', 'insights_config', 'categorias_comentarios', 'classificacoes_especificas', 'influenciadores']:
+        for field in ['metricas_selecionadas', 'insights_config', 'categorias_comentarios', 'influenciadores']:
             if camp.get(field):
                 try:
                     camp[field] = json.loads(camp[field])
                 except:
-                    camp[field] = [] if field not in ['insights_config', 'classificacoes_especificas'] else {}
+                    camp[field] = [] if field != 'insights_config' else {}
         camp['is_aon'] = bool(camp.get('is_aon'))
         return camp
     return None
@@ -955,7 +953,6 @@ def atualizar_campanha(camp_id: int, dados: Dict) -> bool:
     metricas_json = json.dumps(campanha_atual.get('metricas_selecionadas', []))
     insights_json = json.dumps(campanha_atual.get('insights_config', {}))
     categorias_json = json.dumps(campanha_atual.get('categorias_comentarios', []))
-    classificacoes_json = json.dumps(campanha_atual.get('classificacoes_especificas', {}))
     influenciadores_json = json.dumps(campanha_atual.get('influenciadores', []))
     
     execute_update('''
@@ -963,7 +960,7 @@ def atualizar_campanha(camp_id: int, dados: Dict) -> bool:
             nome = ?, cliente_id = ?, cliente_nome = ?, objetivo = ?,
             data_inicio = ?, data_fim = ?, tipo_dados = ?, is_aon = ?,
             status = ?, metricas_selecionadas = ?, insights_config = ?,
-            categorias_comentarios = ?, classificacoes_especificas = ?, notas = ?, influenciadores = ?,
+            categorias_comentarios = ?, notas = ?, influenciadores = ?,
             estimativa_alcance = ?, estimativa_impressoes = ?, investimento_total = ?
         WHERE id = ?
     ''', (
@@ -979,7 +976,6 @@ def atualizar_campanha(camp_id: int, dados: Dict) -> bool:
         metricas_json,
         insights_json,
         categorias_json,
-        classificacoes_json,
         campanha_atual.get('notas', ''),
         influenciadores_json,
         campanha_atual.get('estimativa_alcance', 0),
