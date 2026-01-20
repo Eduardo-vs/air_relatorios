@@ -95,7 +95,7 @@ def get_css(primary_color):
     .chart-box {{ flex: 1; background: #f8fafc; border-radius: 12px; padding: 20px; border: 1px solid #e2e8f0; }}
     .chart-title {{ font-size: 10pt; font-weight: 600; color: #374151; margin-bottom: 15px; text-align: center; }}
     .bar-chart {{ margin: 10px 0; }}
-    .bar-row {{ display: flex; align-items: center; margin-bottom: 10px; }}
+    .bar-row {{ display: flex; align-items: center; margin-bottom: 10px; page-break-inside: avoid; }}
     .bar-label {{ width: 100px; font-size: 8pt; color: #374151; text-align: right; padding-right: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
     .bar-container {{ flex: 1; background: #e5e7eb; border-radius: 6px; height: 26px; overflow: hidden; }}
     .bar-fill {{ height: 100%; border-radius: 6px; display: flex; align-items: center; justify-content: flex-end; padding-right: 10px; min-width: 50px; }}
@@ -109,7 +109,7 @@ def get_css(primary_color):
     .v-bar-label {{ font-size: 8pt; color: #6b7280; margin-top: 8px; text-align: center; max-width: 70px; word-wrap: break-word; }}
     .insights-section {{ margin-top: 25px; }}
     .insights-grid {{ display: flex; flex-wrap: wrap; gap: 12px; }}
-    .insight-card {{ flex: 1; min-width: 45%; background: #f0fdf4; border-left: 4px solid #22c55e; padding: 15px; border-radius: 0 10px 10px 0; }}
+    .insight-card {{ flex: 1; min-width: 45%; background: #f0fdf4; border-left: 4px solid #22c55e; padding: 15px; border-radius: 0 10px 10px 0; page-break-inside: avoid; }}
     .insight-card.alerta {{ background: #fffbeb; border-color: #f59e0b; }}
     .insight-card.destaque {{ background: #eff6ff; border-color: #3b82f6; }}
     .insight-card.info {{ background: #f5f3ff; border-color: {primary_color}; }}
@@ -117,13 +117,16 @@ def get_css(primary_color):
     .insight-title {{ font-weight: 600; font-size: 10pt; margin-bottom: 6px; color: #1f2937; }}
     .insight-text {{ font-size: 8pt; color: #374151; line-height: 1.5; }}
     table {{ width: 100%; border-collapse: collapse; font-size: 8pt; margin-top: 15px; }}
-    th {{ background: {primary_color}; color: white; padding: 12px 10px; text-align: left; font-size: 8pt; text-transform: uppercase; font-weight: 600; }}
-    td {{ padding: 10px; border-bottom: 1px solid #e5e7eb; }}
+    thead {{ display: table-header-group; }}
+    tbody {{ display: table-row-group; }}
+    tr {{ page-break-inside: avoid; page-break-after: auto; }}
+    th {{ background: {primary_color}; color: white; padding: 10px 8px; text-align: left; font-size: 7pt; text-transform: uppercase; font-weight: 600; }}
+    td {{ padding: 8px; border-bottom: 1px solid #e5e7eb; font-size: 7pt; }}
     tr:nth-child(even) {{ background: #f8fafc; }}
     .text-right {{ text-align: right; }}
     .text-center {{ text-align: center; }}
     .font-bold {{ font-weight: 600; }}
-    .influ-card {{ display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #e5e7eb; gap: 15px; }}
+    .influ-card {{ display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #e5e7eb; gap: 15px; page-break-inside: avoid; }}
     .influ-avatar {{ width: 40px; height: 40px; background: {primary_color}; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 14pt; }}
     .influ-info {{ flex: 1; }}
     .influ-name {{ font-weight: 600; font-size: 10pt; }}
@@ -226,7 +229,9 @@ def gerar_pdf_relatorio(campanha_id: int, incluir_paginas: list = None, config_k
         for post in posts:
             views = post.get('views', 0) or 0
             imp_post = post.get('impressoes', 0) or 0
-            imp = views + imp_post
+            # Impressoes = maior valor entre views e impressoes, ou soma se ambos existirem
+            # Para TikTok usa views, para Instagram usa impressoes
+            imp = max(views, imp_post) if views > 0 and imp_post > 0 else views + imp_post
             alc = post.get('alcance', 0) or 0
             inter = post.get('interacoes', 0) or 0
             curt = post.get('curtidas', 0) or 0
@@ -303,7 +308,7 @@ def gerar_pdf_relatorio(campanha_id: int, incluir_paginas: list = None, config_k
         kpi_barras = config_kpis.get('big_numbers', {}).get('barras', 'Impressoes')
         kpi_classif = config_kpis.get('big_numbers', {}).get('classificacao', 'Impressoes')
         
-        total_impressoes = metricas['total_views'] + metricas['total_impressoes']
+        total_impressoes = metricas.get('total_imp_combinado', metricas['total_views'] + metricas['total_impressoes'])
         html += f'''<div class="section"><div class="section-title">Big Numbers</div>
         <div class="big-number-card"><div class="value">{metricas['engajamento_efetivo']:.2f}%</div><div class="label">Taxa de Engajamento Efetivo</div></div>
         <div class="metrics-grid">

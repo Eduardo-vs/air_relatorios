@@ -1290,10 +1290,13 @@ def calcular_metricas_campanha(campanha: Dict) -> Dict:
         total_posts += len(posts)
         
         for post in posts:
-            total_views += post.get('views', 0) or 0
+            # Para views/impressoes, usa o maior valor ou soma se diferentes
+            views = post.get('views', 0) or 0
+            impressoes_post = post.get('impressoes', 0) or 0
+            total_views += views
+            total_impressoes += impressoes_post
             total_alcance += post.get('alcance', 0) or 0
             total_interacoes += post.get('interacoes', 0) or 0
-            total_impressoes += post.get('impressoes', 0) or 0
             total_curtidas += post.get('curtidas', 0) or 0
             # comentarios pode ser lista de objetos ou numero
             comentarios = post.get('comentarios', 0)
@@ -1313,8 +1316,11 @@ def calcular_metricas_campanha(campanha: Dict) -> Dict:
     engajamento_efetivo = 0
     taxa_alcance = 0
     
-    if total_views > 0:
-        engajamento_efetivo = round((total_interacoes / total_views) * 100, 2)
+    # Total combinado de views e impressoes (evita duplicacao)
+    total_imp_combinado = max(total_views, total_impressoes) if total_views > 0 and total_impressoes > 0 else total_views + total_impressoes
+    
+    if total_imp_combinado > 0:
+        engajamento_efetivo = round((total_interacoes / total_imp_combinado) * 100, 2)
     
     if total_seguidores > 0:
         taxa_alcance = round((total_alcance / total_seguidores) * 100, 2)
@@ -1327,6 +1333,7 @@ def calcular_metricas_campanha(campanha: Dict) -> Dict:
         'total_alcance': total_alcance,
         'total_interacoes': total_interacoes,
         'total_impressoes': total_impressoes,
+        'total_imp_combinado': total_imp_combinado,
         'total_curtidas': total_curtidas,
         'total_comentarios': total_comentarios,
         'total_compartilhamentos': total_compartilhamentos,

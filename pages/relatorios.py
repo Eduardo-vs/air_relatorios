@@ -1185,7 +1185,6 @@ def render_pag4_kpis_influenciador(campanhas_list, cores):
     col1, col2 = st.columns([1, 3])
     with col1:
         metrica_custo = st.selectbox("Metrica:", ["CPM", "CPE", "CPI", "CPV"], key="custo_pag4")
-        investimento = st.number_input("Investimento (R$):", min_value=0.0, value=float(sum([d.get('custo', 0) for d in dados_inf])), step=100.0, key="invest_pag4")
     
     with col2:
         df_custo = df.copy()
@@ -1206,7 +1205,7 @@ def render_pag4_kpis_influenciador(campanhas_list, cores):
             fig2.update_layout(title=f'{metrica_custo} (R$)', height=max(300, len(df_custo) * 25), bargap=0.5)
             st.plotly_chart(fig2, use_container_width=True)
         else:
-            st.info("Adicione custos aos posts")
+            st.info("Adicione custos aos influenciadores para ver este grafico")
     
     st.markdown("### Grafico 3: Trafego")
     
