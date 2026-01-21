@@ -21,14 +21,11 @@ from utils import data_manager, funcoes_auxiliares
 def calcular_impressoes_post(post: Dict) -> int:
     """
     Calcula impressoes de um post combinando views e impressoes.
-    Evita duplicacao quando ambos os campos tem valores.
+    Sempre soma views + impressoes (sao metricas diferentes).
     """
     views = post.get('views', 0) or 0
     impressoes = post.get('impressoes', 0) or 0
-    # Se ambos tem valor, usa o maior (evita duplicacao)
-    # Se apenas um tem valor, soma (pega o que existe)
-    if views > 0 and impressoes > 0:
-        return max(views, impressoes)
+    # Sempre somar views + impressoes
     return views + impressoes
 
 
@@ -707,10 +704,10 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
                 
                 valor = 0
                 if kpi_barra == "Impressoes":
-                    # Juntar views + impressoes, evitando duplicacao
+                    # Sempre somar views + impressoes
                     views = post.get('views', 0) or 0
                     imp = post.get('impressoes', 0) or 0
-                    valor = max(views, imp) if views > 0 and imp > 0 else views + imp
+                    valor = views + imp
                 elif kpi_barra == "Alcance":
                     valor = post.get('alcance', 0) or 0
                 elif kpi_barra == "Interacoes":
@@ -1464,31 +1461,11 @@ def render_pag6_lista_influenciadores(campanhas_list, cores):
     
     st.subheader("Lista de Influenciadores")
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     with col1:
         filtro_class = st.multiselect("Classificacao:", ["Nano", "Micro", "Mid", "Macro", "Mega"], key="class_pag6")
     with col2:
         ordenar = st.selectbox("Ordenar:", ["Impressoes", "Alcance Total", "Interacoes", "Taxa Eng.", "Investimento"], key="ord_pag6")
-    with col3:
-        mostrar_cols_custom = st.checkbox("Mostrar colunas personalizadas", value=False, key="cols_custom_pag6")
-    
-    # Configuracao de colunas personalizadas
-    if mostrar_cols_custom:
-        st.markdown("---")
-        st.markdown("**Colunas Personalizadas:**")
-        st.caption("Adicione dados manuais para cada influenciador (ex: Tipo de Cabelo, Faixa Etaria)")
-        
-        col_a, col_b = st.columns(2)
-        with col_a:
-            col_custom1_nome = st.text_input("Nome da Coluna 1:", value=st.session_state.get('col_custom1_nome', ''), placeholder="Ex: Tipo de Cabelo", key="input_col1")
-        with col_b:
-            col_custom2_nome = st.text_input("Nome da Coluna 2:", value=st.session_state.get('col_custom2_nome', ''), placeholder="Ex: Faixa Etaria", key="input_col2")
-        
-        # Salvar nomes das colunas na sessao
-        if col_custom1_nome:
-            st.session_state.col_custom1_nome = col_custom1_nome
-        if col_custom2_nome:
-            st.session_state.col_custom2_nome = col_custom2_nome
     
     dados = coletar_dados_influenciadores(campanhas_list)
     
@@ -1504,18 +1481,36 @@ def render_pag6_lista_influenciadores(campanhas_list, cores):
     ordem_map = {"Impressoes": "impressoes", "Alcance Total": "alcance_total", "Interacoes": "interacoes", "Taxa Eng.": "taxa_eng", "Investimento": "custo"}
     df = df.sort_values(ordem_map.get(ordenar, 'impressoes'), ascending=False)
     
-    # Adicionar colunas personalizadas com dados da campanha
-    if mostrar_cols_custom and (st.session_state.get('col_custom1_nome') or st.session_state.get('col_custom2_nome')):
-        # Buscar dados personalizados dos influenciadores na campanha
-        dados_custom = {}
-        for camp in campanhas_list:
-            for inf_camp in camp.get('influenciadores', []):
-                inf_id = inf_camp.get('influenciador_id')
-                dados_custom[inf_id] = {
-                    'col1': inf_camp.get('dado_custom1', ''),
-                    'col2': inf_camp.get('dado_custom2', '')
-                }
+    # Verificar se há colunas personalizadas preenchidas na campanha
+    dados_custom = {}
+    col_custom1_nome = None
+    col_custom2_nome = None
+    tem_dados_custom = False
+    
+    for camp in campanhas_list:
+        # Verificar nomes das colunas salvos na campanha
+        config_cols = camp.get('colunas_personalizadas', {})
+        if config_cols.get('col1_nome'):
+            col_custom1_nome = config_cols['col1_nome']
+        if config_cols.get('col2_nome'):
+            col_custom2_nome = config_cols['col2_nome']
         
+        # Buscar dados dos influenciadores
+        for inf_camp in camp.get('influenciadores', []):
+            inf_id = inf_camp.get('influenciador_id')
+            col1_val = inf_camp.get('dado_custom1', '')
+            col2_val = inf_camp.get('dado_custom2', '')
+            
+            if col1_val or col2_val:
+                tem_dados_custom = True
+            
+            dados_custom[inf_id] = {
+                'col1': col1_val,
+                'col2': col2_val
+            }
+    
+    # Se tem dados custom preenchidos, mostrar as colunas
+    if tem_dados_custom and (col_custom1_nome or col_custom2_nome):
         # Adicionar ao dataframe
         df['col_custom1'] = df['id'].apply(lambda x: dados_custom.get(x, {}).get('col1', ''))
         df['col_custom2'] = df['id'].apply(lambda x: dados_custom.get(x, {}).get('col2', ''))
@@ -1524,12 +1519,12 @@ def render_pag6_lista_influenciadores(campanhas_list, cores):
         colunas_base = ['nome', 'usuario', 'classificacao', 'seguidores', 'posts', 'impressoes', 'alcance_total', 'interacoes', 'custo', 'taxa_eng']
         nomes_base = ['Nome', 'Usuario', 'Classe', 'Seguidores', 'Posts', 'Impressoes', 'Alcance Total', 'Interacoes', 'Invest. (R$)', 'Tx Eng. %']
         
-        if st.session_state.get('col_custom1_nome'):
+        if col_custom1_nome:
             colunas_base.append('col_custom1')
-            nomes_base.append(st.session_state.col_custom1_nome)
-        if st.session_state.get('col_custom2_nome'):
+            nomes_base.append(col_custom1_nome)
+        if col_custom2_nome:
             colunas_base.append('col_custom2')
-            nomes_base.append(st.session_state.col_custom2_nome)
+            nomes_base.append(col_custom2_nome)
         
         df_exibir = df[colunas_base].copy()
         df_exibir.columns = nomes_base
@@ -1552,56 +1547,69 @@ def render_pag6_lista_influenciadores(campanhas_list, cores):
     
     st.dataframe(df_exibir, use_container_width=True, hide_index=True)
     
-    # Edicao dos dados personalizados
-    if mostrar_cols_custom and (st.session_state.get('col_custom1_nome') or st.session_state.get('col_custom2_nome')):
+    # Configuração e edição de colunas personalizadas
+    st.markdown("---")
+    with st.expander("⚙️ Configurar Colunas Personalizadas", expanded=False):
+        st.caption("Configure os nomes das colunas e preencha os dados para cada influenciador")
+        
+        # Nomes das colunas
+        st.markdown("**Nomes das Colunas:**")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            novo_col1_nome = st.text_input("Nome da Coluna 1:", value=col_custom1_nome or '', placeholder="Ex: Tipo de Cabelo", key="config_col1_nome")
+        with col_b:
+            novo_col2_nome = st.text_input("Nome da Coluna 2:", value=col_custom2_nome or '', placeholder="Ex: Faixa Etaria", key="config_col2_nome")
+        
         st.markdown("---")
-        with st.expander("✏️ Editar dados personalizados", expanded=False):
-            st.caption("Preencha os dados personalizados para cada influenciador")
+        st.markdown("**Dados por Influenciador:**")
+        
+        # Pegar a primeira campanha para editar
+        if campanhas_list:
+            camp = campanhas_list[0]
+            camp_id = camp['id']
             
-            # Pegar a primeira campanha para editar
-            if campanhas_list:
-                camp = campanhas_list[0]
-                camp_id = camp['id']
+            for idx, inf_camp in enumerate(camp.get('influenciadores', [])):
+                inf = data_manager.get_influenciador(inf_camp.get('influenciador_id'))
+                if not inf:
+                    continue
                 
-                for idx, inf_camp in enumerate(camp.get('influenciadores', [])):
-                    inf = data_manager.get_influenciador(inf_camp.get('influenciador_id'))
-                    if not inf:
-                        continue
-                    
-                    nome_inf = inf.get('nome', 'Desconhecido')
-                    col1, col2, col3 = st.columns([2, 2, 2])
-                    
-                    with col1:
-                        st.markdown(f"**{nome_inf}**")
-                    
-                    with col2:
-                        if st.session_state.get('col_custom1_nome'):
-                            val1 = st.text_input(
-                                st.session_state.col_custom1_nome,
-                                value=inf_camp.get('dado_custom1', ''),
-                                key=f"custom1_{inf['id']}",
-                                label_visibility="collapsed",
-                                placeholder=st.session_state.col_custom1_nome
-                            )
-                            if val1 != inf_camp.get('dado_custom1', ''):
-                                inf_camp['dado_custom1'] = val1
-                    
-                    with col3:
-                        if st.session_state.get('col_custom2_nome'):
-                            val2 = st.text_input(
-                                st.session_state.col_custom2_nome,
-                                value=inf_camp.get('dado_custom2', ''),
-                                key=f"custom2_{inf['id']}",
-                                label_visibility="collapsed",
-                                placeholder=st.session_state.col_custom2_nome
-                            )
-                            if val2 != inf_camp.get('dado_custom2', ''):
-                                inf_camp['dado_custom2'] = val2
+                nome_inf = inf.get('nome', 'Desconhecido')
+                col1, col2, col3 = st.columns([2, 2, 2])
                 
-                if st.button("💾 Salvar dados personalizados", type="primary"):
-                    data_manager.atualizar_campanha(camp_id, {'influenciadores': camp['influenciadores']})
-                    st.success("Dados salvos!")
-                    st.rerun()
+                with col1:
+                    st.markdown(f"**{nome_inf}**")
+                
+                with col2:
+                    val1 = st.text_input(
+                        novo_col1_nome or "Coluna 1",
+                        value=inf_camp.get('dado_custom1', ''),
+                        key=f"edit_custom1_{inf['id']}",
+                        label_visibility="collapsed",
+                        placeholder=novo_col1_nome or "Coluna 1"
+                    )
+                    inf_camp['dado_custom1'] = val1
+                
+                with col3:
+                    val2 = st.text_input(
+                        novo_col2_nome or "Coluna 2",
+                        value=inf_camp.get('dado_custom2', ''),
+                        key=f"edit_custom2_{inf['id']}",
+                        label_visibility="collapsed",
+                        placeholder=novo_col2_nome or "Coluna 2"
+                    )
+                    inf_camp['dado_custom2'] = val2
+            
+            if st.button("💾 Salvar colunas personalizadas", type="primary"):
+                # Salvar nomes das colunas e dados
+                data_manager.atualizar_campanha(camp_id, {
+                    'influenciadores': camp['influenciadores'],
+                    'colunas_personalizadas': {
+                        'col1_nome': novo_col1_nome,
+                        'col2_nome': novo_col2_nome
+                    }
+                })
+                st.success("Dados salvos!")
+                st.rerun()
 
 
 # ========================================

@@ -76,7 +76,7 @@ def get_css(primary_color):
     return f'''
     @page {{ size: A4; margin: 1.2cm; }}
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 8pt; line-height: 1.4; color: #1f2937; background: #fff; }}
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 9pt; line-height: 1.4; color: #1f2937; background: #fff; }}
     .header {{ text-align: center; padding: 20px 0; border-bottom: 4px solid {primary_color}; margin-bottom: 20px; }}
     .header h1 {{ color: {primary_color}; font-size: 22pt; margin-bottom: 6px; }}
     .header .subtitle {{ color: #6b7280; font-size: 10pt; }}
@@ -90,23 +90,23 @@ def get_css(primary_color):
     .metrics-grid {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }}
     .metric-card {{ flex: 1; min-width: 90px; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; text-align: center; }}
     .metric-card .value {{ font-size: 14pt; font-weight: 700; color: {primary_color}; }}
-    .metric-card .label {{ font-size: 6pt; color: #64748b; text-transform: uppercase; margin-top: 3px; }}
+    .metric-card .label {{ font-size: 7pt; color: #64748b; text-transform: uppercase; margin-top: 3px; }}
     .charts-row {{ display: flex; gap: 15px; margin-bottom: 20px; }}
     .chart-box {{ flex: 1; background: #f8fafc; border-radius: 10px; padding: 15px; border: 1px solid #e2e8f0; page-break-inside: avoid; }}
     .chart-title {{ font-size: 9pt; font-weight: 600; color: #374151; margin-bottom: 12px; text-align: center; }}
     .bar-chart {{ margin: 8px 0; }}
     .bar-row {{ display: flex; align-items: center; margin-bottom: 6px; page-break-inside: avoid; }}
-    .bar-label {{ width: 80px; font-size: 7pt; color: #374151; text-align: right; padding-right: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+    .bar-label {{ width: 80px; font-size: 8pt; color: #374151; text-align: right; padding-right: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
     .bar-container {{ flex: 1; background: #e5e7eb; border-radius: 4px; height: 20px; overflow: hidden; }}
     .bar-fill {{ height: 100%; border-radius: 4px; display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; min-width: 40px; }}
-    .bar-value {{ font-size: 7pt; font-weight: 600; color: white; }}
-    .bar-pct {{ font-size: 6pt; color: rgba(255,255,255,0.8); margin-left: 4px; }}
+    .bar-value {{ font-size: 8pt; font-weight: 600; color: white; }}
+    .bar-pct {{ font-size: 7pt; color: rgba(255,255,255,0.8); margin-left: 4px; }}
     .vertical-chart {{ display: flex; justify-content: space-around; align-items: flex-end; height: 150px; padding: 10px 8px; border-bottom: 2px solid #e5e7eb; margin-bottom: 8px; }}
     .v-bar-item {{ display: flex; flex-direction: column; align-items: center; flex: 1; max-width: 70px; }}
     .v-bar {{ width: 40px; border-radius: 4px 4px 0 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 4px; min-height: 20px; }}
-    .v-bar-value {{ font-size: 7pt; font-weight: 700; color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }}
-    .v-bar-pct {{ font-size: 6pt; color: rgba(255,255,255,0.9); }}
-    .v-bar-label {{ font-size: 7pt; color: #6b7280; margin-top: 6px; text-align: center; max-width: 60px; word-wrap: break-word; }}
+    .v-bar-value {{ font-size: 8pt; font-weight: 700; color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }}
+    .v-bar-pct {{ font-size: 7pt; color: rgba(255,255,255,0.9); }}
+    .v-bar-label {{ font-size: 8pt; color: #6b7280; margin-top: 6px; text-align: center; max-width: 60px; word-wrap: break-word; }}
     .insights-section {{ margin-top: 20px; page-break-inside: avoid; }}
     .insights-grid {{ display: flex; flex-wrap: wrap; gap: 10px; }}
     .insight-card {{ flex: 1; min-width: 45%; background: #f0fdf4; border-left: 3px solid #22c55e; padding: 12px; border-radius: 0 8px 8px 0; page-break-inside: avoid; }}
@@ -114,15 +114,15 @@ def get_css(primary_color):
     .insight-card.destaque {{ background: #eff6ff; border-color: #3b82f6; }}
     .insight-card.info {{ background: #f5f3ff; border-color: {primary_color}; }}
     .insight-card.critico {{ background: #fef2f2; border-color: #ef4444; }}
-    .insight-title {{ font-weight: 600; font-size: 9pt; margin-bottom: 4px; color: #1f2937; }}
-    .insight-text {{ font-size: 7pt; color: #374151; line-height: 1.4; }}
-    table {{ width: 100%; border-collapse: collapse; font-size: 7pt; margin-top: 12px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
+    .insight-title {{ font-weight: 600; font-size: 10pt; margin-bottom: 4px; color: #1f2937; }}
+    .insight-text {{ font-size: 8pt; color: #374151; line-height: 1.4; }}
+    table {{ width: 100%; border-collapse: collapse; font-size: 8pt; margin-top: 12px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
     thead {{ display: table-header-group; }}
     tbody {{ display: table-row-group; }}
     tfoot {{ display: table-footer-group; }}
     tr {{ page-break-inside: avoid !important; break-inside: avoid !important; }}
-    th {{ background: {primary_color} !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; color: white; padding: 6px 4px; text-align: left; font-size: 6pt; text-transform: uppercase; font-weight: 600; }}
-    td {{ padding: 5px 4px; border-bottom: 1px solid #e5e7eb; font-size: 6pt; vertical-align: middle; }}
+    th {{ background: {primary_color} !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; color: white; padding: 8px 6px; text-align: left; font-size: 7pt; text-transform: uppercase; font-weight: 600; }}
+    td {{ padding: 6px; border-bottom: 1px solid #e5e7eb; font-size: 8pt; vertical-align: middle; }}
     tr:nth-child(even) {{ background: #f8fafc; }}
     .text-right {{ text-align: right; }}
     .text-center {{ text-align: center; }}
@@ -230,9 +230,8 @@ def gerar_pdf_relatorio(campanha_id: int, incluir_paginas: list = None, config_k
         for post in posts:
             views = post.get('views', 0) or 0
             imp_post = post.get('impressoes', 0) or 0
-            # Impressoes = maior valor entre views e impressoes, ou soma se ambos existirem
-            # Para TikTok usa views, para Instagram usa impressoes
-            imp = max(views, imp_post) if views > 0 and imp_post > 0 else views + imp_post
+            # Sempre somar views + impressoes
+            imp = views + imp_post
             alc = post.get('alcance', 0) or 0
             inter = post.get('interacoes', 0) or 0
             curt = post.get('curtidas', 0) or 0

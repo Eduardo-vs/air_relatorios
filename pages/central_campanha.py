@@ -1066,7 +1066,7 @@ def render_top_conteudos(campanha):
                 comentarios = len(comentarios)
             saves = post.get('saves', 0) or 0
             
-            total_imp = max(views, impressoes) if views > 0 and impressoes > 0 else views + impressoes
+            total_imp = views + impressoes
             
             post_id = f"{inf['id']}_{idx}"
             

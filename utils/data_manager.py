@@ -9,6 +9,8 @@ import json
 import sqlite3
 import os
 import time
+import base64
+import requests
 
 # Verificar se tem DATABASE_URL para PostgreSQL
 DATABASE_URL = os.getenv('DATABASE_URL', '')
@@ -25,6 +27,50 @@ DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'air_
 
 # Flag para indicar se estamos usando PostgreSQL
 USING_POSTGRES = 'postgresql' in DATABASE_URL.lower() or 'postgres' in DATABASE_URL.lower()
+
+
+def converter_foto_para_base64(url_foto: str) -> str:
+    """
+    Converte URL de foto para base64 para salvar no banco e não depender do link externo.
+    Se a foto já estiver em base64, retorna como está.
+    """
+    if not url_foto:
+        return ''
+    
+    # Se já é base64, retorna como está
+    if url_foto.startswith('data:image'):
+        return url_foto
+    
+    # Se não é uma URL válida, retorna vazio
+    if not url_foto.startswith(('http://', 'https://')):
+        return url_foto
+    
+    try:
+        # Fazer download da imagem com timeout
+        response = requests.get(url_foto, timeout=10, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        })
+        response.raise_for_status()
+        
+        # Detectar tipo de imagem
+        content_type = response.headers.get('content-type', 'image/jpeg')
+        if 'png' in content_type:
+            mime_type = 'image/png'
+        elif 'gif' in content_type:
+            mime_type = 'image/gif'
+        elif 'webp' in content_type:
+            mime_type = 'image/webp'
+        else:
+            mime_type = 'image/jpeg'
+        
+        # Converter para base64
+        img_base64 = base64.b64encode(response.content).decode('utf-8')
+        return f"data:{mime_type};base64,{img_base64}"
+    
+    except Exception as e:
+        # Se falhar, retorna a URL original
+        print(f"Erro ao converter foto para base64: {e}")
+        return url_foto
 
 
 def parse_data_flexivel(data_str: str) -> datetime:
@@ -680,6 +726,9 @@ def criar_influenciador(dados: Dict) -> Dict:
     means_json = json.dumps(dados.get('means', {})) if dados.get('means') else '{}'
     hashtags_json = json.dumps(dados.get('hashtags', [])) if dados.get('hashtags') else '[]'
     
+    # Converter foto para base64 se for URL
+    foto = converter_foto_para_base64(dados.get('foto', ''))
+    
     inf_id = execute_insert('''
         INSERT INTO influenciadores (
             profile_id, nome, usuario, network, seguidores, foto, bio,
@@ -693,7 +742,7 @@ def criar_influenciador(dados: Dict) -> Dict:
         dados.get('usuario', ''),
         dados.get('network', 'instagram'),
         dados.get('seguidores', 0),
-        dados.get('foto', ''),
+        foto,
         dados.get('bio', ''),
         dados.get('engagement_rate', 0),
         dados.get('air_score', 0),
@@ -790,6 +839,9 @@ def atualizar_influenciador(inf_id: int, dados: Dict) -> bool:
     means_json = json.dumps(dados.get('means', {})) if dados.get('means') else '{}'
     hashtags_json = json.dumps(dados.get('hashtags', [])) if dados.get('hashtags') else '[]'
     
+    # Converter foto para base64 se for URL
+    foto = converter_foto_para_base64(dados.get('foto', ''))
+    
     execute_update('''
         UPDATE influenciadores SET
             profile_id = ?, nome = ?, usuario = ?, network = ?, seguidores = ?,
@@ -804,7 +856,7 @@ def atualizar_influenciador(inf_id: int, dados: Dict) -> bool:
         dados.get('usuario', ''),
         dados.get('network', 'instagram'),
         dados.get('seguidores', 0),
-        dados.get('foto', ''),
+        foto,
         dados.get('bio', ''),
         dados.get('engagement_rate', 0),
         dados.get('air_score', 0),
@@ -1330,8 +1382,8 @@ def calcular_metricas_campanha(campanha: Dict) -> Dict:
     engajamento_efetivo = 0
     taxa_alcance = 0
     
-    # Total combinado de views e impressoes (evita duplicacao)
-    total_imp_combinado = max(total_views, total_impressoes) if total_views > 0 and total_impressoes > 0 else total_views + total_impressoes
+    # Total combinado de views e impressoes (sempre somar)
+    total_imp_combinado = total_views + total_impressoes
     
     if total_imp_combinado > 0:
         engajamento_efetivo = round((total_interacoes / total_imp_combinado) * 100, 2)
