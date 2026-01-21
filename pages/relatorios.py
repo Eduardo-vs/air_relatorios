@@ -18,6 +18,20 @@ import copy
 from utils import data_manager, funcoes_auxiliares
 
 
+def calcular_impressoes_post(post: Dict) -> int:
+    """
+    Calcula impressoes de um post combinando views e impressoes.
+    Evita duplicacao quando ambos os campos tem valores.
+    """
+    views = post.get('views', 0) or 0
+    impressoes = post.get('impressoes', 0) or 0
+    # Se ambos tem valor, usa o maior (evita duplicacao)
+    # Se apenas um tem valor, soma (pega o que existe)
+    if views > 0 and impressoes > 0:
+        return max(views, impressoes)
+    return views + impressoes
+
+
 def filtrar_campanhas_por_periodo(campanhas_list: List[Dict], data_inicio: str, data_fim: str) -> List[Dict]:
     """
     Filtra posts das campanhas por periodo
@@ -681,6 +695,8 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
             key="kpi_barra_pag1"
         )
         
+        mostrar_percentual = st.checkbox("Mostrar % de contribuição", value=True, key="pct_contrib_pag1")
+        
         # Agregar dados por formato E por classificacao
         dados_grafico = []
         
@@ -693,7 +709,10 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
                 
                 valor = 0
                 if kpi_barra == "Impressoes":
-                    valor = post.get('impressoes', 0) or 0
+                    # Juntar views + impressoes, evitando duplicacao
+                    views = post.get('views', 0) or 0
+                    imp = post.get('impressoes', 0) or 0
+                    valor = max(views, imp) if views > 0 and imp > 0 else views + imp
                 elif kpi_barra == "Alcance":
                     valor = post.get('alcance', 0) or 0
                 elif kpi_barra == "Interacoes":
@@ -723,6 +742,12 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
             df_barras = pd.DataFrame(dados_grafico)
             df_agg = df_barras.groupby(['Formato', 'Classificacao'])['Valor'].sum().reset_index()
             
+            # Calcular % de contribuicao por formato
+            df_total_formato = df_agg.groupby('Formato')['Valor'].sum().reset_index()
+            df_total_formato.columns = ['Formato', 'Total_Formato']
+            df_agg = df_agg.merge(df_total_formato, on='Formato')
+            df_agg['Percentual'] = (df_agg['Valor'] / df_agg['Total_Formato'] * 100).round(1)
+            
             # Cores para classificacoes
             cores_classif = {
                 'Nano': '#22c55e',
@@ -733,8 +758,16 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
                 'Mega 1': '#ef4444',
                 'Mega 2': '#dc2626',
                 'Super Mega': '#991b1b',
+                'Mid': '#8b5cf6',
+                'Mega': '#ef4444',
                 'Desconhecido': '#9ca3af'
             }
+            
+            # Texto do grafico: valor ou percentual
+            if mostrar_percentual:
+                df_agg['Texto'] = df_agg['Percentual'].apply(lambda x: f"{x:.0f}%")
+            else:
+                df_agg['Texto'] = df_agg['Valor'].apply(lambda x: funcoes_auxiliares.formatar_numero(x))
             
             fig_barras = px.bar(
                 df_agg,
@@ -743,11 +776,15 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
                 color='Classificacao',
                 color_discrete_map=cores_classif,
                 barmode='stack',
-                text='Valor'
+                text='Texto',
+                custom_data=['Percentual', 'Classificacao']
             )
-            fig_barras.update_traces(texttemplate='%{text:.2s}', textposition='inside')
+            fig_barras.update_traces(
+                textposition='inside',
+                hovertemplate='<b>%{customdata[1]}</b><br>Valor: %{y:,.0f}<br>Contribuição: %{customdata[0]:.1f}%<extra></extra>'
+            )
             fig_barras.update_layout(
-                height=350,
+                height=380,
                 xaxis_title="",
                 yaxis_title=kpi_barra,
                 legend_title="Classificacao",
@@ -1348,11 +1385,31 @@ def render_pag6_lista_influenciadores(campanhas_list, cores):
     
     st.subheader("Lista de Influenciadores")
     
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         filtro_class = st.multiselect("Classificacao:", ["Nano", "Micro", "Mid", "Macro", "Mega"], key="class_pag6")
     with col2:
         ordenar = st.selectbox("Ordenar:", ["Impressoes", "Alcance Total", "Interacoes", "Taxa Eng.", "Investimento"], key="ord_pag6")
+    with col3:
+        mostrar_cols_custom = st.checkbox("Mostrar colunas personalizadas", value=False, key="cols_custom_pag6")
+    
+    # Configuracao de colunas personalizadas
+    if mostrar_cols_custom:
+        st.markdown("---")
+        st.markdown("**Colunas Personalizadas:**")
+        st.caption("Adicione dados manuais para cada influenciador (ex: Tipo de Cabelo, Faixa Etaria)")
+        
+        col_a, col_b = st.columns(2)
+        with col_a:
+            col_custom1_nome = st.text_input("Nome da Coluna 1:", value=st.session_state.get('col_custom1_nome', ''), placeholder="Ex: Tipo de Cabelo", key="input_col1")
+        with col_b:
+            col_custom2_nome = st.text_input("Nome da Coluna 2:", value=st.session_state.get('col_custom2_nome', ''), placeholder="Ex: Faixa Etaria", key="input_col2")
+        
+        # Salvar nomes das colunas na sessao
+        if col_custom1_nome:
+            st.session_state.col_custom1_nome = col_custom1_nome
+        if col_custom2_nome:
+            st.session_state.col_custom2_nome = col_custom2_nome
     
     dados = coletar_dados_influenciadores(campanhas_list)
     
@@ -1368,19 +1425,104 @@ def render_pag6_lista_influenciadores(campanhas_list, cores):
     ordem_map = {"Impressoes": "impressoes", "Alcance Total": "alcance_total", "Interacoes": "interacoes", "Taxa Eng.": "taxa_eng", "Investimento": "custo"}
     df = df.sort_values(ordem_map.get(ordenar, 'impressoes'), ascending=False)
     
-    # Preparar dataframe para exibicao com formatacao
-    df_exibir = df[['nome', 'usuario', 'classificacao', 'seguidores', 'posts', 'impressoes', 'alcance_total', 'interacoes', 'custo', 'taxa_eng', 'taxa_alcance']].copy()
-    df_exibir.columns = ['Nome', 'Usuario', 'Classe', 'Seguidores', 'Posts', 'Impressoes', 'Alcance Total', 'Interacoes', 'Invest. (R$)', 'Tx Eng. %', 'Tx Alc. %']
+    # Adicionar colunas personalizadas com dados da campanha
+    if mostrar_cols_custom and (st.session_state.get('col_custom1_nome') or st.session_state.get('col_custom2_nome')):
+        # Buscar dados personalizados dos influenciadores na campanha
+        dados_custom = {}
+        for camp in campanhas_list:
+            for inf_camp in camp.get('influenciadores', []):
+                inf_id = inf_camp.get('influenciador_id')
+                dados_custom[inf_id] = {
+                    'col1': inf_camp.get('dado_custom1', ''),
+                    'col2': inf_camp.get('dado_custom2', '')
+                }
+        
+        # Adicionar ao dataframe
+        df['col_custom1'] = df['id'].apply(lambda x: dados_custom.get(x, {}).get('col1', ''))
+        df['col_custom2'] = df['id'].apply(lambda x: dados_custom.get(x, {}).get('col2', ''))
+        
+        # Preparar dataframe para exibicao
+        colunas_base = ['nome', 'usuario', 'classificacao', 'seguidores', 'posts', 'impressoes', 'alcance_total', 'interacoes', 'custo', 'taxa_eng']
+        nomes_base = ['Nome', 'Usuario', 'Classe', 'Seguidores', 'Posts', 'Impressoes', 'Alcance Total', 'Interacoes', 'Invest. (R$)', 'Tx Eng. %']
+        
+        if st.session_state.get('col_custom1_nome'):
+            colunas_base.append('col_custom1')
+            nomes_base.append(st.session_state.col_custom1_nome)
+        if st.session_state.get('col_custom2_nome'):
+            colunas_base.append('col_custom2')
+            nomes_base.append(st.session_state.col_custom2_nome)
+        
+        df_exibir = df[colunas_base].copy()
+        df_exibir.columns = nomes_base
+    else:
+        # Preparar dataframe para exibicao com formatacao
+        df_exibir = df[['nome', 'usuario', 'classificacao', 'seguidores', 'posts', 'impressoes', 'alcance_total', 'interacoes', 'custo', 'taxa_eng', 'taxa_alcance']].copy()
+        df_exibir.columns = ['Nome', 'Usuario', 'Classe', 'Seguidores', 'Posts', 'Impressoes', 'Alcance Total', 'Interacoes', 'Invest. (R$)', 'Tx Eng. %', 'Tx Alc. %']
     
     # Formatar numeros com ponto nas centenas
     for col in ['Seguidores', 'Impressoes', 'Alcance Total', 'Interacoes']:
-        df_exibir[col] = df_exibir[col].apply(lambda x: f"{x:,.0f}".replace(",", "."))
+        if col in df_exibir.columns:
+            df_exibir[col] = df_exibir[col].apply(lambda x: f"{x:,.0f}".replace(",", "."))
     
-    df_exibir['Invest. (R$)'] = df_exibir['Invest. (R$)'].apply(lambda x: f"{x:,.0f}".replace(",", "."))
-    df_exibir['Tx Eng. %'] = df_exibir['Tx Eng. %'].apply(lambda x: f"{x:.2f}")
-    df_exibir['Tx Alc. %'] = df_exibir['Tx Alc. %'].apply(lambda x: f"{x:.2f}")
+    if 'Invest. (R$)' in df_exibir.columns:
+        df_exibir['Invest. (R$)'] = df_exibir['Invest. (R$)'].apply(lambda x: f"{x:,.0f}".replace(",", "."))
+    if 'Tx Eng. %' in df_exibir.columns:
+        df_exibir['Tx Eng. %'] = df_exibir['Tx Eng. %'].apply(lambda x: f"{x:.2f}")
+    if 'Tx Alc. %' in df_exibir.columns:
+        df_exibir['Tx Alc. %'] = df_exibir['Tx Alc. %'].apply(lambda x: f"{x:.2f}")
     
     st.dataframe(df_exibir, use_container_width=True, hide_index=True)
+    
+    # Edicao dos dados personalizados
+    if mostrar_cols_custom and (st.session_state.get('col_custom1_nome') or st.session_state.get('col_custom2_nome')):
+        st.markdown("---")
+        with st.expander("✏️ Editar dados personalizados", expanded=False):
+            st.caption("Preencha os dados personalizados para cada influenciador")
+            
+            # Pegar a primeira campanha para editar
+            if campanhas_list:
+                camp = campanhas_list[0]
+                camp_id = camp['id']
+                
+                for idx, inf_camp in enumerate(camp.get('influenciadores', [])):
+                    inf = data_manager.get_influenciador(inf_camp.get('influenciador_id'))
+                    if not inf:
+                        continue
+                    
+                    nome_inf = inf.get('nome', 'Desconhecido')
+                    col1, col2, col3 = st.columns([2, 2, 2])
+                    
+                    with col1:
+                        st.markdown(f"**{nome_inf}**")
+                    
+                    with col2:
+                        if st.session_state.get('col_custom1_nome'):
+                            val1 = st.text_input(
+                                st.session_state.col_custom1_nome,
+                                value=inf_camp.get('dado_custom1', ''),
+                                key=f"custom1_{inf['id']}",
+                                label_visibility="collapsed",
+                                placeholder=st.session_state.col_custom1_nome
+                            )
+                            if val1 != inf_camp.get('dado_custom1', ''):
+                                inf_camp['dado_custom1'] = val1
+                    
+                    with col3:
+                        if st.session_state.get('col_custom2_nome'):
+                            val2 = st.text_input(
+                                st.session_state.col_custom2_nome,
+                                value=inf_camp.get('dado_custom2', ''),
+                                key=f"custom2_{inf['id']}",
+                                label_visibility="collapsed",
+                                placeholder=st.session_state.col_custom2_nome
+                            )
+                            if val2 != inf_camp.get('dado_custom2', ''):
+                                inf_camp['dado_custom2'] = val2
+                
+                if st.button("💾 Salvar dados personalizados", type="primary"):
+                    data_manager.atualizar_campanha(camp_id, {'influenciadores': camp['influenciadores']})
+                    st.success("Dados salvos!")
+                    st.rerun()
 
 
 # ========================================
@@ -1438,6 +1580,7 @@ def coletar_dados_formato(campanhas_list):
             inf_id = camp_inf.get('influenciador_id')
             for post in camp_inf.get('posts', []):
                 formato = post.get('formato', 'Outro')
+                impressoes_total = calcular_impressoes_post(post)
                 
                 if formato == 'Stories':
                     # Agregar Stories do mesmo influenciador/data
@@ -1454,25 +1597,25 @@ def coletar_dados_formato(campanhas_list):
                             'curtidas': 0
                         }
                     
-                    # Somar views e interacoes
-                    stories_por_influ_data[chave]['views'] += post.get('views', 0)
-                    stories_por_influ_data[chave]['interacoes'] += post.get('interacoes', 0)
-                    stories_por_influ_data[chave]['impressoes'] += post.get('impressoes', 0)
-                    stories_por_influ_data[chave]['curtidas'] += post.get('curtidas', 0)
+                    # Somar metricas
+                    stories_por_influ_data[chave]['views'] += post.get('views', 0) or 0
+                    stories_por_influ_data[chave]['interacoes'] += post.get('interacoes', 0) or 0
+                    stories_por_influ_data[chave]['impressoes'] += impressoes_total
+                    stories_por_influ_data[chave]['curtidas'] += post.get('curtidas', 0) or 0
                     # Alcance = pegar o maior
                     stories_por_influ_data[chave]['alcance_max'] = max(
                         stories_por_influ_data[chave]['alcance_max'],
-                        post.get('alcance', 0)
+                        post.get('alcance', 0) or 0
                     )
                 else:
                     # Outros formatos: adicionar normalmente
                     dados_raw.append({
                         'formato': formato, 
-                        'views': post.get('views', 0), 
-                        'alcance': post.get('alcance', 0), 
-                        'interacoes': post.get('interacoes', 0), 
-                        'impressoes': post.get('impressoes', 0),
-                        'curtidas': post.get('curtidas', 0)
+                        'views': post.get('views', 0) or 0, 
+                        'alcance': post.get('alcance', 0) or 0, 
+                        'interacoes': post.get('interacoes', 0) or 0, 
+                        'impressoes': impressoes_total,
+                        'curtidas': post.get('curtidas', 0) or 0
                     })
     
     # Adicionar Stories agregados
@@ -1502,11 +1645,11 @@ def coletar_dados_classificacao_completo(campanhas_list):
                     'classificacao': classificacao, 
                     'influenciador': inf['nome'], 
                     'post_id': post.get('id', 0), 
-                    'views': post.get('views', 0), 
-                    'alcance': post.get('alcance', 0), 
-                    'interacoes': post.get('interacoes', 0), 
-                    'impressoes': post.get('impressoes', 0),
-                    'curtidas': post.get('curtidas', 0)
+                    'views': post.get('views', 0) or 0, 
+                    'alcance': post.get('alcance', 0) or 0, 
+                    'interacoes': post.get('interacoes', 0) or 0, 
+                    'impressoes': calcular_impressoes_post(post),
+                    'curtidas': post.get('curtidas', 0) or 0
                 })
     return dados
 
@@ -1527,10 +1670,10 @@ def coletar_dados_temporais(campanhas_list, data_ini, data_fim):
                             'data': data_post, 
                             'influenciador': inf['nome'], 
                             'seguidores': seguidores, 
-                            'views': post.get('views', 0), 
-                            'alcance': post.get('alcance', 0), 
-                            'interacoes': post.get('interacoes', 0), 
-                            'impressoes': post.get('impressoes', 0)
+                            'views': post.get('views', 0) or 0, 
+                            'alcance': post.get('alcance', 0) or 0, 
+                            'interacoes': post.get('interacoes', 0) or 0, 
+                            'impressoes': calcular_impressoes_post(post)
                         })
                 except:
                     pass
@@ -1538,7 +1681,9 @@ def coletar_dados_temporais(campanhas_list, data_ini, data_fim):
 
 
 def coletar_dados_influenciadores(campanhas_list):
+    """Coleta dados por influenciador. Stories do mesmo dia contam como 1 publicacao."""
     dados_inf = {}
+    
     for camp in campanhas_list:
         for camp_inf in camp.get('influenciadores', []):
             inf = data_manager.get_influenciador(camp_inf.get('influenciador_id'))
@@ -1561,21 +1706,44 @@ def coletar_dados_influenciadores(campanhas_list):
                     'custo': 0, 
                     'cliques_link': 0, 
                     'cliques_arroba': 0, 
-                    'posts': 0
+                    'posts': 0,
+                    '_stories_datas': set()  # Para contar datas unicas de Stories
                 }
             dados_inf[inf_id]['custo'] += camp_inf.get('custo', 0)
+            
             for post in camp_inf.get('posts', []):
-                dados_inf[inf_id]['impressoes'] += post.get('views', 0) + post.get('impressoes', 0)
-                post_alcance = post.get('alcance', 0)
+                formato = post.get('formato', 'Outro')
+                data_post = post.get('data_publicacao', '')
+                
+                # Calcular impressoes combinadas
+                imp = calcular_impressoes_post(post)
+                
+                dados_inf[inf_id]['impressoes'] += imp
+                post_alcance = post.get('alcance', 0) or 0
                 dados_inf[inf_id]['alcance'] = max(dados_inf[inf_id]['alcance'], post_alcance)
                 dados_inf[inf_id]['alcance_total'] += post_alcance
-                dados_inf[inf_id]['interacoes'] += post.get('interacoes', 0)
-                dados_inf[inf_id]['curtidas'] += post.get('curtidas', 0)
-                dados_inf[inf_id]['cliques_link'] += post.get('clique_link', 0)
+                dados_inf[inf_id]['interacoes'] += post.get('interacoes', 0) or 0
+                dados_inf[inf_id]['curtidas'] += post.get('curtidas', 0) or 0
+                dados_inf[inf_id]['cliques_link'] += post.get('clique_link', 0) or 0
                 dados_inf[inf_id]['cliques_arroba'] += post.get('clique_arroba', 0) or post.get('cliques_arroba', 0) or 0
-                dados_inf[inf_id]['posts'] += 1
+                
+                # Contagem de posts: Stories do mesmo dia = 1 publicacao
+                if formato == 'Stories':
+                    if data_post and data_post not in dados_inf[inf_id]['_stories_datas']:
+                        dados_inf[inf_id]['_stories_datas'].add(data_post)
+                        dados_inf[inf_id]['posts'] += 1
+                    elif not data_post:
+                        # Se nao tem data, conta como post individual
+                        dados_inf[inf_id]['posts'] += 1
+                else:
+                    # Outros formatos contam normalmente
+                    dados_inf[inf_id]['posts'] += 1
+    
     resultado = []
     for inf_id, d in dados_inf.items():
+        # Remover campo auxiliar
+        d.pop('_stories_datas', None)
+        
         d['taxa_eng'] = round((d['interacoes'] / d['impressoes'] * 100), 2) if d['impressoes'] > 0 else 0
         d['taxa_alcance'] = round((d['alcance'] / d['seguidores'] * 100), 2) if d['seguidores'] > 0 else 0
         d['taxa_eng_geral'] = round((d['interacoes'] / d['seguidores'] * 100), 2) if d['seguidores'] > 0 else 0

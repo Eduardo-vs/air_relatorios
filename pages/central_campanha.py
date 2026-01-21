@@ -699,30 +699,49 @@ def render_form_post_manual(campanha, inf):
     
     metricas_config = campanha.get('metricas_selecionadas', {})
     
+    # Escolher formato primeiro para mostrar opcoes de Stories
+    col_fmt, col_plat = st.columns(2)
+    with col_fmt:
+        formato = st.selectbox("Formato *", ["Reels", "Stories", "Carrossel", "Feed", "TikTok", "YouTube"], key=f"fmt_{inf['id']}")
+    with col_plat:
+        plataforma = st.selectbox("Plataforma", ["Instagram", "TikTok", "YouTube"], key=f"plat_{inf['id']}")
+    
+    # Se for Stories, perguntar quantas telas
+    qtd_telas = 1
+    if formato == "Stories":
+        st.info("📱 **Stories com múltiplas telas**: Preencha os dados totais de todas as telas. O sistema vai somar automaticamente.")
+        qtd_telas = st.number_input("Quantidade de telas (Stories)", min_value=1, max_value=50, value=1, key=f"qtd_telas_{inf['id']}")
+        
+        if qtd_telas > 1:
+            st.caption(f"Você está adicionando {qtd_telas} telas de Stories do mesmo dia como 1 publicação")
+    
     with st.form(f"form_post_manual_{inf['id']}"):
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         
         with col1:
-            formato = st.selectbox("Formato *", ["Reels", "Stories", "Carrossel", "Feed", "TikTok", "YouTube"])
-            plataforma = st.selectbox("Plataforma", ["Instagram", "TikTok", "YouTube"])
+            data_pub = st.date_input("Data Publicacao *")
         
         with col2:
-            data_pub = st.date_input("Data Publicacao *")
             link_post = st.text_input("Link do Post")
         
-        with col3:
-            views = st.number_input("Views", min_value=0, value=0)
-            alcance = st.number_input("Alcance", min_value=0, value=0)
+        if formato == "Stories" and qtd_telas > 1:
+            st.markdown("**Métricas totais (soma de todas as telas):**")
         
         col1, col2, col3 = st.columns(3)
         with col1:
-            interacoes = st.number_input("Interacoes", min_value=0, value=0)
-            impressoes = st.number_input("Impressoes", min_value=0, value=0)
+            views = st.number_input("Views (total)", min_value=0, value=0)
+            impressoes = st.number_input("Impressões (total)", min_value=0, value=0)
         with col2:
-            curtidas = st.number_input("Curtidas", min_value=0, value=0)
-            comentarios_qtd = st.number_input("Comentarios", min_value=0, value=0)
+            alcance = st.number_input("Alcance (maior)", min_value=0, value=0, help="Para Stories, use o maior alcance entre as telas")
+            interacoes = st.number_input("Interações (total)", min_value=0, value=0)
         with col3:
+            curtidas = st.number_input("Curtidas (total)", min_value=0, value=0)
+            comentarios_qtd = st.number_input("Comentários (total)", min_value=0, value=0)
+        
+        col1, col2 = st.columns(2)
+        with col1:
             compartilhamentos = st.number_input("Compartilhamentos", min_value=0, value=0)
+        with col2:
             saves = st.number_input("Salvamentos", min_value=0, value=0)
         
         # Metricas opcionais
@@ -730,7 +749,7 @@ def render_form_post_manual(campanha, inf):
         with col1:
             clique_link = st.number_input("Cliques no Link", min_value=0, value=0) if metricas_config.get('clique_link') else 0
         with col2:
-            cupom_conversoes = st.number_input("Conversoes Cupom", min_value=0, value=0) if metricas_config.get('cupom_conversoes') else 0
+            cupom_conversoes = st.number_input("Conversões Cupom", min_value=0, value=0) if metricas_config.get('cupom_conversoes') else 0
         
         col1, col2 = st.columns(2)
         submitted = col1.form_submit_button("Adicionar Post", use_container_width=True, type="primary")
@@ -752,12 +771,13 @@ def render_form_post_manual(campanha, inf):
                 'saves': saves,
                 'clique_link': clique_link,
                 'cupom_conversoes': cupom_conversoes,
-                'imagens': []
+                'imagens': [],
+                'qtd_telas': qtd_telas if formato == "Stories" else 1
             }
             
             data_manager.adicionar_post(campanha['id'], inf['id'], post_data)
             st.session_state.show_manual_post_inf = None
-            st.success("Post adicionado!")
+            st.success(f"Post adicionado!" + (f" ({qtd_telas} telas de Stories)" if qtd_telas > 1 else ""))
             st.rerun()
         
         if cancel:

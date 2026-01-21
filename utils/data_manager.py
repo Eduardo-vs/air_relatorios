@@ -1258,7 +1258,7 @@ def get_posts_influenciador(camp_id: int, inf_id: int) -> List[Dict]:
 # ========================================
 
 def calcular_metricas_campanha(campanha: Dict) -> Dict:
-    """Calcula metricas agregadas de uma campanha"""
+    """Calcula metricas agregadas de uma campanha. Stories do mesmo dia/influenciador = 1 publicacao."""
     
     total_influenciadores = 0
     total_seguidores = 0
@@ -1280,6 +1280,7 @@ def calcular_metricas_campanha(campanha: Dict) -> Dict:
     
     for inf_camp in influenciadores:
         inf = get_influenciador(inf_camp.get('influenciador_id'))
+        inf_id = inf_camp.get('influenciador_id')
         if inf:
             total_seguidores += inf.get('seguidores', 0)
         
@@ -1287,9 +1288,22 @@ def calcular_metricas_campanha(campanha: Dict) -> Dict:
         total_custo += inf_camp.get('custo', 0)
         
         posts = inf_camp.get('posts', [])
-        total_posts += len(posts)
+        stories_datas = set()  # Para contar datas unicas de Stories
         
         for post in posts:
+            formato = post.get('formato', 'Outro')
+            data_post = post.get('data_publicacao', '')
+            
+            # Contagem de posts: Stories do mesmo dia = 1 publicacao
+            if formato == 'Stories':
+                if data_post and data_post not in stories_datas:
+                    stories_datas.add(data_post)
+                    total_posts += 1
+                elif not data_post:
+                    total_posts += 1
+            else:
+                total_posts += 1
+            
             # Para views/impressoes, usa o maior valor ou soma se diferentes
             views = post.get('views', 0) or 0
             impressoes_post = post.get('impressoes', 0) or 0

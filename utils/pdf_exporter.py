@@ -74,76 +74,77 @@ def gerar_insights_html(campanha_id, pagina):
 
 def get_css(primary_color):
     return f'''
-    @page {{ size: A4; margin: 1.5cm; }}
+    @page {{ size: A4; margin: 1.2cm; }}
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 9pt; line-height: 1.5; color: #1f2937; background: #fff; }}
-    .header {{ text-align: center; padding: 25px 0; border-bottom: 4px solid {primary_color}; margin-bottom: 25px; }}
-    .header h1 {{ color: {primary_color}; font-size: 26pt; margin-bottom: 8px; }}
-    .header .subtitle {{ color: #6b7280; font-size: 12pt; }}
-    .page-break {{ page-break-before: always; padding-top: 20px; }}
-    .section {{ margin-bottom: 30px; }}
-    .section-title {{ color: {primary_color}; font-size: 16pt; font-weight: 700; border-bottom: 3px solid {primary_color}; padding-bottom: 10px; margin-bottom: 20px; }}
-    .subsection-title {{ font-size: 12pt; font-weight: 600; color: #374151; margin: 25px 0 15px 0; padding-bottom: 5px; border-bottom: 1px solid #e5e7eb; }}
-    .big-number-card {{ background: linear-gradient(135deg, {primary_color} 0%, #a78bfa 100%); color: white; padding: 35px; border-radius: 16px; text-align: center; margin-bottom: 25px; }}
-    .big-number-card .value {{ font-size: 52pt; font-weight: 800; line-height: 1; }}
-    .big-number-card .label {{ font-size: 11pt; opacity: 0.9; text-transform: uppercase; margin-top: 8px; letter-spacing: 1px; }}
-    .metrics-grid {{ display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 25px; }}
-    .metric-card {{ flex: 1; min-width: 100px; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border: 1px solid #e2e8f0; border-radius: 12px; padding: 15px; text-align: center; }}
-    .metric-card .value {{ font-size: 18pt; font-weight: 700; color: {primary_color}; }}
-    .metric-card .label {{ font-size: 7pt; color: #64748b; text-transform: uppercase; margin-top: 4px; }}
-    .charts-row {{ display: flex; gap: 20px; margin-bottom: 25px; }}
-    .chart-box {{ flex: 1; background: #f8fafc; border-radius: 12px; padding: 20px; border: 1px solid #e2e8f0; }}
-    .chart-title {{ font-size: 10pt; font-weight: 600; color: #374151; margin-bottom: 15px; text-align: center; }}
-    .bar-chart {{ margin: 10px 0; }}
-    .bar-row {{ display: flex; align-items: center; margin-bottom: 10px; page-break-inside: avoid; }}
-    .bar-label {{ width: 100px; font-size: 8pt; color: #374151; text-align: right; padding-right: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
-    .bar-container {{ flex: 1; background: #e5e7eb; border-radius: 6px; height: 26px; overflow: hidden; }}
-    .bar-fill {{ height: 100%; border-radius: 6px; display: flex; align-items: center; justify-content: flex-end; padding-right: 10px; min-width: 50px; }}
-    .bar-value {{ font-size: 8pt; font-weight: 600; color: white; }}
-    .bar-pct {{ font-size: 7pt; color: rgba(255,255,255,0.8); margin-left: 5px; }}
-    .vertical-chart {{ display: flex; justify-content: space-around; align-items: flex-end; height: 180px; padding: 15px 10px; border-bottom: 2px solid #e5e7eb; margin-bottom: 10px; }}
-    .v-bar-item {{ display: flex; flex-direction: column; align-items: center; flex: 1; max-width: 80px; }}
-    .v-bar {{ width: 50px; border-radius: 6px 6px 0 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 5px; min-height: 25px; }}
-    .v-bar-value {{ font-size: 8pt; font-weight: 700; color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }}
-    .v-bar-pct {{ font-size: 7pt; color: rgba(255,255,255,0.9); }}
-    .v-bar-label {{ font-size: 8pt; color: #6b7280; margin-top: 8px; text-align: center; max-width: 70px; word-wrap: break-word; }}
-    .insights-section {{ margin-top: 25px; }}
-    .insights-grid {{ display: flex; flex-wrap: wrap; gap: 12px; }}
-    .insight-card {{ flex: 1; min-width: 45%; background: #f0fdf4; border-left: 4px solid #22c55e; padding: 15px; border-radius: 0 10px 10px 0; page-break-inside: avoid; }}
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 8pt; line-height: 1.4; color: #1f2937; background: #fff; }}
+    .header {{ text-align: center; padding: 20px 0; border-bottom: 4px solid {primary_color}; margin-bottom: 20px; }}
+    .header h1 {{ color: {primary_color}; font-size: 22pt; margin-bottom: 6px; }}
+    .header .subtitle {{ color: #6b7280; font-size: 10pt; }}
+    .page-break {{ page-break-before: always; padding-top: 15px; }}
+    .section {{ margin-bottom: 20px; }}
+    .section-title {{ color: {primary_color}; font-size: 14pt; font-weight: 700; border-bottom: 3px solid {primary_color}; padding-bottom: 8px; margin-bottom: 15px; }}
+    .subsection-title {{ font-size: 11pt; font-weight: 600; color: #374151; margin: 20px 0 12px 0; padding-bottom: 4px; border-bottom: 1px solid #e5e7eb; }}
+    .big-number-card {{ background: linear-gradient(135deg, {primary_color} 0%, #a78bfa 100%); color: white; padding: 25px; border-radius: 12px; text-align: center; margin-bottom: 20px; }}
+    .big-number-card .value {{ font-size: 42pt; font-weight: 800; line-height: 1; }}
+    .big-number-card .label {{ font-size: 10pt; opacity: 0.9; text-transform: uppercase; margin-top: 6px; letter-spacing: 1px; }}
+    .metrics-grid {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }}
+    .metric-card {{ flex: 1; min-width: 90px; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; text-align: center; }}
+    .metric-card .value {{ font-size: 14pt; font-weight: 700; color: {primary_color}; }}
+    .metric-card .label {{ font-size: 6pt; color: #64748b; text-transform: uppercase; margin-top: 3px; }}
+    .charts-row {{ display: flex; gap: 15px; margin-bottom: 20px; }}
+    .chart-box {{ flex: 1; background: #f8fafc; border-radius: 10px; padding: 15px; border: 1px solid #e2e8f0; page-break-inside: avoid; }}
+    .chart-title {{ font-size: 9pt; font-weight: 600; color: #374151; margin-bottom: 12px; text-align: center; }}
+    .bar-chart {{ margin: 8px 0; }}
+    .bar-row {{ display: flex; align-items: center; margin-bottom: 6px; page-break-inside: avoid; }}
+    .bar-label {{ width: 80px; font-size: 7pt; color: #374151; text-align: right; padding-right: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+    .bar-container {{ flex: 1; background: #e5e7eb; border-radius: 4px; height: 20px; overflow: hidden; }}
+    .bar-fill {{ height: 100%; border-radius: 4px; display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; min-width: 40px; }}
+    .bar-value {{ font-size: 7pt; font-weight: 600; color: white; }}
+    .bar-pct {{ font-size: 6pt; color: rgba(255,255,255,0.8); margin-left: 4px; }}
+    .vertical-chart {{ display: flex; justify-content: space-around; align-items: flex-end; height: 150px; padding: 10px 8px; border-bottom: 2px solid #e5e7eb; margin-bottom: 8px; }}
+    .v-bar-item {{ display: flex; flex-direction: column; align-items: center; flex: 1; max-width: 70px; }}
+    .v-bar {{ width: 40px; border-radius: 4px 4px 0 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 4px; min-height: 20px; }}
+    .v-bar-value {{ font-size: 7pt; font-weight: 700; color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }}
+    .v-bar-pct {{ font-size: 6pt; color: rgba(255,255,255,0.9); }}
+    .v-bar-label {{ font-size: 7pt; color: #6b7280; margin-top: 6px; text-align: center; max-width: 60px; word-wrap: break-word; }}
+    .insights-section {{ margin-top: 20px; page-break-inside: avoid; }}
+    .insights-grid {{ display: flex; flex-wrap: wrap; gap: 10px; }}
+    .insight-card {{ flex: 1; min-width: 45%; background: #f0fdf4; border-left: 3px solid #22c55e; padding: 12px; border-radius: 0 8px 8px 0; page-break-inside: avoid; }}
     .insight-card.alerta {{ background: #fffbeb; border-color: #f59e0b; }}
     .insight-card.destaque {{ background: #eff6ff; border-color: #3b82f6; }}
     .insight-card.info {{ background: #f5f3ff; border-color: {primary_color}; }}
     .insight-card.critico {{ background: #fef2f2; border-color: #ef4444; }}
-    .insight-title {{ font-weight: 600; font-size: 10pt; margin-bottom: 6px; color: #1f2937; }}
-    .insight-text {{ font-size: 8pt; color: #374151; line-height: 1.5; }}
-    table {{ width: 100%; border-collapse: collapse; font-size: 8pt; margin-top: 15px; }}
+    .insight-title {{ font-weight: 600; font-size: 9pt; margin-bottom: 4px; color: #1f2937; }}
+    .insight-text {{ font-size: 7pt; color: #374151; line-height: 1.4; }}
+    table {{ width: 100%; border-collapse: collapse; font-size: 7pt; margin-top: 12px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
     thead {{ display: table-header-group; }}
     tbody {{ display: table-row-group; }}
-    tr {{ page-break-inside: avoid; page-break-after: auto; }}
-    th {{ background: {primary_color}; color: white; padding: 10px 8px; text-align: left; font-size: 7pt; text-transform: uppercase; font-weight: 600; }}
-    td {{ padding: 8px; border-bottom: 1px solid #e5e7eb; font-size: 7pt; }}
+    tfoot {{ display: table-footer-group; }}
+    tr {{ page-break-inside: avoid !important; break-inside: avoid !important; }}
+    th {{ background: {primary_color} !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; color: white; padding: 6px 4px; text-align: left; font-size: 6pt; text-transform: uppercase; font-weight: 600; }}
+    td {{ padding: 5px 4px; border-bottom: 1px solid #e5e7eb; font-size: 6pt; vertical-align: middle; }}
     tr:nth-child(even) {{ background: #f8fafc; }}
     .text-right {{ text-align: right; }}
     .text-center {{ text-align: center; }}
     .font-bold {{ font-weight: 600; }}
-    .influ-card {{ display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #e5e7eb; gap: 15px; page-break-inside: avoid; }}
-    .influ-avatar {{ width: 40px; height: 40px; background: {primary_color}; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 14pt; }}
-    .influ-info {{ flex: 1; }}
-    .influ-name {{ font-weight: 600; font-size: 10pt; }}
-    .influ-meta {{ font-size: 8pt; color: #6b7280; }}
-    .influ-metrics {{ display: flex; gap: 20px; }}
-    .influ-metric {{ text-align: center; }}
-    .influ-metric-value {{ font-weight: 600; font-size: 10pt; color: {primary_color}; }}
-    .influ-metric-label {{ font-size: 7pt; color: #6b7280; text-transform: uppercase; }}
-    .comment-card {{ background: #f8fafc; border-radius: 10px; padding: 15px; margin-bottom: 12px; border-left: 3px solid {primary_color}; }}
-    .comment-header {{ display: flex; justify-content: space-between; margin-bottom: 8px; }}
-    .comment-author {{ font-weight: 600; color: {primary_color}; }}
-    .comment-date {{ font-size: 8pt; color: #9ca3af; }}
-    .comment-text {{ font-size: 9pt; color: #374151; line-height: 1.6; }}
-    .glossary-item {{ margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid #e5e7eb; }}
-    .glossary-term {{ font-weight: 600; color: {primary_color}; font-size: 10pt; margin-bottom: 4px; }}
-    .glossary-def {{ font-size: 9pt; color: #4b5563; line-height: 1.5; }}
-    .footer {{ text-align: center; color: #9ca3af; font-size: 8pt; padding: 25px 0; margin-top: 40px; border-top: 1px solid #e5e7eb; }}
+    .influ-card {{ display: block; padding: 10px; border-bottom: 1px solid #e5e7eb; page-break-inside: avoid !important; break-inside: avoid !important; }}
+    .influ-avatar {{ display: inline-block; width: 30px; height: 30px; background: {primary_color}; border-radius: 50%; text-align: center; line-height: 30px; color: white; font-weight: 600; font-size: 12pt; vertical-align: middle; margin-right: 10px; }}
+    .influ-info {{ display: inline-block; vertical-align: middle; }}
+    .influ-name {{ font-weight: 600; font-size: 9pt; }}
+    .influ-meta {{ font-size: 7pt; color: #6b7280; }}
+    .influ-metrics {{ margin-top: 6px; }}
+    .influ-metric {{ display: inline-block; margin-right: 15px; text-align: center; }}
+    .influ-metric-value {{ font-weight: 600; font-size: 9pt; color: {primary_color}; }}
+    .influ-metric-label {{ font-size: 6pt; color: #6b7280; text-transform: uppercase; }}
+    .comment-card {{ background: #f8fafc; border-radius: 8px; padding: 12px; margin-bottom: 10px; border-left: 3px solid {primary_color}; page-break-inside: avoid; }}
+    .comment-header {{ display: flex; justify-content: space-between; margin-bottom: 6px; }}
+    .comment-author {{ font-weight: 600; color: {primary_color}; font-size: 8pt; }}
+    .comment-date {{ font-size: 7pt; color: #9ca3af; }}
+    .comment-text {{ font-size: 8pt; color: #374151; line-height: 1.5; }}
+    .glossary-item {{ margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #e5e7eb; page-break-inside: avoid; }}
+    .glossary-term {{ font-weight: 600; color: {primary_color}; font-size: 9pt; margin-bottom: 3px; }}
+    .glossary-def {{ font-size: 8pt; color: #4b5563; line-height: 1.4; }}
+    .footer {{ text-align: center; color: #9ca3af; font-size: 7pt; padding: 20px 0; margin-top: 30px; border-top: 1px solid #e5e7eb; }}
     '''
 
 
