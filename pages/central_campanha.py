@@ -51,9 +51,10 @@ def render():
             st.rerun()
     
     # Tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "Influenciadores e Posts",
         "Configuracoes da Campanha",
+        "Top Conteudos",
         "Configurar Insights",
         "Comentarios",
         "Categorias de Comentarios"
@@ -66,12 +67,15 @@ def render():
         render_configuracoes_campanha(campanha)
     
     with tab3:
-        render_configurar_insights(campanha)
+        render_top_conteudos(campanha)
     
     with tab4:
-        render_comentarios(campanha)
+        render_configurar_insights(campanha)
     
     with tab5:
+        render_comentarios(campanha)
+    
+    with tab6:
         render_categorias_comentarios(campanha)
 
 
@@ -1032,6 +1036,190 @@ def render_configuracoes_campanha(campanha):
             
             st.success("Configuracoes salvas!")
             st.rerun()
+
+
+def render_top_conteudos(campanha):
+    """Configura os top 3 conteúdos que mais desempenharam para exibir no relatório"""
+    
+    st.subheader("Top Conteudos")
+    st.caption("Selecione os 3 conteudos que mais desempenharam para destacar no relatorio de Top Performance")
+    
+    campanha_id = campanha['id']
+    
+    # Buscar influenciadores e posts
+    influenciadores = data_manager.get_influenciadores_campanha(campanha_id)
+    
+    # Coletar todos os posts com informações
+    todos_posts = []
+    for inf in influenciadores:
+        for idx, post in enumerate(inf.get('posts', [])):
+            link = post.get('link', '') or post.get('link_post', '') or post.get('permalink', '') or post.get('url', '') or ''
+            
+            # Calcular engajamento
+            views = post.get('views', 0) or 0
+            impressoes = post.get('impressoes', 0) or 0
+            alcance = post.get('alcance', 0) or 0
+            interacoes = post.get('interacoes', 0) or 0
+            curtidas = post.get('curtidas', 0) or 0
+            comentarios = post.get('comentarios', 0) or post.get('comentarios_qtd', 0) or 0
+            if isinstance(comentarios, list):
+                comentarios = len(comentarios)
+            saves = post.get('saves', 0) or 0
+            
+            total_imp = max(views, impressoes) if views > 0 and impressoes > 0 else views + impressoes
+            
+            post_id = f"{inf['id']}_{idx}"
+            
+            todos_posts.append({
+                'post_id': post_id,
+                'influenciador': inf.get('nome', ''),
+                'influenciador_id': inf.get('id'),
+                'usuario': inf.get('usuario', ''),
+                'formato': post.get('formato', 'N/A'),
+                'data': post.get('data_publicacao', ''),
+                'link': link,
+                'thumbnail': post.get('thumbnail', ''),
+                'views': views,
+                'impressoes': total_imp,
+                'alcance': alcance,
+                'interacoes': interacoes,
+                'curtidas': curtidas,
+                'comentarios': comentarios,
+                'saves': saves,
+                'legenda': post.get('legenda', '') or post.get('caption', '') or ''
+            })
+    
+    if not todos_posts:
+        st.warning("Nenhum post encontrado na campanha.")
+        return
+    
+    # Buscar configuração atual dos top conteúdos
+    top_conteudos = campanha.get('top_conteudos', {})
+    
+    st.markdown("---")
+    st.markdown("### Selecionar Top 3 Conteudos")
+    st.info("Selecione manualmente os 3 conteudos de melhor desempenho e escreva uma breve descricao explicando a escolha de cada um.")
+    
+    # Ordenar posts por interações para sugestão
+    posts_ordenados = sorted(todos_posts, key=lambda x: x['interacoes'], reverse=True)
+    
+    # Criar opções para selectbox
+    opcoes_posts = ["(Nenhum)"] + [
+        f"{p['influenciador']} - {p['formato']} - {funcoes_auxiliares.formatar_numero(p['interacoes'])} inter. ({p['data']})"
+        for p in posts_ordenados
+    ]
+    
+    # Mapear opções para post_ids
+    opcoes_map = {opcoes_posts[0]: None}
+    for i, p in enumerate(posts_ordenados):
+        opcoes_map[opcoes_posts[i+1]] = p['post_id']
+    
+    # Inverso: post_id para opção
+    post_id_to_opcao = {v: k for k, v in opcoes_map.items()}
+    
+    with st.form("form_top_conteudos"):
+        for i in range(1, 4):
+            st.markdown(f"#### 🏆 Top {i}")
+            
+            col1, col2 = st.columns([1, 2])
+            
+            with col1:
+                # Valor atual
+                atual_post_id = top_conteudos.get(f'top{i}_post_id', None)
+                atual_opcao = post_id_to_opcao.get(atual_post_id, "(Nenhum)")
+                
+                try:
+                    idx_default = opcoes_posts.index(atual_opcao)
+                except:
+                    idx_default = 0
+                
+                selected = st.selectbox(
+                    f"Conteudo Top {i}:",
+                    opcoes_posts,
+                    index=idx_default,
+                    key=f"top{i}_select"
+                )
+                
+                # Mostrar preview do post selecionado
+                selected_post_id = opcoes_map.get(selected)
+                if selected_post_id:
+                    post_info = next((p for p in todos_posts if p['post_id'] == selected_post_id), None)
+                    if post_info:
+                        if post_info.get('thumbnail'):
+                            try:
+                                st.image(post_info['thumbnail'], width=150)
+                            except:
+                                pass
+                        st.caption(f"@{post_info['usuario']} | {post_info['formato']}")
+                        st.caption(f"👁 {funcoes_auxiliares.formatar_numero(post_info['impressoes'])} | ❤️ {funcoes_auxiliares.formatar_numero(post_info['curtidas'])} | 💬 {funcoes_auxiliares.formatar_numero(post_info['comentarios'])}")
+            
+            with col2:
+                atual_descricao = top_conteudos.get(f'top{i}_descricao', '')
+                descricao = st.text_area(
+                    f"Descricao da escolha (Top {i}):",
+                    value=atual_descricao,
+                    height=120,
+                    placeholder="Explique por que este conteudo foi destaque na campanha...",
+                    key=f"top{i}_desc"
+                )
+            
+            st.markdown("---")
+        
+        submitted = st.form_submit_button("Salvar Top Conteudos", type="primary", use_container_width=True)
+        
+        if submitted:
+            novo_top_conteudos = {}
+            
+            for i in range(1, 4):
+                selected = st.session_state.get(f"top{i}_select", "(Nenhum)")
+                descricao = st.session_state.get(f"top{i}_desc", "")
+                
+                selected_post_id = opcoes_map.get(selected)
+                
+                if selected_post_id:
+                    # Buscar dados completos do post
+                    post_info = next((p for p in todos_posts if p['post_id'] == selected_post_id), None)
+                    if post_info:
+                        novo_top_conteudos[f'top{i}_post_id'] = selected_post_id
+                        novo_top_conteudos[f'top{i}_descricao'] = descricao
+                        novo_top_conteudos[f'top{i}_influenciador'] = post_info['influenciador']
+                        novo_top_conteudos[f'top{i}_usuario'] = post_info['usuario']
+                        novo_top_conteudos[f'top{i}_formato'] = post_info['formato']
+                        novo_top_conteudos[f'top{i}_link'] = post_info['link']
+                        novo_top_conteudos[f'top{i}_thumbnail'] = post_info['thumbnail']
+                        novo_top_conteudos[f'top{i}_impressoes'] = post_info['impressoes']
+                        novo_top_conteudos[f'top{i}_alcance'] = post_info['alcance']
+                        novo_top_conteudos[f'top{i}_interacoes'] = post_info['interacoes']
+                        novo_top_conteudos[f'top{i}_curtidas'] = post_info['curtidas']
+                        novo_top_conteudos[f'top{i}_comentarios'] = post_info['comentarios']
+                        novo_top_conteudos[f'top{i}_saves'] = post_info['saves']
+            
+            data_manager.atualizar_campanha(campanha_id, {'top_conteudos': novo_top_conteudos})
+            st.success("Top conteudos salvos com sucesso!")
+            st.rerun()
+    
+    # Mostrar preview dos tops configurados
+    if top_conteudos:
+        st.markdown("### Preview dos Top Conteudos Configurados")
+        
+        cols = st.columns(3)
+        for i, col in enumerate(cols, 1):
+            with col:
+                post_id = top_conteudos.get(f'top{i}_post_id')
+                if post_id:
+                    st.markdown(f"**🏆 Top {i}**")
+                    thumb = top_conteudos.get(f'top{i}_thumbnail', '')
+                    if thumb:
+                        try:
+                            st.image(thumb, use_container_width=True)
+                        except:
+                            st.markdown("📷")
+                    
+                    st.markdown(f"**@{top_conteudos.get(f'top{i}_usuario', '')}**")
+                    st.caption(top_conteudos.get(f'top{i}_formato', ''))
+                    st.caption(top_conteudos.get(f'top{i}_descricao', '')[:100] + '...' if len(top_conteudos.get(f'top{i}_descricao', '')) > 100 else top_conteudos.get(f'top{i}_descricao', ''))
+                else:
+                    st.info(f"Top {i} nao configurado")
 
 
 def render_configurar_insights(campanha):

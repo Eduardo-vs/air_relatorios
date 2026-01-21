@@ -695,8 +695,6 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
             key="kpi_barra_pag1"
         )
         
-        mostrar_percentual = st.checkbox("Mostrar % de contribuição", value=True, key="pct_contrib_pag1")
-        
         # Agregar dados por formato E por classificacao
         dados_grafico = []
         
@@ -763,33 +761,31 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
                 'Desconhecido': '#9ca3af'
             }
             
-            # Texto do grafico: valor ou percentual
-            if mostrar_percentual:
-                df_agg['Texto'] = df_agg['Percentual'].apply(lambda x: f"{x:.0f}%")
-            else:
-                df_agg['Texto'] = df_agg['Valor'].apply(lambda x: funcoes_auxiliares.formatar_numero(x))
+            # Sempre mostrar em percentual
+            df_agg['Texto'] = df_agg['Percentual'].apply(lambda x: f"{x:.0f}%")
             
             fig_barras = px.bar(
                 df_agg,
                 x='Formato',
-                y='Valor',
+                y='Percentual',
                 color='Classificacao',
                 color_discrete_map=cores_classif,
                 barmode='stack',
                 text='Texto',
-                custom_data=['Percentual', 'Classificacao']
+                custom_data=['Percentual', 'Classificacao', 'Valor']
             )
             fig_barras.update_traces(
                 textposition='inside',
-                hovertemplate='<b>%{customdata[1]}</b><br>Valor: %{y:,.0f}<br>Contribuição: %{customdata[0]:.1f}%<extra></extra>'
+                hovertemplate='<b>%{customdata[1]}</b><br>Valor: %{customdata[2]:,.0f}<br>Contribuição: %{customdata[0]:.1f}%<extra></extra>'
             )
             fig_barras.update_layout(
                 height=380,
                 xaxis_title="",
-                yaxis_title=kpi_barra,
+                yaxis_title=f"{kpi_barra} (%)",
                 legend_title="Classificacao",
                 legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5)
             )
+            fig_barras.update_yaxes(ticksuffix='%')
             st.plotly_chart(fig_barras, use_container_width=True)
         else:
             st.info("Sem dados para exibir")
@@ -1312,6 +1308,67 @@ def render_pag5_top_performance(campanhas_list, cores):
     
     st.subheader("Top Performance")
     
+    # ========== SEÇÃO: TOP 3 CONTEÚDOS DESTACADOS ==========
+    if len(campanhas_list) == 1:
+        campanha = campanhas_list[0]
+        top_conteudos = campanha.get('top_conteudos', {})
+        
+        # Verificar se há top conteúdos configurados
+        tem_tops = any(top_conteudos.get(f'top{i}_post_id') for i in range(1, 4))
+        
+        if tem_tops:
+            st.markdown("### 🏆 Conteudos que Mais Desempenharam")
+            
+            cols = st.columns(3)
+            
+            for i, col in enumerate(cols, 1):
+                with col:
+                    post_id = top_conteudos.get(f'top{i}_post_id')
+                    if post_id:
+                        # Card do top conteúdo
+                        st.markdown(f"""
+                        <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); 
+                                    border-radius: 12px; padding: 0.5rem; text-align: center; margin-bottom: 0.5rem;">
+                            <span style="font-size: 1.5rem;">🥇</span> <b>Top {i}</b>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # Thumbnail
+                        thumb = top_conteudos.get(f'top{i}_thumbnail', '')
+                        if thumb:
+                            try:
+                                st.image(thumb, use_container_width=True)
+                            except:
+                                st.markdown("📷 *Imagem indisponivel*")
+                        else:
+                            st.markdown("📷 *Sem imagem*")
+                        
+                        # Info do influenciador
+                        st.markdown(f"**@{top_conteudos.get(f'top{i}_usuario', 'N/A')}**")
+                        st.caption(f"{top_conteudos.get(f'top{i}_formato', '')} | {top_conteudos.get(f'top{i}_influenciador', '')}")
+                        
+                        # Métricas
+                        inter = top_conteudos.get(f'top{i}_interacoes', 0)
+                        curt = top_conteudos.get(f'top{i}_curtidas', 0)
+                        coment = top_conteudos.get(f'top{i}_comentarios', 0)
+                        
+                        st.caption(f"❤️ {funcoes_auxiliares.formatar_numero(curt)} | 💬 {funcoes_auxiliares.formatar_numero(coment)} | 🔥 {funcoes_auxiliares.formatar_numero(inter)} inter.")
+                        
+                        # Descrição da escolha
+                        descricao = top_conteudos.get(f'top{i}_descricao', '')
+                        if descricao:
+                            st.markdown(f"<div style='background: #f9fafb; border-left: 3px solid #f59e0b; padding: 0.5rem; border-radius: 4px; font-size: 0.85rem; margin-top: 0.5rem;'>{descricao}</div>", unsafe_allow_html=True)
+                        
+                        # Link do conteúdo
+                        link = top_conteudos.get(f'top{i}_link', '')
+                        if link:
+                            st.markdown(f"[🔗 Ver conteudo]({link})")
+                    else:
+                        st.info(f"Top {i} não configurado")
+            
+            st.markdown("---")
+    
+    # ========== GRÁFICO DE DISPERSÃO ==========
     dados_influs = coletar_dados_influenciadores(campanhas_list)
     
     if not dados_influs:
@@ -1320,7 +1377,6 @@ def render_pag5_top_performance(campanhas_list, cores):
     
     df = pd.DataFrame(dados_influs)
     
-    # Grafico de dispersao primeiro (sem filtros)
     if len(df) > 0:
         st.markdown("### Dispersao: Engajamento vs Alcance")
         
@@ -1331,7 +1387,7 @@ def render_pag5_top_performance(campanhas_list, cores):
     
     st.markdown("---")
     
-    # Filtros acima da lista
+    # ========== LISTA DE TOP PERFORMANCE COM LINKS ==========
     st.markdown("### Lista de Top Performance")
     
     col1, col2, col3 = st.columns(3)
@@ -1350,8 +1406,24 @@ def render_pag5_top_performance(campanhas_list, cores):
     ordem_map = {"Investimento (Custo)": "custo", "Interacoes": "interacoes", "Taxa Eng. Efetivo": "taxa_eng", "Impressoes": "impressoes", "Alcance": "alcance"}
     df_filtrado = df_filtrado.sort_values(ordem_map.get(metrica_ordenar, 'interacoes'), ascending=False).head(qtd)
     
+    # Coletar links dos posts por influenciador
+    posts_por_influenciador = {}
+    for camp in campanhas_list:
+        for inf_camp in camp.get('influenciadores', []):
+            inf_id = inf_camp.get('id')
+            if inf_id not in posts_por_influenciador:
+                posts_por_influenciador[inf_id] = []
+            for post in inf_camp.get('posts', []):
+                link = post.get('link', '') or post.get('link_post', '') or post.get('permalink', '') or post.get('url', '') or ''
+                if link:
+                    posts_por_influenciador[inf_id].append({
+                        'link': link,
+                        'formato': post.get('formato', 'N/A'),
+                        'interacoes': post.get('interacoes', 0) or 0
+                    })
+    
     for _, row in df_filtrado.iterrows():
-        col1, col2, col3, col4, col5, col6 = st.columns([0.5, 2, 1.2, 1.2, 1.2, 1.2])
+        col1, col2, col3, col4, col5, col6 = st.columns([0.5, 2.5, 1, 1, 1, 1])
         with col1:
             if row.get('foto'):
                 try:
@@ -1363,6 +1435,13 @@ def render_pag5_top_performance(campanhas_list, cores):
         with col2:
             st.write(f"**{row['nome']}**")
             st.caption(f"@{row['usuario']} | {row['classificacao']}")
+            
+            # Links dos conteúdos do influenciador
+            inf_id = row.get('id')
+            posts_inf = posts_por_influenciador.get(inf_id, [])
+            if posts_inf:
+                links_html = " ".join([f"[{p['formato']}]({p['link']})" for p in posts_inf[:5]])
+                st.caption(f"📎 {links_html}")
         with col3:
             st.metric("Investimento", f"R$ {row.get('custo', 0):,.0f}".replace(",", "."))
         with col4:
