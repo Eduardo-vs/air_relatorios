@@ -382,6 +382,7 @@ def init_db():
             hashtags {text_type},
             classificacao {text_type},
             nicho {text_type},
+            categoria {text_type},
             total_posts {int_type} DEFAULT 0,
             total_likes {int_type} DEFAULT 0,
             total_views {int_type} DEFAULT 0,
@@ -733,9 +734,9 @@ def criar_influenciador(dados: Dict) -> Dict:
         INSERT INTO influenciadores (
             profile_id, nome, usuario, network, seguidores, foto, bio,
             engagement_rate, air_score, reach_rate, means, hashtags,
-            classificacao, nicho, total_posts, total_likes, total_views,
-            total_comments, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            classificacao, nicho, categoria, total_posts, total_likes, total_views,
+            total_comments, vinculo_id, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
         dados.get('profile_id', ''),
         dados.get('nome', ''),
@@ -751,10 +752,12 @@ def criar_influenciador(dados: Dict) -> Dict:
         hashtags_json,
         classificacao,
         dados.get('nicho', ''),
+        dados.get('categoria', ''),
         dados.get('total_posts', 0),
         dados.get('total_likes', 0),
         dados.get('total_views', 0),
         dados.get('total_comments', 0),
+        dados.get('vinculo_id'),
         now,
         now
     ))
@@ -846,9 +849,9 @@ def atualizar_influenciador(inf_id: int, dados: Dict) -> bool:
         UPDATE influenciadores SET
             profile_id = ?, nome = ?, usuario = ?, network = ?, seguidores = ?,
             foto = ?, bio = ?, engagement_rate = ?, air_score = ?, reach_rate = ?,
-            means = ?, hashtags = ?, classificacao = ?, nicho = ?,
+            means = ?, hashtags = ?, classificacao = ?, nicho = ?, categoria = ?,
             total_posts = ?, total_likes = ?, total_views = ?, total_comments = ?,
-            updated_at = ?
+            vinculo_id = ?, updated_at = ?
         WHERE id = ?
     ''', (
         dados.get('profile_id', ''),
@@ -865,10 +868,12 @@ def atualizar_influenciador(inf_id: int, dados: Dict) -> bool:
         hashtags_json,
         classificacao,
         dados.get('nicho', ''),
+        dados.get('categoria', ''),
         dados.get('total_posts', 0),
         dados.get('total_likes', 0),
         dados.get('total_views', 0),
         dados.get('total_comments', 0),
+        dados.get('vinculo_id'),
         now,
         inf_id
     ))
@@ -1049,8 +1054,8 @@ def excluir_campanha(camp_id: int) -> bool:
 # INFLUENCIADORES NA CAMPANHA
 # ========================================
 
-def adicionar_influenciador_campanha(camp_id: int, inf_id: int, custo: float = 0) -> bool:
-    """Adiciona influenciador a uma campanha com custo"""
+def adicionar_influenciador_campanha(camp_id: int, inf_id: int, custo: float = 0, categoria: str = '') -> bool:
+    """Adiciona influenciador a uma campanha com custo e categoria"""
     campanha = get_campanha(camp_id)
     if not campanha:
         return False
@@ -1066,14 +1071,17 @@ def adicionar_influenciador_campanha(camp_id: int, inf_id: int, custo: float = 0
         if inf.get('influenciador_id') == inf_id:
             return False
     
-    # Adicionar com custo
+    # Adicionar com custo e categoria
     novo_inf = {
         'influenciador_id': inf_id,
         'nome': influenciador.get('nome', ''),
         'usuario': influenciador.get('usuario', ''),
         'foto': influenciador.get('foto', ''),
         'seguidores': influenciador.get('seguidores', 0),
-        'custo': custo,  # Custo atrelado ao influenciador na campanha
+        'network': influenciador.get('network', 'instagram'),
+        'custo': custo,
+        'categoria': categoria or influenciador.get('categoria', ''),
+        'vinculo_id': influenciador.get('vinculo_id'),
         'posts': []
     }
     

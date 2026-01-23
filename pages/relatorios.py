@@ -1149,23 +1149,92 @@ def render_pag4_kpis_influenciador(campanhas_list, cores):
         return
     
     df = pd.DataFrame(dados_inf)
-    df = df.sort_values('impressoes', ascending=False).head(15)
+    
+    # Obter redes sociais disponíveis
+    redes_disponiveis = df['network'].dropna().unique().tolist() if 'network' in df.columns else ['instagram']
+    if not redes_disponiveis:
+        redes_disponiveis = ['instagram']
     
     st.markdown("### Grafico 1: Performance Geral")
     
-    col1, col2 = st.columns(2)
+    col1, col2, col3, col4 = st.columns([1.5, 1.5, 1.5, 1.5])
     with col1:
         kpi_barra = st.selectbox("KPI Barras:", ["Seguidores", "Impressoes", "Alcance", "Interacoes", "Interacoes Qualificadas"], key="kpi_barra_pag4")
     with col2:
         kpi_linha = st.selectbox("KPI Linha:", ["Taxa Eng. Efetivo", "Taxa Alcance", "Taxa de Interacoes Qualificadas", "Taxa Visualizacao", "Engajamento Total"], key="kpi_linha_pag4")
+    with col3:
+        filtro_rede = st.selectbox("Rede Social:", ["Todas"] + redes_disponiveis, key="filtro_rede_pag4")
+    with col4:
+        agrupar_vinculados = st.checkbox("Agrupar contas vinculadas", value=True, key="agrupar_vinc_pag4", help="Soma métricas de contas de diferentes redes do mesmo influenciador")
+    
+    # Aplicar filtro de rede social
+    df_filtrado = df.copy()
+    if filtro_rede != "Todas":
+        df_filtrado = df_filtrado[df_filtrado['network'] == filtro_rede]
+    
+    # Agrupar contas vinculadas se selecionado
+    if agrupar_vinculados and filtro_rede == "Todas":
+        # Criar dicionário de vínculos
+        vinculados_processados = set()
+        dados_agrupados = []
+        
+        for _, row in df_filtrado.iterrows():
+            inf_id = row.get('id')
+            
+            # Se já foi processado como parte de um grupo, pular
+            if inf_id in vinculados_processados:
+                continue
+            
+            vinculo_id = row.get('vinculo_id')
+            
+            if vinculo_id and vinculo_id in df_filtrado['id'].values:
+                # Encontrar o vinculado
+                row_vinc = df_filtrado[df_filtrado['id'] == vinculo_id].iloc[0] if len(df_filtrado[df_filtrado['id'] == vinculo_id]) > 0 else None
+                
+                if row_vinc is not None:
+                    # Somar métricas
+                    dados_agrup = row.to_dict()
+                    dados_agrup['nome'] = f"{row['nome']} (Multi)"
+                    dados_agrup['seguidores'] = row['seguidores'] + row_vinc['seguidores']
+                    dados_agrup['impressoes'] = row['impressoes'] + row_vinc['impressoes']
+                    dados_agrup['alcance'] = row.get('alcance', 0) + row_vinc.get('alcance', 0)
+                    dados_agrup['alcance_total'] = row.get('alcance_total', 0) + row_vinc.get('alcance_total', 0)
+                    dados_agrup['interacoes'] = row['interacoes'] + row_vinc['interacoes']
+                    dados_agrup['curtidas'] = row.get('curtidas', 0) + row_vinc.get('curtidas', 0)
+                    dados_agrup['custo'] = row.get('custo', 0) + row_vinc.get('custo', 0)
+                    dados_agrup['interacoes_qualif'] = max(0, dados_agrup['interacoes'] - dados_agrup['curtidas'])
+                    
+                    # Recalcular taxas
+                    if dados_agrup['impressoes'] > 0:
+                        dados_agrup['taxa_eng'] = (dados_agrup['interacoes'] / dados_agrup['impressoes'] * 100)
+                    if dados_agrup['seguidores'] > 0:
+                        dados_agrup['taxa_alcance'] = (dados_agrup['alcance_total'] / dados_agrup['seguidores'] * 100)
+                    if dados_agrup['interacoes'] > 0:
+                        dados_agrup['taxa_interacoes_qualif'] = (dados_agrup['interacoes_qualif'] / dados_agrup['interacoes'] * 100)
+                    
+                    dados_agrupados.append(dados_agrup)
+                    vinculados_processados.add(inf_id)
+                    vinculados_processados.add(vinculo_id)
+                else:
+                    dados_agrupados.append(row.to_dict())
+            else:
+                dados_agrupados.append(row.to_dict())
+        
+        df_filtrado = pd.DataFrame(dados_agrupados)
+    
+    if df_filtrado.empty:
+        st.info("Nenhum dado disponível para os filtros selecionados")
+        return
+    
+    df_filtrado = df_filtrado.sort_values('impressoes', ascending=False).head(15)
     
     kpi_map = {'Seguidores': 'seguidores', 'Impressoes': 'impressoes', 'Alcance': 'alcance', 'Interacoes': 'interacoes', 'Interacoes Qualificadas': 'interacoes_qualif'}
     campo_barra = kpi_map.get(kpi_barra, 'seguidores')
     
     # Calcular taxa de visualizacao (impressoes / seguidores)
-    df['taxa_views'] = (df['impressoes'] / df['seguidores'] * 100).round(2).fillna(0)
+    df_filtrado['taxa_views'] = (df_filtrado['impressoes'] / df_filtrado['seguidores'] * 100).round(2).fillna(0)
     
-    df_sorted = df.sort_values(campo_barra, ascending=False)
+    df_sorted = df_filtrado.sort_values(campo_barra, ascending=False)
     
     fig1 = go.Figure()
     # Barras VERTICAIS
@@ -1209,6 +1278,9 @@ def render_pag4_kpis_influenciador(campanhas_list, cores):
         bargap=0.5  # Barras mais finas
     )
     st.plotly_chart(fig1, use_container_width=True)
+    
+    # Usar df_filtrado ao invés de df para os próximos gráficos
+    df = df_filtrado
     
     st.markdown("### Grafico 2: Eficiencia de Gasto")
     
@@ -1785,6 +1857,9 @@ def coletar_dados_influenciadores(campanhas_list):
                     'foto': inf.get('foto', ''), 
                     'classificacao': inf.get('classificacao', 'Desconhecido'), 
                     'seguidores': inf.get('seguidores', 0), 
+                    'network': inf.get('network', camp_inf.get('network', 'instagram')),
+                    'categoria': inf.get('categoria', camp_inf.get('categoria', '')),
+                    'vinculo_id': inf.get('vinculo_id', camp_inf.get('vinculo_id')),
                     'impressoes': 0, 
                     'alcance': 0, 
                     'alcance_total': 0,

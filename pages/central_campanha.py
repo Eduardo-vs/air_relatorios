@@ -710,14 +710,69 @@ def render_form_post_manual(campanha, inf):
     with col_plat:
         plataforma = st.selectbox("Plataforma", ["Instagram", "TikTok", "YouTube"], key=f"plat_{inf['id']}")
     
-    # Se for Stories, perguntar quantas telas
+    # Se for Stories, interface especial para múltiplas telas
     qtd_telas = 1
     if formato == "Stories":
-        st.info("📱 **Stories com múltiplas telas**: Preencha os dados totais de todas as telas. O sistema vai somar automaticamente.")
-        qtd_telas = st.number_input("Quantidade de telas (Stories)", min_value=1, max_value=50, value=1, key=f"qtd_telas_{inf['id']}")
+        st.markdown("---")
+        st.info("📱 **Stories**: Adicione todas as telas de um mesmo dia de uma vez!")
         
-        if qtd_telas > 1:
-            st.caption(f"Você está adicionando {qtd_telas} telas de Stories do mesmo dia como 1 publicação")
+        modo_stories = st.radio(
+            "Modo de entrada:",
+            ["Dados consolidados (soma de todas as telas)", "Tela por tela (mais detalhado)"],
+            key=f"modo_stories_{inf['id']}"
+        )
+        
+        if modo_stories == "Dados consolidados (soma de todas as telas)":
+            qtd_telas = st.number_input("Quantidade de telas (Stories)", min_value=1, max_value=50, value=1, key=f"qtd_telas_{inf['id']}")
+            if qtd_telas > 1:
+                st.caption(f"✅ Você está adicionando {qtd_telas} telas de Stories do mesmo dia como 1 publicação")
+        else:
+            # Modo tela por tela
+            st.markdown("**Adicionar telas individualmente:**")
+            
+            # Inicializar lista de telas na sessão
+            key_telas = f"stories_telas_{inf['id']}"
+            if key_telas not in st.session_state:
+                st.session_state[key_telas] = []
+            
+            col_add, col_info = st.columns([2, 1])
+            with col_add:
+                nova_views = st.number_input("Views desta tela", min_value=0, value=0, key=f"nova_views_{inf['id']}")
+                nova_alcance = st.number_input("Alcance desta tela", min_value=0, value=0, key=f"nova_alcance_{inf['id']}")
+                nova_inter = st.number_input("Interações desta tela", min_value=0, value=0, key=f"nova_inter_{inf['id']}")
+                
+                if st.button("➕ Adicionar tela", key=f"add_tela_{inf['id']}"):
+                    st.session_state[key_telas].append({
+                        'views': nova_views,
+                        'alcance': nova_alcance,
+                        'interacoes': nova_inter
+                    })
+                    st.rerun()
+            
+            with col_info:
+                st.markdown("**Telas adicionadas:**")
+                if st.session_state[key_telas]:
+                    total_views = sum(t['views'] for t in st.session_state[key_telas])
+                    max_alcance = max(t['alcance'] for t in st.session_state[key_telas])
+                    total_inter = sum(t['interacoes'] for t in st.session_state[key_telas])
+                    
+                    for i, tela in enumerate(st.session_state[key_telas]):
+                        col_t, col_del = st.columns([3, 1])
+                        with col_t:
+                            st.caption(f"Tela {i+1}: {tela['views']} views")
+                        with col_del:
+                            if st.button("🗑️", key=f"del_tela_{inf['id']}_{i}"):
+                                st.session_state[key_telas].pop(i)
+                                st.rerun()
+                    
+                    st.markdown(f"**Total:** {len(st.session_state[key_telas])} telas")
+                    st.markdown(f"Views: {total_views:,}")
+                    st.markdown(f"Alcance (maior): {max_alcance:,}")
+                    st.markdown(f"Interações: {total_inter:,}")
+                    
+                    qtd_telas = len(st.session_state[key_telas])
+                else:
+                    st.caption("Nenhuma tela adicionada ainda")
     
     with st.form(f"form_post_manual_{inf['id']}"):
         col1, col2 = st.columns(2)
@@ -728,19 +783,31 @@ def render_form_post_manual(campanha, inf):
         with col2:
             link_post = st.text_input("Link do Post")
         
-        if formato == "Stories" and qtd_telas > 1:
-            st.markdown("**Métricas totais (soma de todas as telas):**")
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            views = st.number_input("Views (total)", min_value=0, value=0)
-            impressoes = st.number_input("Impressões (total)", min_value=0, value=0)
-        with col2:
-            alcance = st.number_input("Alcance (maior)", min_value=0, value=0, help="Para Stories, use o maior alcance entre as telas")
-            interacoes = st.number_input("Interações (total)", min_value=0, value=0)
-        with col3:
-            curtidas = st.number_input("Curtidas (total)", min_value=0, value=0)
-            comentarios_qtd = st.number_input("Comentários (total)", min_value=0, value=0)
+        # Se Stories no modo tela por tela com telas adicionadas
+        if formato == "Stories" and modo_stories != "Dados consolidados (soma de todas as telas)" and st.session_state.get(f"stories_telas_{inf['id']}"):
+            telas = st.session_state[f"stories_telas_{inf['id']}"]
+            views = sum(t['views'] for t in telas)
+            impressoes = views  # Para Stories, views = impressoes
+            alcance = max(t['alcance'] for t in telas)
+            interacoes = sum(t['interacoes'] for t in telas)
+            curtidas = 0
+            comentarios_qtd = 0
+            
+            st.info(f"📊 Usando dados das {len(telas)} telas adicionadas")
+        else:
+            if formato == "Stories" and qtd_telas > 1:
+                st.markdown("**Métricas totais (soma de todas as telas):**")
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                views = st.number_input("Views (total)", min_value=0, value=0)
+                impressoes = st.number_input("Impressões (total)", min_value=0, value=0)
+            with col2:
+                alcance = st.number_input("Alcance (maior)", min_value=0, value=0, help="Para Stories, use o maior alcance entre as telas")
+                interacoes = st.number_input("Interações (total)", min_value=0, value=0)
+            with col3:
+                curtidas = st.number_input("Curtidas (total)", min_value=0, value=0)
+                comentarios_qtd = st.number_input("Comentários (total)", min_value=0, value=0)
         
         col1, col2 = st.columns(2)
         with col1:
@@ -780,11 +847,19 @@ def render_form_post_manual(campanha, inf):
             }
             
             data_manager.adicionar_post(campanha['id'], inf['id'], post_data)
+            
+            # Limpar telas de Stories da sessão
+            if f"stories_telas_{inf['id']}" in st.session_state:
+                del st.session_state[f"stories_telas_{inf['id']}"]
+            
             st.session_state.show_manual_post_inf = None
             st.success(f"Post adicionado!" + (f" ({qtd_telas} telas de Stories)" if qtd_telas > 1 else ""))
             st.rerun()
         
         if cancel:
+            # Limpar telas de Stories da sessão
+            if f"stories_telas_{inf['id']}" in st.session_state:
+                del st.session_state[f"stories_telas_{inf['id']}"]
             st.session_state.show_manual_post_inf = None
             st.rerun()
 
@@ -897,6 +972,26 @@ def render_modal_add_influenciador(campanha):
                 air_score = st.number_input("AIR Score (0-1)", min_value=0.0, max_value=1.0, value=0.0, step=0.01)
                 custo = st.number_input("Custo (R$)", min_value=0.0, value=0.0, step=100.0)
             
+            st.markdown("---")
+            st.markdown("**Categorias do Influenciador** (para filtrar insights)")
+            st.caption("Separe múltiplas categorias por vírgula (ex: Cabelo Liso, Pele Clara, 25-35 anos)")
+            categoria = st.text_input("Categorias:", placeholder="Ex: Cabelo Crespo, Pele Negra, 18-24 anos")
+            
+            # Vincular a outra conta
+            st.markdown("---")
+            st.markdown("**Vincular a outra conta** (opcional)")
+            st.caption("Se este influenciador tem contas em outras redes, vincule para somar métricas")
+            
+            # Buscar influenciadores existentes para vincular
+            todos_inf_vinculo = data_manager.get_influenciadores()
+            opcoes_vinculo = ["Nenhum"] + [f"{inf['nome']} (@{inf['usuario']}) - {inf.get('network', 'instagram')}" for inf in todos_inf_vinculo]
+            vinculo_map = {opcoes_vinculo[0]: None}
+            for i, inf in enumerate(todos_inf_vinculo):
+                vinculo_map[opcoes_vinculo[i+1]] = inf['id']
+            
+            vinculo_sel = st.selectbox("Vincular a:", opcoes_vinculo)
+            vinculo_id = vinculo_map.get(vinculo_sel)
+            
             col1, col2 = st.columns(2)
             with col1:
                 if st.form_submit_button("Cadastrar e Adicionar", type="primary", use_container_width=True):
@@ -910,12 +1005,23 @@ def render_modal_add_influenciador(campanha):
                             'foto': foto,
                             'engagement_rate': engagement_rate,
                             'air_score': air_score,
-                            'classificacao': data_manager.calcular_classificacao(seguidores)
+                            'classificacao': data_manager.calcular_classificacao(seguidores),
+                            'categoria': categoria,
+                            'vinculo_id': vinculo_id
                         })
                         
                         if novo_inf:
-                            # Adicionar a campanha com custo
-                            data_manager.adicionar_influenciador_campanha(campanha['id'], novo_inf, custo=custo)
+                            # Se vinculou, atualizar o outro influenciador também
+                            if vinculo_id:
+                                inf_vinculo = data_manager.get_influenciador(vinculo_id)
+                                if inf_vinculo:
+                                    data_manager.atualizar_influenciador(vinculo_id, {
+                                        **inf_vinculo,
+                                        'vinculo_id': novo_inf['id']
+                                    })
+                            
+                            # Adicionar a campanha com custo e categoria
+                            data_manager.adicionar_influenciador_campanha(campanha['id'], novo_inf['id'], custo=custo, categoria=categoria)
                             st.session_state.show_add_inf_to_campaign = False
                             st.success(f"Influenciador {nome} cadastrado e adicionado!")
                             st.rerun()
