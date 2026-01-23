@@ -51,10 +51,11 @@ def render():
             st.rerun()
     
     # Tabs
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "Influenciadores e Posts",
         "Configuracoes da Campanha",
         "Top Conteudos",
+        "Dados Personalizados",
         "Configurar Insights",
         "Comentarios",
         "Categorias de Comentarios"
@@ -70,12 +71,15 @@ def render():
         render_top_conteudos(campanha)
     
     with tab4:
-        render_configurar_insights(campanha)
+        render_dados_personalizados(campanha)
     
     with tab5:
-        render_comentarios(campanha)
+        render_configurar_insights(campanha)
     
     with tab6:
+        render_comentarios(campanha)
+    
+    with tab7:
         render_categorias_comentarios(campanha)
 
 
@@ -1326,6 +1330,163 @@ def render_top_conteudos(campanha):
                     st.caption(top_conteudos.get(f'top{i}_descricao', '')[:100] + '...' if len(top_conteudos.get(f'top{i}_descricao', '')) > 100 else top_conteudos.get(f'top{i}_descricao', ''))
                 else:
                     st.info(f"Top {i} nao configurado")
+
+
+def render_dados_personalizados(campanha):
+    """Configuração de colunas personalizadas para lista de influenciadores"""
+    
+    st.subheader("Dados Personalizados")
+    st.caption("Configure colunas extras para a lista de influenciadores no relatório (ex: Tipo de Cabelo, Faixa Etária)")
+    
+    campanha_id = campanha['id']
+    
+    # Obter configuração atual
+    colunas_config = campanha.get('colunas_personalizadas', {})
+    col1_nome = colunas_config.get('col1_nome', '')
+    col2_nome = colunas_config.get('col2_nome', '')
+    
+    st.markdown("### Configurar Nomes das Colunas")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        novo_col1_nome = st.text_input(
+            "Nome da Coluna 1:", 
+            value=col1_nome, 
+            placeholder="Ex: Tipo de Cabelo",
+            key="config_col1_nome_tab"
+        )
+    with col2:
+        novo_col2_nome = st.text_input(
+            "Nome da Coluna 2:", 
+            value=col2_nome, 
+            placeholder="Ex: Faixa Etária",
+            key="config_col2_nome_tab"
+        )
+    
+    if st.button("💾 Salvar Nomes das Colunas", type="primary"):
+        data_manager.atualizar_campanha(campanha_id, {
+            'colunas_personalizadas': {
+                'col1_nome': novo_col1_nome,
+                'col2_nome': novo_col2_nome
+            }
+        })
+        st.success("Nomes das colunas salvos!")
+        st.rerun()
+    
+    st.markdown("---")
+    st.markdown("### Preencher Dados dos Influenciadores")
+    
+    if not novo_col1_nome and not novo_col2_nome and not col1_nome and not col2_nome:
+        st.info("Configure os nomes das colunas acima primeiro")
+        return
+    
+    # Nomes a usar (novos ou salvos)
+    nome_col1 = novo_col1_nome or col1_nome or "Coluna 1"
+    nome_col2 = novo_col2_nome or col2_nome or "Coluna 2"
+    
+    # Listar influenciadores da campanha
+    influenciadores = campanha.get('influenciadores', [])
+    
+    if not influenciadores:
+        st.info("Nenhum influenciador na campanha")
+        return
+    
+    # Criar formulário para editar dados
+    st.markdown(f"**Preencha os dados para cada influenciador:**")
+    
+    # Header da tabela
+    col_header = st.columns([2, 2, 2])
+    with col_header[0]:
+        st.markdown("**Influenciador**")
+    with col_header[1]:
+        st.markdown(f"**{nome_col1}**")
+    with col_header[2]:
+        st.markdown(f"**{nome_col2}**")
+    
+    st.markdown("---")
+    
+    # Coletar dados em session_state para não perder ao digitar
+    if 'dados_custom_temp' not in st.session_state:
+        st.session_state.dados_custom_temp = {}
+    
+    for idx, inf_camp in enumerate(influenciadores):
+        inf = data_manager.get_influenciador(inf_camp.get('influenciador_id'))
+        if not inf:
+            continue
+        
+        inf_id = inf['id']
+        nome_inf = inf.get('nome', 'Desconhecido')
+        usuario_inf = inf.get('usuario', '')
+        
+        cols = st.columns([2, 2, 2])
+        
+        with cols[0]:
+            st.markdown(f"**{nome_inf}**")
+            st.caption(f"@{usuario_inf}")
+        
+        with cols[1]:
+            val1 = st.text_input(
+                nome_col1,
+                value=inf_camp.get('dado_custom1', ''),
+                key=f"dados_custom1_{inf_id}",
+                label_visibility="collapsed",
+                placeholder=nome_col1
+            )
+        
+        with cols[2]:
+            val2 = st.text_input(
+                nome_col2,
+                value=inf_camp.get('dado_custom2', ''),
+                key=f"dados_custom2_{inf_id}",
+                label_visibility="collapsed",
+                placeholder=nome_col2
+            )
+        
+        # Armazenar temporariamente
+        st.session_state.dados_custom_temp[inf_id] = {'col1': val1, 'col2': val2}
+    
+    st.markdown("---")
+    
+    if st.button("💾 Salvar Dados dos Influenciadores", type="primary", use_container_width=True):
+        # Atualizar dados dos influenciadores
+        for inf_camp in influenciadores:
+            inf_id = inf_camp.get('influenciador_id')
+            if inf_id in st.session_state.dados_custom_temp:
+                inf_camp['dado_custom1'] = st.session_state.dados_custom_temp[inf_id]['col1']
+                inf_camp['dado_custom2'] = st.session_state.dados_custom_temp[inf_id]['col2']
+        
+        # Salvar campanha com influenciadores atualizados
+        data_manager.atualizar_campanha(campanha_id, {
+            'influenciadores': influenciadores,
+            'colunas_personalizadas': {
+                'col1_nome': novo_col1_nome or col1_nome,
+                'col2_nome': novo_col2_nome or col2_nome
+            }
+        })
+        
+        st.success("Dados personalizados salvos com sucesso!")
+        st.session_state.dados_custom_temp = {}
+        st.rerun()
+    
+    # Preview da tabela
+    st.markdown("---")
+    st.markdown("### Preview da Lista de Influenciadores")
+    
+    preview_data = []
+    for inf_camp in influenciadores:
+        inf = data_manager.get_influenciador(inf_camp.get('influenciador_id'))
+        if inf:
+            preview_data.append({
+                'Nome': inf.get('nome', ''),
+                'Usuário': f"@{inf.get('usuario', '')}",
+                nome_col1: inf_camp.get('dado_custom1', ''),
+                nome_col2: inf_camp.get('dado_custom2', '')
+            })
+    
+    if preview_data:
+        import pandas as pd
+        df_preview = pd.DataFrame(preview_data)
+        st.dataframe(df_preview, use_container_width=True, hide_index=True)
 
 
 def render_configurar_insights(campanha):

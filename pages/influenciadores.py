@@ -258,6 +258,11 @@ def render_modal_adicionar():
                     reach_rate = st.number_input("Taxa de Alcance (%)", min_value=0.0, value=0.0, step=0.01)
                     total_posts = st.number_input("Total de Posts", min_value=0, value=0)
                 
+                st.markdown("---")
+                st.markdown("**Categorias** (para filtrar insights no relatório)")
+                st.caption("Separe múltiplas categorias por vírgula (ex: Cabelo Liso, Pele Clara, 25-35 anos)")
+                categoria = st.text_input("Categorias:", placeholder="Ex: Cabelo Crespo, Pele Negra, 18-24 anos")
+                
                 col1, col2 = st.columns(2)
                 with col1:
                     if st.form_submit_button("Salvar", use_container_width=True):
@@ -273,6 +278,7 @@ def render_modal_adicionar():
                                 'air_score': air_score,
                                 'reach_rate': reach_rate,
                                 'total_posts': total_posts,
+                                'categoria': categoria,
                                 'classificacao': data_manager.calcular_classificacao(seguidores)
                             })
                             st.session_state.show_add_influenciador = False
@@ -391,6 +397,12 @@ def render_modal_editar():
                                             value=float(inf.get('reach_rate', 0)), step=0.01)
                 total_posts = st.number_input("Total de Posts", min_value=0, value=inf.get('total_posts', 0))
             
+            st.markdown("---")
+            st.markdown("**Categorias** (para filtrar insights no relatório)")
+            st.caption("Separe múltiplas categorias por vírgula (ex: Cabelo Liso, Pele Clara, 25-35 anos)")
+            categoria = st.text_input("Categorias:", value=inf.get('categoria', ''), 
+                                     placeholder="Ex: Cabelo Crespo, Pele Negra, 18-24 anos")
+            
             col1, col2, col3 = st.columns(3)
             with col1:
                 if st.form_submit_button("Salvar", use_container_width=True):
@@ -406,6 +418,7 @@ def render_modal_editar():
                             'air_score': air_score,
                             'reach_rate': reach_rate,
                             'total_posts': total_posts,
+                            'categoria': categoria,
                             'classificacao': data_manager.calcular_classificacao(seguidores)
                         })
                         st.session_state.edit_influenciador_id = None

@@ -1479,7 +1479,9 @@ def render_pag5_top_performance(campanhas_list, cores):
     posts_por_influenciador = {}
     for camp in campanhas_list:
         for inf_camp in camp.get('influenciadores', []):
-            inf_id = inf_camp.get('id')
+            inf_id = inf_camp.get('influenciador_id')
+            if not inf_id:
+                continue
             if inf_id not in posts_por_influenciador:
                 posts_por_influenciador[inf_id] = []
             for post in inf_camp.get('posts', []):
