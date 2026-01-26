@@ -285,26 +285,45 @@ def render_importar_air():
                             if isinstance(dados, list) and len(dados) > 0:
                                 dados = dados[0]
                             
-                            # Verificar se tem dados válidos (pode não ter campo 'success')
-                            # Aceitar se tiver 'influencers' ou 'name' ou 'hashtags'
+                            # Verificar se tem dados válidos
+                            # Campos podem ser: title/name, profiles_in_campaign/influencers, hashtags
                             tem_dados = (
                                 dados.get('success') or 
+                                dados.get('profiles_in_campaign') or
                                 dados.get('influencers') or 
+                                dados.get('title') or
                                 dados.get('name') or 
                                 dados.get('hashtags')
                             )
                             
                             if tem_dados:
+                                # Pegar nome (pode ser 'title' ou 'name')
+                                nome_camp = dados.get('title') or dados.get('name', 'Campanha AIR')
+                                
+                                # Pegar influenciadores (pode ser 'profiles_in_campaign' ou 'influencers')
+                                inf_ids = dados.get('profiles_in_campaign') or dados.get('influencers', [])
+                                
+                                # Pegar hashtags
+                                hashtags = dados.get('hashtags', [])
+                                
+                                # Pegar datas se existirem
+                                start_date = dados.get('start_date', '')
+                                end_date = dados.get('end_date', '')
+                                
+                                # Pegar menções
+                                mentions = dados.get('mentions', [])
+                                
                                 st.session_state.air_import_data = {
                                     'codigo': codigo,
-                                    'nome': dados.get('name', 'Campanha AIR'),
-                                    'hashtags': dados.get('hashtags', []),
-                                    'influenciadores_ids': dados.get('influencers', []),
+                                    'nome': nome_camp,
+                                    'hashtags': hashtags,
+                                    'mentions': mentions,
+                                    'influenciadores_ids': inf_ids,
+                                    'start_date': start_date,
+                                    'end_date': end_date,
                                     'cliente': cliente_sel if cliente_sel != "Selecione..." else None
                                 }
-                                nome = dados.get('name', 'Campanha')
-                                qtd_inf = len(dados.get('influencers', []))
-                                st.success(f"✅ Campanha '{nome}' encontrada! {qtd_inf} influenciadores")
+                                st.success(f"✅ Campanha '{nome_camp}' encontrada! {len(inf_ids)} influenciadores")
                                 st.rerun()
                             else:
                                 st.error("Campanha não encontrada ou resposta inválida")
@@ -330,17 +349,36 @@ def render_importar_air():
             key="air_nome_editado"
         )
         
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("Influenciadores", len(air_data.get('influenciadores_ids', [])))
         with col2:
             st.metric("Hashtags", len(air_data.get('hashtags', [])))
+        with col3:
+            st.metric("Menções", len(air_data.get('mentions', [])))
+        
+        # Mostrar datas
+        start_date = air_data.get('start_date', '')
+        end_date = air_data.get('end_date', '')
+        if start_date or end_date:
+            try:
+                start_fmt = datetime.fromisoformat(start_date.replace('Z', '')).strftime('%d/%m/%Y') if start_date else 'N/A'
+                end_fmt = datetime.fromisoformat(end_date.replace('Z', '')).strftime('%d/%m/%Y') if end_date else 'N/A'
+                st.caption(f"📅 Período: {start_fmt} até {end_fmt}")
+            except:
+                pass
         
         # Mostrar hashtags
         hashtags = air_data.get('hashtags', [])
         if hashtags:
             st.markdown("**Hashtags da campanha:**")
-            st.caption(" ".join([f"#{h}" if not h.startswith('#') else h for h in hashtags]))
+            st.caption(" ".join(hashtags[:15]))
+        
+        # Mostrar menções
+        mentions = air_data.get('mentions', [])
+        if mentions:
+            st.markdown("**Menções:**")
+            st.caption(" ".join(mentions))
         
         st.markdown("---")
         
@@ -374,8 +412,32 @@ def criar_campanha_do_air(air_data, buscar_posts=True, criar_ausentes=True, limi
     
     nome_campanha = air_data.get('nome', 'Campanha AIR')
     hashtags = air_data.get('hashtags', [])
+    mentions = air_data.get('mentions', [])
     inf_ids_air = air_data.get('influenciadores_ids', [])
     cliente_nome = air_data.get('cliente')
+    
+    # Datas do AIR (formato ISO) ou usar padrão
+    start_date_str = air_data.get('start_date', '')
+    end_date_str = air_data.get('end_date', '')
+    
+    # Converter datas
+    try:
+        if start_date_str:
+            start_dt = datetime.fromisoformat(start_date_str.replace('Z', ''))
+            data_inicio = start_dt.strftime('%d/%m/%Y')
+        else:
+            data_inicio = datetime.now().strftime('%d/%m/%Y')
+    except:
+        data_inicio = datetime.now().strftime('%d/%m/%Y')
+    
+    try:
+        if end_date_str:
+            end_dt = datetime.fromisoformat(end_date_str.replace('Z', ''))
+            data_fim = end_dt.strftime('%d/%m/%Y')
+        else:
+            data_fim = (datetime.now() + timedelta(days=30)).strftime('%d/%m/%Y')
+    except:
+        data_fim = (datetime.now() + timedelta(days=30)).strftime('%d/%m/%Y')
     
     status.text("Criando campanha...")
     
@@ -388,14 +450,21 @@ def criar_campanha_do_air(air_data, buscar_posts=True, criar_ausentes=True, limi
                 cliente_id = c['id']
                 break
     
+    # Montar objetivo com hashtags e mentions
+    objetivo_parts = ["Campanha importada do AIR."]
+    if hashtags:
+        objetivo_parts.append(f"Hashtags: {', '.join(hashtags[:10])}")
+    if mentions:
+        objetivo_parts.append(f"Menções: {', '.join(mentions)}")
+    
     # Criar campanha
     nova_campanha = data_manager.criar_campanha({
         'nome': nome_campanha,
         'cliente_id': cliente_id,
         'cliente_nome': cliente_nome or '',
-        'objetivo': f"Campanha importada do AIR. Hashtags: {', '.join(hashtags)}",
-        'data_inicio': datetime.now().strftime('%d/%m/%Y'),
-        'data_fim': (datetime.now() + timedelta(days=30)).strftime('%d/%m/%Y'),
+        'objetivo': ' | '.join(objetivo_parts),
+        'data_inicio': data_inicio,
+        'data_fim': data_fim,
         'tipo_dados': 'estatico',
         'status': 'ativa',
         'metricas_selecionadas': {
