@@ -277,11 +277,24 @@ def render_importar_air():
                         if response.status_code == 200:
                             dados = response.json()
                             
+                            # Debug: mostrar resposta raw
+                            with st.expander("🔍 Debug: Resposta do servidor"):
+                                st.json(dados)
+                            
                             # O retorno pode ser uma lista ou objeto
                             if isinstance(dados, list) and len(dados) > 0:
                                 dados = dados[0]
                             
-                            if dados.get('success'):
+                            # Verificar se tem dados válidos (pode não ter campo 'success')
+                            # Aceitar se tiver 'influencers' ou 'name' ou 'hashtags'
+                            tem_dados = (
+                                dados.get('success') or 
+                                dados.get('influencers') or 
+                                dados.get('name') or 
+                                dados.get('hashtags')
+                            )
+                            
+                            if tem_dados:
                                 st.session_state.air_import_data = {
                                     'codigo': codigo,
                                     'nome': dados.get('name', 'Campanha AIR'),
@@ -289,10 +302,13 @@ def render_importar_air():
                                     'influenciadores_ids': dados.get('influencers', []),
                                     'cliente': cliente_sel if cliente_sel != "Selecione..." else None
                                 }
-                                st.success(f"✅ Campanha '{dados.get('name', '')}' encontrada! {len(dados.get('influencers', []))} influenciadores")
+                                nome = dados.get('name', 'Campanha')
+                                qtd_inf = len(dados.get('influencers', []))
+                                st.success(f"✅ Campanha '{nome}' encontrada! {qtd_inf} influenciadores")
                                 st.rerun()
                             else:
-                                st.error("Campanha não encontrada ou erro no servidor")
+                                st.error("Campanha não encontrada ou resposta inválida")
+                                st.caption(f"Resposta: {str(dados)[:500]}")
                         else:
                             st.error(f"Erro ao buscar campanha: {response.status_code}")
                     except requests.exceptions.Timeout:
