@@ -271,47 +271,96 @@ def buscar_por_profile_id(profile_id: str) -> Dict:
         return {"success": False, "error": str(e)}
 
 
-def buscar_posts_influenciador(profile_id: str, limite: int = 20, hashtags: List[str] = None) -> Dict:
+def buscar_posts_influenciador(profile_id: str, limite: int = 100, hashtags: List[str] = None, mentions: List[str] = None, start_date: str = None, end_date: str = None) -> Dict:
     """
-    Busca posts recentes de um influenciador
+    Busca posts de um influenciador, paginando todas as páginas disponíveis
     
     Args:
         profile_id: ID do perfil no AIR
-        limite: Número máximo de posts a buscar
-        hashtags: Lista de hashtags para filtrar (opcional)
+        limite: Número máximo de posts a buscar (total)
+        hashtags: Lista de hashtags para filtrar via parâmetro text
+        mentions: Lista de menções para filtrar via parâmetro text
+        start_date: Data início no formato YYYY-MM-DD (obrigatório)
+        end_date: Data fim no formato YYYY-MM-DD (obrigatório)
     
     Returns:
         Dict com success e posts
     """
     from datetime import datetime, timedelta
     
+    if not start_date or not end_date:
+        return {"success": False, "posts": [], "error": "Datas de início e fim são obrigatórias"}
+    
     try:
-        # Buscar posts dos últimos 6 meses
-        end_date = datetime.now().strftime('%Y-%m-%d')
-        start_date = (datetime.now() - timedelta(days=180)).strftime('%Y-%m-%d')
+        # Montar lista de termos para filtro (hashtags + mentions)
+        termos_filtro = []
+        if hashtags:
+            for h in hashtags:
+                # Limpar hashtag
+                h_clean = h.strip().replace('#', '')
+                if h_clean:
+                    termos_filtro.append(h_clean)
         
-        resultado = buscar_posts(
-            profile_id=profile_id,
-            start_date=start_date,
-            end_date=end_date,
-            page=0
-        )
+        if mentions:
+            for m in mentions:
+                # Limpar mention
+                m_clean = m.strip().replace('@', '')
+                if m_clean:
+                    termos_filtro.append(m_clean)
         
-        if not resultado.get('success'):
-            return {"success": False, "posts": [], "error": resultado.get('error')}
+        todos_posts = []
+        page = 0
+        max_pages = 50  # Limite de segurança
         
-        data = resultado.get('data', {})
+        while len(todos_posts) < limite and page < max_pages:
+            # Buscar com os termos de filtro
+            if termos_filtro:
+                # Junta todos os termos para busca
+                texto_busca = ' '.join(termos_filtro[:10])  # Limita a 10 termos
+                
+                resultado = buscar_posts(
+                    profile_id=profile_id,
+                    start_date=start_date,
+                    end_date=end_date,
+                    text=texto_busca,
+                    page=page
+                )
+            else:
+                resultado = buscar_posts(
+                    profile_id=profile_id,
+                    start_date=start_date,
+                    end_date=end_date,
+                    page=page
+                )
+            
+            if not resultado.get('success'):
+                break
+            
+            data = resultado.get('data', {})
+            
+            # Extrair posts e info de paginação
+            posts_pagina = []
+            total_pages = 1
+            
+            if isinstance(data, dict):
+                posts_pagina = data.get('posts', [])
+                total_pages = data.get('pages', 1)
+            elif isinstance(data, list):
+                posts_pagina = data
+            
+            if not posts_pagina:
+                break
+            
+            todos_posts.extend(posts_pagina)
+            
+            # Verificar se há mais páginas
+            page += 1
+            if page >= total_pages:
+                break
         
-        # A API retorna: { "posts": [...], "count": X, "pages": Y }
-        # Ou pode ser uma lista direta
-        posts_raw = []
-        if isinstance(data, dict):
-            posts_raw = data.get('posts', [])
-        elif isinstance(data, list):
-            posts_raw = data
-        
+        # Processar todos os posts coletados
         posts_processados = []
-        for post_raw in posts_raw[:limite]:
+        for post_raw in todos_posts[:limite]:
             # Extrair counters
             counters = post_raw.get('counters', {})
             
@@ -327,6 +376,8 @@ def buscar_posts_influenciador(profile_id: str, limite: int = 20, hashtags: List
             if not permalink and short_code:
                 if network == 'instagram':
                     permalink = f"https://www.instagram.com/p/{short_code}/"
+                elif network == 'tiktok':
+                    permalink = f"https://www.tiktok.com/@user/video/{short_code}"
             
             # Mapear tipo para formato
             formato_map = {
@@ -350,21 +401,6 @@ def buscar_posts_influenciador(profile_id: str, limite: int = 20, hashtags: List
                     data_pub = dt.strftime('%d/%m/%Y')
                 except:
                     data_pub = posted_at[:10] if len(posted_at) >= 10 else ''
-            
-            # Se tem filtro de hashtags, verificar
-            if hashtags:
-                caption_lower = caption.lower()
-                post_hashtags = [h.lower() for h in post_raw.get('hashtags', [])]
-                
-                tem_hashtag = False
-                for h in hashtags:
-                    h_clean = h.lower().replace('#', '')
-                    if h_clean in caption_lower or h_clean in post_hashtags:
-                        tem_hashtag = True
-                        break
-                
-                if not tem_hashtag:
-                    continue
             
             # Montar post processado
             post_processado = {
@@ -395,7 +431,7 @@ def buscar_posts_influenciador(profile_id: str, limite: int = 20, hashtags: List
             
             posts_processados.append(post_processado)
         
-        return {"success": True, "posts": posts_processados}
+        return {"success": True, "posts": posts_processados, "total_encontrados": len(todos_posts)}
         
     except Exception as e:
         return {"success": False, "posts": [], "error": str(e)}

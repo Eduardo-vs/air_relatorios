@@ -556,19 +556,50 @@ def criar_campanha_do_air(air_data, buscar_posts=True, criar_ausentes=True, limi
             except Exception as e:
                 erros.append(f"Erro ao adicionar {inf_local.get('nome', '')}: {str(e)}")
             
-            # Buscar posts com hashtags se habilitado
-            if buscar_posts and hashtags:
-                status.text(f"Buscando posts de {inf_local.get('nome', '')}...")
+            # Buscar posts com hashtags/mentions se habilitado
+            if buscar_posts and (hashtags or mentions):
+                status.text(f"Buscando posts de {inf_local.get('nome', '')} (pode demorar)...")
                 
                 try:
-                    # Buscar posts do influenciador (já filtra por hashtags)
+                    # Converter datas para formato YYYY-MM-DD para a API
+                    api_start_date = None
+                    api_end_date = None
+                    
+                    if start_date_str:
+                        try:
+                            dt = datetime.fromisoformat(start_date_str.replace('Z', ''))
+                            api_start_date = dt.strftime('%Y-%m-%d')
+                        except:
+                            pass
+                    
+                    if end_date_str:
+                        try:
+                            dt = datetime.fromisoformat(end_date_str.replace('Z', ''))
+                            api_end_date = dt.strftime('%Y-%m-%d')
+                        except:
+                            pass
+                    
+                    # Se não tem datas, usar período padrão
+                    if not api_start_date:
+                        api_start_date = (datetime.now() - timedelta(days=180)).strftime('%Y-%m-%d')
+                    if not api_end_date:
+                        api_end_date = datetime.now().strftime('%Y-%m-%d')
+                    
+                    # Buscar posts do influenciador com filtro de texto e datas da campanha
                     posts_resultado = api_client.buscar_posts_influenciador(
                         inf_local.get('profile_id') or inf_id_air,
                         limite=limite_posts,
-                        hashtags=hashtags  # Passa hashtags para filtrar na API
+                        hashtags=hashtags,
+                        mentions=mentions,
+                        start_date=api_start_date,
+                        end_date=api_end_date
                     )
                     
+                    total_encontrados = posts_resultado.get('total_encontrados', 0)
+                    
                     if posts_resultado.get('success') and posts_resultado.get('posts'):
+                        status.text(f"Salvando {len(posts_resultado['posts'])} posts de {inf_local.get('nome', '')}...")
+                        
                         for post_api in posts_resultado['posts']:
                             # Adicionar post à campanha
                             post_data = {
@@ -593,7 +624,7 @@ def criar_campanha_do_air(air_data, buscar_posts=True, criar_ausentes=True, limi
                             except Exception as pe:
                                 erros.append(f"Erro ao salvar post: {str(pe)[:50]}")
                     else:
-                        # Sem posts com hashtags
+                        # Sem posts encontrados
                         erro_posts = posts_resultado.get('error', '')
                         if erro_posts:
                             erros.append(f"Posts de {inf_local.get('nome', '')}: {erro_posts[:50]}")
