@@ -483,9 +483,12 @@ def criar_campanha_do_air(air_data, buscar_posts=True, criar_ausentes=True, limi
     posts_adicionados = 0
     erros = []
     
+    if total_inf == 0:
+        st.warning("Nenhum influenciador para processar")
+    
     for idx, inf_id_air in enumerate(inf_ids_air):
-        progress.progress(0.1 + (0.8 * idx / total_inf))
-        status.text(f"Processando influenciador {idx+1}/{total_inf}...")
+        progress.progress(0.1 + (0.8 * (idx + 1) / max(total_inf, 1)))
+        status.text(f"Processando influenciador {idx+1}/{total_inf} (ID: {inf_id_air[:10]}...)...")
         
         # Verificar se existe na base local (por profile_id)
         inf_local = None
@@ -511,15 +514,47 @@ def criar_campanha_do_air(air_data, buscar_posts=True, criar_ausentes=True, limi
                     # Criar influenciador
                     novo_inf = data_manager.criar_influenciador(dados_api)
                     inf_local = novo_inf
-                    status.text(f"Influenciador {dados_api.get('nome', '')} cadastrado!")
+                    status.text(f"✅ {dados_api.get('nome', 'Influenciador')} cadastrado!")
+                else:
+                    erro_msg = resultado.get('error', 'Perfil não encontrado na API')
+                    erros.append(f"ID {inf_id_air[:15]}...: {erro_msg}")
+                    
+                    # Criar influenciador com dados mínimos para não perder
+                    dados_minimos = {
+                        'nome': f'Influenciador AIR',
+                        'usuario': f'air_{inf_id_air[:8]}',
+                        'profile_id': inf_id_air,
+                        'network': 'instagram',
+                        'seguidores': 0
+                    }
+                    novo_inf = data_manager.criar_influenciador(dados_minimos)
+                    inf_local = novo_inf
+                    
             except Exception as e:
-                erros.append(f"Erro ao buscar {inf_id_air}: {str(e)}")
+                erros.append(f"Erro ao buscar {inf_id_air[:15]}...: {str(e)}")
+                
+                # Criar influenciador com dados mínimos mesmo com erro
+                try:
+                    dados_minimos = {
+                        'nome': f'Influenciador AIR',
+                        'usuario': f'air_{inf_id_air[:8]}',
+                        'profile_id': inf_id_air,
+                        'network': 'instagram',
+                        'seguidores': 0
+                    }
+                    novo_inf = data_manager.criar_influenciador(dados_minimos)
+                    inf_local = novo_inf
+                except:
+                    pass
         
         # Se tem influenciador, adicionar à campanha
         if inf_local:
             # Adicionar à campanha
-            data_manager.adicionar_influenciador_campanha(campanha_id, inf_local['id'])
-            influenciadores_adicionados += 1
+            try:
+                data_manager.adicionar_influenciador_campanha(campanha_id, inf_local['id'])
+                influenciadores_adicionados += 1
+            except Exception as e:
+                erros.append(f"Erro ao adicionar {inf_local.get('nome', '')}: {str(e)}")
             
             # Buscar posts com hashtags se habilitado
             if buscar_posts and hashtags:

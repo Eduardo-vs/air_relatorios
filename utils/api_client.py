@@ -7,7 +7,7 @@ from typing import List, Dict, Optional
 
 # URLs dos endpoints
 ENDPOINT_GET_PROFILE_ID = "https://n8n.air.com.vc/webhook/2e7956e8-2f15-497d-9a10-efb21038d5e5"
-ENDPOINT_GET_PROFILE = "https://n8n.air.com.vc/webhook-test/5246e807-0d6a-44aa-935a-88a26d831428"
+ENDPOINT_GET_PROFILE = "https://n8n.air.com.vc/webhook/5246e807-0d6a-44aa-935a-88a26d831428"
 ENDPOINT_GET_POSTS = "https://n8n.air.com.vc/webhook/9fe6eb2a-ebec-418b-8744-889e3e0e47ac"
 
 
@@ -244,16 +244,28 @@ def buscar_por_profile_id(profile_id: str) -> Dict:
         Dict com success e data
     """
     try:
+        # Tentar buscar perfil completo
         resultado = buscar_perfil_completo([profile_id])
         
-        if not resultado.get('success'):
-            return resultado
+        if resultado.get('success'):
+            data = resultado.get('data', {})
+            
+            # Tentar diferentes formatos de resposta
+            items = []
+            if isinstance(data, dict):
+                items = data.get('items', [])
+                if not items and data.get('profile'):
+                    items = [data.get('profile')]
+                if not items and data.get('data'):
+                    items = [data.get('data')] if isinstance(data.get('data'), dict) else data.get('data', [])
+            elif isinstance(data, list):
+                items = data
+            
+            if items and len(items) > 0:
+                return {"success": True, "data": items[0]}
         
-        items = resultado.get('data', {}).get('items', [])
-        if not items:
-            return {"success": False, "error": "Perfil nao encontrado"}
-        
-        return {"success": True, "data": items[0]}
+        # Se não encontrou, retornar erro
+        return {"success": False, "error": resultado.get('error', 'Perfil não encontrado na API')}
         
     except Exception as e:
         return {"success": False, "error": str(e)}
