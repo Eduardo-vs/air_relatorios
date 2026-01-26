@@ -2037,6 +2037,55 @@ def render_comentarios(campanha):
     # Webhook para classificacao
     WEBHOOK_URL = "https://n8n.air.com.vc/webhook/e19fe530-62b6-44af-b6d1-3aeed59cfe0b"
     
+    # ========== CONFIGURAÇÃO DE LOGIN DO INSTAGRAM ==========
+    with st.expander("⚙️ Configurar Conta do Instagram (Opcional)", expanded=False):
+        st.caption("Configure uma conta para evitar erros de 'login required' ao extrair comentários")
+        
+        # Verificar se já há sessão salva
+        insta_username = st.session_state.get('insta_username', '')
+        insta_logged_in = st.session_state.get('insta_logged_in', False)
+        
+        if insta_logged_in:
+            st.success(f"✅ Logado como @{insta_username}")
+            if st.button("Fazer Logout"):
+                st.session_state['insta_username'] = ''
+                st.session_state['insta_password'] = ''
+                st.session_state['insta_logged_in'] = False
+                st.rerun()
+        else:
+            st.warning("⚠️ Sem login - alguns perfis podem não permitir extração")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                login_username = st.text_input("Usuário do Instagram:", placeholder="seu_usuario", key="insta_login_user")
+            with col2:
+                login_password = st.text_input("Senha:", type="password", key="insta_login_pass")
+            
+            st.caption("💡 Use uma conta secundária. A sessão fica salva no navegador.")
+            
+            if st.button("Fazer Login"):
+                if login_username and login_password:
+                    with st.spinner("Fazendo login..."):
+                        try:
+                            from utils.comentarios_extractor import ComentariosExtractor
+                            extractor = ComentariosExtractor()
+                            resultado = extractor.login(login_username, login_password)
+                            
+                            if resultado.get('sucesso'):
+                                st.session_state['insta_username'] = login_username
+                                st.session_state['insta_password'] = login_password
+                                st.session_state['insta_logged_in'] = True
+                                st.success(resultado.get('mensagem'))
+                                st.rerun()
+                            else:
+                                st.error(resultado.get('erro'))
+                        except Exception as e:
+                            st.error(f"Erro: {str(e)}")
+                else:
+                    st.error("Preencha usuário e senha")
+    
+    st.markdown("---")
+    
     # Categorias configuradas (formato novo com descricao)
     categorias_raw = campanha.get('categorias_comentarios', [])
     
@@ -2054,22 +2103,6 @@ def render_comentarios(campanha):
     
     # Buscar influenciadores e posts da campanha
     influenciadores = data_manager.get_influenciadores_campanha(campanha_id)
-    
-    # DEBUG: Mostrar estrutura dos posts para diagnóstico
-    debug_info = []
-    for inf in influenciadores:
-        for post in inf.get('posts', []):
-            debug_info.append({
-                'inf': inf.get('nome', ''),
-                'keys': list(post.keys()),
-                'link': post.get('link', ''),
-                'link_post': post.get('link_post', ''),
-                'permalink': post.get('permalink', ''),
-                'url': post.get('url', '')
-            })
-    
-    with st.expander("Debug: Estrutura dos posts (clique para ver)"):
-        st.json(debug_info)
     
     # Coletar todos os posts com links
     posts_campanha = []
@@ -2097,8 +2130,6 @@ def render_comentarios(campanha):
         st.caption("Adicione links aos posts dos influenciadores para extrair comentarios.")
         return
     
-    st.markdown("---")
-    
     # Mostrar categorias configuradas
     st.markdown(f"**Categorias configuradas ({len(categorias)}):**")
     cats_texto = ", ".join([c.get('nome', '') for c in categorias[:10]])
@@ -2117,7 +2148,8 @@ def render_comentarios(campanha):
             'Formato': p['formato'],
             'Data': p['data'],
             'Curtidas': p['curtidas'],
-            'Coments': p['comentarios_qtd']
+            'Coments': p['comentarios_qtd'],
+            'Link': p['link'][:50] + '...' if len(p['link']) > 50 else p['link']
         }
         for p in posts_campanha
     ])
@@ -2140,6 +2172,12 @@ def render_comentarios(campanha):
         )
     with col2:
         limite_comentarios = st.number_input("Limite por post:", min_value=10, max_value=500, value=100, step=10)
+    
+    # Status de login
+    if st.session_state.get('insta_logged_in'):
+        st.caption(f"✅ Usando conta @{st.session_state.get('insta_username')}")
+    else:
+        st.caption("⚠️ Sem login - configure acima se tiver erros")
     
     if st.button("Extrair Comentarios"):
         st.session_state['extraindo_comentarios'] = True
@@ -2167,7 +2205,16 @@ def render_comentarios(campanha):
         try:
             from utils.comentarios_extractor import ComentariosExtractor
             
-            extractor = ComentariosExtractor()
+            # Criar extrator com login se disponível
+            insta_user = st.session_state.get('insta_username', '')
+            insta_pass = st.session_state.get('insta_password', '')
+            
+            if insta_user and insta_pass:
+                extractor = ComentariosExtractor(username=insta_user, password=insta_pass)
+                status_text.text(f"Usando conta @{insta_user}...")
+            else:
+                extractor = ComentariosExtractor()
+                status_text.text("Extraindo sem login...")
             
             for i, post in enumerate(posts_extrair):
                 status_text.text(f"Extraindo de {post['influenciador']} ({i+1}/{len(posts_extrair)})...")
@@ -2190,9 +2237,14 @@ def render_comentarios(campanha):
                     }
                     status_text.text(f"{post['influenciador']}: {len(comentarios)} comentarios")
                 else:
-                    st.warning(f"{post['influenciador']}: {resultado.get('erro', 'Erro')}")
+                    erro_msg = resultado.get('erro', 'Erro desconhecido')
+                    st.warning(f"{post['influenciador']}: {erro_msg}")
+                    
+                    # Se requer login, avisar
+                    if resultado.get('requer_login'):
+                        st.info("💡 Configure uma conta do Instagram no painel acima para acessar este perfil")
                 
-                time.sleep(1)
+                time.sleep(1.5)  # Aumentado para evitar rate limit
             
             progress_bar.progress(1.0)
             

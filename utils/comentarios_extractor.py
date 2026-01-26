@@ -7,6 +7,7 @@ import instaloader
 import requests
 import time
 import re
+import os
 from datetime import datetime
 from typing import List, Dict, Optional, Callable
 import json
@@ -15,15 +16,134 @@ import json
 class ComentariosExtractor:
     """Classe para extrair e classificar comentarios do Instagram"""
     
-    def __init__(self, webhook_url: str = None):
+    def __init__(self, webhook_url: str = None, username: str = None, password: str = None, session_file: str = None):
         """
         Inicializa o extrator
         
         Args:
             webhook_url: URL do webhook para classificacao via IA
+            username: Usuario do Instagram para login (opcional)
+            password: Senha do Instagram para login (opcional)
+            session_file: Arquivo de sessao salva (opcional)
         """
-        self.loader = instaloader.Instaloader()
+        self.loader = instaloader.Instaloader(
+            download_pictures=False,
+            download_videos=False,
+            download_video_thumbnails=False,
+            download_geotags=False,
+            download_comments=False,
+            save_metadata=False,
+            compress_json=False,
+            quiet=True,
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
         self.webhook_url = webhook_url or "https://n8n.air.com.vc/webhook/classificar-comentarios"
+        self.logged_in = False
+        self.username = username
+        
+        # Tentar carregar sessao salva ou fazer login
+        if session_file and os.path.exists(session_file):
+            try:
+                self.loader.load_session_from_file(username, session_file)
+                self.logged_in = True
+            except:
+                pass
+        elif username and password:
+            self.login(username, password)
+    
+    def login(self, username: str, password: str, save_session: bool = True) -> Dict:
+        """
+        Faz login no Instagram
+        
+        Args:
+            username: Usuario do Instagram
+            password: Senha do Instagram
+            save_session: Se deve salvar a sessao para uso futuro
+            
+        Returns:
+            Dict com status do login
+        """
+        try:
+            self.loader.login(username, password)
+            self.logged_in = True
+            self.username = username
+            
+            if save_session:
+                # Salvar sessao em arquivo
+                session_file = f".instaloader_session_{username}"
+                self.loader.save_session_to_file(session_file)
+            
+            return {
+                'sucesso': True,
+                'mensagem': f'Login realizado com sucesso como @{username}'
+            }
+        except instaloader.exceptions.BadCredentialsException:
+            return {
+                'sucesso': False,
+                'erro': 'Credenciais invalidas. Verifique usuario e senha.'
+            }
+        except instaloader.exceptions.TwoFactorAuthRequiredException:
+            return {
+                'sucesso': False,
+                'erro': 'Conta requer autenticacao de dois fatores. Desative temporariamente ou use uma conta sem 2FA.'
+            }
+        except instaloader.exceptions.ConnectionException as e:
+            return {
+                'sucesso': False,
+                'erro': f'Erro de conexao: {str(e)}'
+            }
+        except Exception as e:
+            return {
+                'sucesso': False,
+                'erro': f'Erro ao fazer login: {str(e)}'
+            }
+    
+    def logout(self):
+        """Faz logout e limpa sessao"""
+        self.loader = instaloader.Instaloader(
+            download_pictures=False,
+            download_videos=False,
+            download_video_thumbnails=False,
+            download_geotags=False,
+            download_comments=False,
+            save_metadata=False,
+            compress_json=False,
+            quiet=True
+        )
+        self.logged_in = False
+        self.username = None
+    
+    def carregar_sessao(self, username: str) -> Dict:
+        """
+        Carrega uma sessao salva anteriormente
+        
+        Args:
+            username: Usuario da sessao salva
+            
+        Returns:
+            Dict com status
+        """
+        session_file = f".instaloader_session_{username}"
+        
+        if not os.path.exists(session_file):
+            return {
+                'sucesso': False,
+                'erro': f'Nenhuma sessao salva encontrada para @{username}'
+            }
+        
+        try:
+            self.loader.load_session_from_file(username, session_file)
+            self.logged_in = True
+            self.username = username
+            return {
+                'sucesso': True,
+                'mensagem': f'Sessao carregada para @{username}'
+            }
+        except Exception as e:
+            return {
+                'sucesso': False,
+                'erro': f'Erro ao carregar sessao: {str(e)}'
+            }
         
     def extrair_shortcode_do_link(self, link: str) -> Optional[str]:
         """
@@ -90,6 +210,7 @@ class ComentariosExtractor:
                 'caption': post.caption[:500] if post.caption else '',
                 'likes': post.likes,
                 'total_comentarios_post': post.comments,
+                'logged_in': self.logged_in,
                 'comentarios': []
             }
             
@@ -128,7 +249,7 @@ class ComentariosExtractor:
                     progress_callback(count, limite)
                 
                 # Pequena pausa para evitar rate limit
-                time.sleep(0.1)
+                time.sleep(0.2)
             
             resultado['total_extraidos'] = len(resultado['comentarios'])
             return resultado
@@ -136,13 +257,32 @@ class ComentariosExtractor:
         except instaloader.exceptions.LoginRequiredException:
             return {
                 'sucesso': False,
-                'erro': 'Este perfil e privado. Necessario login.',
+                'erro': 'Este perfil requer login. Configure uma conta do Instagram nas configuracoes.',
+                'requer_login': True,
                 'comentarios': []
             }
         except instaloader.exceptions.QueryReturnedNotFoundException:
             return {
                 'sucesso': False,
                 'erro': 'Post nao encontrado. Verifique o link.',
+                'comentarios': []
+            }
+        except instaloader.exceptions.QueryReturnedBadRequestException:
+            return {
+                'sucesso': False,
+                'erro': 'Requisicao bloqueada pelo Instagram. Aguarde alguns minutos ou faca login.',
+                'comentarios': []
+            }
+        except instaloader.exceptions.ConnectionException as e:
+            if "429" in str(e) or "rate" in str(e).lower():
+                return {
+                    'sucesso': False,
+                    'erro': 'Limite de requisicoes atingido. Aguarde alguns minutos.',
+                    'comentarios': []
+                }
+            return {
+                'sucesso': False,
+                'erro': f'Erro de conexao: {str(e)}',
                 'comentarios': []
             }
         except Exception as e:

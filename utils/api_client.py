@@ -231,3 +231,107 @@ def atualizar_influenciador_api(profile_id: str) -> Dict:
     dados_processados = processar_dados_api(items[0])
     
     return {"success": True, "data": dados_processados}
+
+
+def buscar_por_profile_id(profile_id: str) -> Dict:
+    """
+    Busca dados de um influenciador pelo profile_id do AIR
+    
+    Args:
+        profile_id: ID do perfil no AIR (ex: "67a66fb7a917c05b016cd500")
+    
+    Returns:
+        Dict com success e data
+    """
+    try:
+        resultado = buscar_perfil_completo([profile_id])
+        
+        if not resultado.get('success'):
+            return resultado
+        
+        items = resultado.get('data', {}).get('items', [])
+        if not items:
+            return {"success": False, "error": "Perfil nao encontrado"}
+        
+        return {"success": True, "data": items[0]}
+        
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def buscar_posts_influenciador(profile_id: str, limite: int = 20, hashtags: List[str] = None) -> Dict:
+    """
+    Busca posts recentes de um influenciador
+    
+    Args:
+        profile_id: ID do perfil no AIR
+        limite: Número máximo de posts a buscar
+        hashtags: Lista de hashtags para filtrar (opcional)
+    
+    Returns:
+        Dict com success e posts
+    """
+    from datetime import datetime, timedelta
+    
+    try:
+        # Buscar posts dos últimos 6 meses
+        end_date = datetime.now().strftime('%Y-%m-%d')
+        start_date = (datetime.now() - timedelta(days=180)).strftime('%Y-%m-%d')
+        
+        resultado = buscar_posts(
+            profile_id=profile_id,
+            start_date=start_date,
+            end_date=end_date,
+            page=0
+        )
+        
+        if not resultado.get('success'):
+            return {"success": False, "posts": [], "error": resultado.get('error')}
+        
+        data = resultado.get('data', {})
+        posts_raw = data.get('posts', []) if isinstance(data, dict) else []
+        
+        # Se não tem posts no formato esperado, tentar outros formatos
+        if not posts_raw and isinstance(data, list):
+            posts_raw = data
+        
+        posts_processados = []
+        for post_raw in posts_raw[:limite]:
+            post = processar_post_api(post_raw)
+            
+            # Se tem filtro de hashtags, verificar
+            if hashtags:
+                caption = (post_raw.get('caption') or '').lower()
+                post_hashtags = [h.lower() for h in post_raw.get('hashtags', [])]
+                
+                tem_hashtag = False
+                for h in hashtags:
+                    h_clean = h.lower().replace('#', '')
+                    if h_clean in caption or h_clean in post_hashtags:
+                        tem_hashtag = True
+                        break
+                
+                if not tem_hashtag:
+                    continue
+            
+            posts_processados.append({
+                'type': post.get('formato', 'Feed'),
+                'permalink': post.get('link_post', ''),
+                'date': post.get('data_publicacao', ''),
+                'caption': post_raw.get('caption', ''),
+                'thumbnail': post.get('thumbnail', ''),
+                'views': post.get('views', 0),
+                'reach': post.get('alcance', 0),
+                'impressions': post.get('impressoes', 0),
+                'engagement': post.get('interacoes', 0),
+                'likes': post.get('curtidas', 0),
+                'comments': post.get('comentarios_qtd', 0),
+                'shares': post.get('compartilhamentos', 0),
+                'saves': post.get('saves', 0),
+                'hashtags': post_raw.get('hashtags', [])
+            })
+        
+        return {"success": True, "posts": posts_processados}
+        
+    except Exception as e:
+        return {"success": False, "posts": [], "error": str(e)}

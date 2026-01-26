@@ -1386,7 +1386,7 @@ def render_pag5_top_performance(campanhas_list, cores):
         tem_tops = any(top_conteudos.get(f'top{i}_post_id') for i in range(1, 4))
         
         if tem_tops:
-            st.markdown("### 🏆 Conteudos que Mais Desempenharam")
+            st.markdown("#### 🏆 Top Conteúdos")
             
             cols = st.columns(3)
             
@@ -1394,46 +1394,38 @@ def render_pag5_top_performance(campanhas_list, cores):
                 with col:
                     post_id = top_conteudos.get(f'top{i}_post_id')
                     if post_id:
-                        # Card do top conteúdo
-                        st.markdown(f"""
-                        <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); 
-                                    border-radius: 12px; padding: 0.5rem; text-align: center; margin-bottom: 0.5rem;">
-                            <span style="font-size: 1.5rem;">🥇</span> <b>Top {i}</b>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        # Card compacto
+                        st.markdown(f"<div style='background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 8px; padding: 0.3rem; text-align: center; margin-bottom: 0.3rem; font-size: 0.8rem;'><b>🥇 Top {i}</b></div>", unsafe_allow_html=True)
                         
-                        # Thumbnail
+                        # Thumbnail pequena
                         thumb = top_conteudos.get(f'top{i}_thumbnail', '')
                         if thumb:
                             try:
-                                st.image(thumb, use_container_width=True)
+                                st.image(thumb, width=120)
                             except:
-                                st.markdown("📷 *Imagem indisponivel*")
-                        else:
-                            st.markdown("📷 *Sem imagem*")
+                                pass
                         
-                        # Info do influenciador
-                        st.markdown(f"**@{top_conteudos.get(f'top{i}_usuario', 'N/A')}**")
-                        st.caption(f"{top_conteudos.get(f'top{i}_formato', '')} | {top_conteudos.get(f'top{i}_influenciador', '')}")
+                        # Info compacta
+                        usuario = top_conteudos.get(f'top{i}_usuario', '')
+                        formato = top_conteudos.get(f'top{i}_formato', '')
+                        st.markdown(f"<span style='font-size: 0.85rem;'><b>@{usuario}</b> | {formato}</span>", unsafe_allow_html=True)
                         
-                        # Métricas
-                        inter = top_conteudos.get(f'top{i}_interacoes', 0)
+                        # Métricas em linha única
                         curt = top_conteudos.get(f'top{i}_curtidas', 0)
                         coment = top_conteudos.get(f'top{i}_comentarios', 0)
+                        inter = top_conteudos.get(f'top{i}_interacoes', 0)
+                        st.caption(f"❤️ {funcoes_auxiliares.formatar_numero(curt)} 💬 {funcoes_auxiliares.formatar_numero(coment)} 🔥 {funcoes_auxiliares.formatar_numero(inter)}")
                         
-                        st.caption(f"❤️ {funcoes_auxiliares.formatar_numero(curt)} | 💬 {funcoes_auxiliares.formatar_numero(coment)} | 🔥 {funcoes_auxiliares.formatar_numero(inter)} inter.")
-                        
-                        # Descrição da escolha
+                        # Descrição curta
                         descricao = top_conteudos.get(f'top{i}_descricao', '')
                         if descricao:
-                            st.markdown(f"<div style='background: #f9fafb; border-left: 3px solid #f59e0b; padding: 0.5rem; border-radius: 4px; font-size: 0.85rem; margin-top: 0.5rem;'>{descricao}</div>", unsafe_allow_html=True)
+                            desc_curta = descricao[:80] + '...' if len(descricao) > 80 else descricao
+                            st.caption(f"💡 {desc_curta}")
                         
-                        # Link do conteúdo
+                        # Link
                         link = top_conteudos.get(f'top{i}_link', '')
                         if link:
-                            st.markdown(f"[🔗 Ver conteudo]({link})")
-                    else:
-                        st.info(f"Top {i} não configurado")
+                            st.markdown(f"<a href='{link}' target='_blank' style='font-size: 0.75rem;'>🔗 Ver</a>", unsafe_allow_html=True)
             
             st.markdown("---")
     
