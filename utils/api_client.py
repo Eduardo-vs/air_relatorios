@@ -301,47 +301,99 @@ def buscar_posts_influenciador(profile_id: str, limite: int = 20, hashtags: List
             return {"success": False, "posts": [], "error": resultado.get('error')}
         
         data = resultado.get('data', {})
-        posts_raw = data.get('posts', []) if isinstance(data, dict) else []
         
-        # Se não tem posts no formato esperado, tentar outros formatos
-        if not posts_raw and isinstance(data, list):
+        # A API retorna: { "posts": [...], "count": X, "pages": Y }
+        # Ou pode ser uma lista direta
+        posts_raw = []
+        if isinstance(data, dict):
+            posts_raw = data.get('posts', [])
+        elif isinstance(data, list):
             posts_raw = data
         
         posts_processados = []
         for post_raw in posts_raw[:limite]:
-            post = processar_post_api(post_raw)
+            # Extrair counters
+            counters = post_raw.get('counters', {})
+            
+            # Extrair dados do post
+            caption = post_raw.get('caption', '') or ''
+            post_type = post_raw.get('type', 'post') or 'post'
+            permalink = post_raw.get('permalink', '') or ''
+            thumbnail = post_raw.get('thumbnail', '') or post_raw.get('image', '') or ''
+            short_code = post_raw.get('short_code', '') or ''
+            network = post_raw.get('network', 'instagram') or 'instagram'
+            
+            # Se não tem permalink mas tem short_code, construir
+            if not permalink and short_code:
+                if network == 'instagram':
+                    permalink = f"https://www.instagram.com/p/{short_code}/"
+            
+            # Mapear tipo para formato
+            formato_map = {
+                'post': 'Feed',
+                'reel': 'Reels',
+                'reels': 'Reels',
+                'story': 'Stories',
+                'stories': 'Stories',
+                'carousel': 'Carrossel',
+                'video': 'Video',
+                'image': 'Feed'
+            }
+            formato = formato_map.get(post_type.lower(), 'Feed')
+            
+            # Data de publicação
+            posted_at = post_raw.get('posted_at', '')
+            data_pub = ''
+            if posted_at:
+                try:
+                    dt = datetime.fromisoformat(posted_at.replace('Z', ''))
+                    data_pub = dt.strftime('%d/%m/%Y')
+                except:
+                    data_pub = posted_at[:10] if len(posted_at) >= 10 else ''
             
             # Se tem filtro de hashtags, verificar
             if hashtags:
-                caption = (post_raw.get('caption') or '').lower()
+                caption_lower = caption.lower()
                 post_hashtags = [h.lower() for h in post_raw.get('hashtags', [])]
                 
                 tem_hashtag = False
                 for h in hashtags:
                     h_clean = h.lower().replace('#', '')
-                    if h_clean in caption or h_clean in post_hashtags:
+                    if h_clean in caption_lower or h_clean in post_hashtags:
                         tem_hashtag = True
                         break
                 
                 if not tem_hashtag:
                     continue
             
-            posts_processados.append({
-                'type': post.get('formato', 'Feed'),
-                'permalink': post.get('link_post', ''),
-                'date': post.get('data_publicacao', ''),
-                'caption': post_raw.get('caption', ''),
-                'thumbnail': post.get('thumbnail', ''),
-                'views': post.get('views', 0),
-                'reach': post.get('alcance', 0),
-                'impressions': post.get('impressoes', 0),
-                'engagement': post.get('interacoes', 0),
-                'likes': post.get('curtidas', 0),
-                'comments': post.get('comentarios_qtd', 0),
-                'shares': post.get('compartilhamentos', 0),
-                'saves': post.get('saves', 0),
+            # Montar post processado
+            post_processado = {
+                'type': formato,
+                'formato': formato,
+                'permalink': permalink,
+                'link': permalink,
+                'date': data_pub,
+                'data_publicacao': data_pub,
+                'caption': caption,
+                'thumbnail': thumbnail,
+                'views': counters.get('views', 0) or 0,
+                'reach': counters.get('reach', 0) or 0,
+                'alcance': counters.get('reach', 0) or 0,
+                'impressions': counters.get('impressions', 0) or 0,
+                'impressoes': counters.get('impressions', 0) or 0,
+                'engagement': counters.get('interactions', 0) or 0,
+                'interacoes': counters.get('interactions', 0) or 0,
+                'likes': counters.get('likes', 0) or 0,
+                'curtidas': counters.get('likes', 0) or 0,
+                'comments': counters.get('comments', 0) or 0,
+                'comentarios_qtd': counters.get('comments', 0) or 0,
+                'shares': counters.get('shares', 0) or 0,
+                'compartilhamentos': counters.get('shares', 0) or 0,
+                'saves': counters.get('saved', 0) or 0,
                 'hashtags': post_raw.get('hashtags', [])
-            })
+            }
+            
+            posts_processados.append(post_processado)
         
         return {"success": True, "posts": posts_processados}
         

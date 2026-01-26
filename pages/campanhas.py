@@ -561,47 +561,45 @@ def criar_campanha_do_air(air_data, buscar_posts=True, criar_ausentes=True, limi
                 status.text(f"Buscando posts de {inf_local.get('nome', '')}...")
                 
                 try:
-                    # Buscar posts do influenciador
+                    # Buscar posts do influenciador (já filtra por hashtags)
                     posts_resultado = api_client.buscar_posts_influenciador(
                         inf_local.get('profile_id') or inf_id_air,
-                        limite=limite_posts
+                        limite=limite_posts,
+                        hashtags=hashtags  # Passa hashtags para filtrar na API
                     )
                     
                     if posts_resultado.get('success') and posts_resultado.get('posts'):
                         for post_api in posts_resultado['posts']:
-                            # Verificar se post tem alguma das hashtags
-                            caption = (post_api.get('caption') or '').lower()
-                            post_hashtags = post_api.get('hashtags', [])
+                            # Adicionar post à campanha
+                            post_data = {
+                                'formato': post_api.get('formato') or post_api.get('type', 'Feed'),
+                                'plataforma': 'Instagram',
+                                'data_publicacao': post_api.get('data_publicacao') or post_api.get('date', ''),
+                                'link': post_api.get('link') or post_api.get('permalink', ''),
+                                'views': post_api.get('views', 0) or 0,
+                                'alcance': post_api.get('alcance') or post_api.get('reach', 0) or 0,
+                                'interacoes': post_api.get('interacoes') or post_api.get('engagement', 0) or 0,
+                                'impressoes': post_api.get('impressoes') or post_api.get('impressions', 0) or 0,
+                                'curtidas': post_api.get('curtidas') or post_api.get('likes', 0) or 0,
+                                'comentarios_qtd': post_api.get('comentarios_qtd') or post_api.get('comments', 0) or 0,
+                                'compartilhamentos': post_api.get('compartilhamentos') or post_api.get('shares', 0) or 0,
+                                'saves': post_api.get('saves', 0) or 0,
+                                'imagens': [post_api.get('thumbnail', '')] if post_api.get('thumbnail') else []
+                            }
                             
-                            tem_hashtag = False
-                            for h in hashtags:
-                                h_clean = h.lower().replace('#', '')
-                                if h_clean in caption or h_clean in [x.lower() for x in post_hashtags]:
-                                    tem_hashtag = True
-                                    break
-                            
-                            if tem_hashtag:
-                                # Adicionar post à campanha
-                                post_data = {
-                                    'formato': post_api.get('type', 'Feed'),
-                                    'plataforma': 'Instagram',
-                                    'data_publicacao': post_api.get('date', datetime.now().strftime('%d/%m/%Y')),
-                                    'link': post_api.get('permalink', ''),
-                                    'views': post_api.get('views', 0) or 0,
-                                    'alcance': post_api.get('reach', 0) or 0,
-                                    'interacoes': post_api.get('engagement', 0) or 0,
-                                    'impressoes': post_api.get('impressions', 0) or 0,
-                                    'curtidas': post_api.get('likes', 0) or 0,
-                                    'comentarios_qtd': post_api.get('comments', 0) or 0,
-                                    'compartilhamentos': post_api.get('shares', 0) or 0,
-                                    'saves': post_api.get('saves', 0) or 0,
-                                    'imagens': [post_api.get('thumbnail', '')] if post_api.get('thumbnail') else []
-                                }
-                                
+                            try:
                                 data_manager.adicionar_post(campanha_id, inf_local['id'], post_data)
                                 posts_adicionados += 1
+                            except Exception as pe:
+                                erros.append(f"Erro ao salvar post: {str(pe)[:50]}")
+                    else:
+                        # Sem posts com hashtags
+                        erro_posts = posts_resultado.get('error', '')
+                        if erro_posts:
+                            erros.append(f"Posts de {inf_local.get('nome', '')}: {erro_posts[:50]}")
+                            
                 except Exception as e:
-                    erros.append(f"Erro ao buscar posts de {inf_local.get('nome', '')}: {str(e)}")
+                    erros.append(f"Erro ao buscar posts de {inf_local.get('nome', '')}: {str(e)[:50]}")
         
         time.sleep(0.3)  # Evitar rate limit
     
