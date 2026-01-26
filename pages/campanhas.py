@@ -212,7 +212,7 @@ def render_importar_air():
     st.markdown("---")
     
     # Endpoint do AIR
-    AIR_ENDPOINT = "https://n8n.air.com.vc/webhook-test/d90a066a-3a26-42d5-8c7b-ac8f0afbe1a6"
+    AIR_ENDPOINT = "https://n8n.air.com.vc/webhook/d90a066a-3a26-42d5-8c7b-ac8f0afbe1a6"
     
     st.markdown("""
     **Como usar:**
@@ -252,18 +252,14 @@ def render_importar_air():
         else:
             st.error("Não foi possível extrair o código do link. Verifique o formato.")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        nome_campanha = st.text_input("Nome da Campanha:", placeholder="Nome para identificar a campanha")
-    with col2:
-        # Cliente
-        clientes = data_manager.get_clientes()
-        if clientes:
-            opcoes_clientes = ["Selecione..."] + [c['nome'] for c in clientes]
-            cliente_sel = st.selectbox("Cliente:", opcoes_clientes)
-        else:
-            cliente_sel = None
-            st.caption("Nenhum cliente cadastrado")
+    # Cliente (mostrar antes de buscar)
+    clientes = data_manager.get_clientes()
+    if clientes:
+        opcoes_clientes = ["Selecione..."] + [c['nome'] for c in clientes]
+        cliente_sel = st.selectbox("Cliente:", opcoes_clientes)
+    else:
+        cliente_sel = None
+        st.caption("Nenhum cliente cadastrado")
     
     if st.button("🔍 Buscar Dados da Campanha", type="primary", disabled=not link_air):
         if not link_air:
@@ -288,12 +284,12 @@ def render_importar_air():
                             if dados.get('success'):
                                 st.session_state.air_import_data = {
                                     'codigo': codigo,
-                                    'nome': dados.get('name', nome_campanha or 'Campanha AIR'),
+                                    'nome': dados.get('name', 'Campanha AIR'),
                                     'hashtags': dados.get('hashtags', []),
                                     'influenciadores_ids': dados.get('influencers', []),
                                     'cliente': cliente_sel if cliente_sel != "Selecione..." else None
                                 }
-                                st.success(f"✅ Campanha encontrada! {len(dados.get('influencers', []))} influenciadores")
+                                st.success(f"✅ Campanha '{dados.get('name', '')}' encontrada! {len(dados.get('influencers', []))} influenciadores")
                                 st.rerun()
                             else:
                                 st.error("Campanha não encontrada ou erro no servidor")
@@ -311,12 +307,17 @@ def render_importar_air():
         st.markdown("---")
         st.markdown("### 📊 Dados da Campanha")
         
-        col1, col2, col3 = st.columns(3)
+        # Permitir editar o nome
+        nome_editado = st.text_input(
+            "Nome da Campanha:", 
+            value=air_data.get('nome', 'Campanha AIR'),
+            key="air_nome_editado"
+        )
+        
+        col1, col2 = st.columns(2)
         with col1:
-            st.metric("Nome", air_data.get('nome', 'N/A'))
-        with col2:
             st.metric("Influenciadores", len(air_data.get('influenciadores_ids', [])))
-        with col3:
+        with col2:
             st.metric("Hashtags", len(air_data.get('hashtags', [])))
         
         # Mostrar hashtags
@@ -342,6 +343,8 @@ def render_importar_air():
         st.markdown("---")
         
         if st.button("🚀 Criar Campanha", type="primary", use_container_width=True):
+            # Usar nome editado
+            air_data['nome'] = nome_editado
             criar_campanha_do_air(air_data, buscar_posts, criar_ausentes, limite_posts)
 
 
