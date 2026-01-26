@@ -168,17 +168,45 @@ def processar_post_api(post_data: Dict) -> Dict:
 def processar_dados_api(api_data: Dict) -> Dict:
     """
     Processa dados da API para formato do banco de dados
-    Retorna exatamente os campos que a API fornece
+    Estrutura da API:
+    {
+        "id": "...",
+        "name": "...",
+        "username": "...",
+        "picture": "...",
+        "bio": "...",
+        "engagement_rate": 105,  # Já em formato x100 (1.05%)
+        "reach_rate": 633,  # Já em formato x100 (6.33%)
+        "score": 0.41,
+        "counters": {
+            "followers": 331544,
+            "posts": 0,
+            "likes": 162499,
+            "views": 2812620,
+            "comments": 3645,
+            ...
+        },
+        "network": "instagram"
+    }
     """
     if not api_data:
         return None
     
-    # Dados podem vir de diferentes estruturas dependendo do endpoint
-    extra = api_data.get('extra_information', {})
-    profile = extra.get('profile', {}) if extra else api_data
+    # A API retorna os dados diretamente no objeto, não em extra_information
+    # Mas pode vir em diferentes formatos dependendo do endpoint
     
-    # Seguidores
-    seguidores = profile.get('followers', 0)
+    # Tentar extrair de extra_information se existir (formato antigo)
+    if api_data.get('extra_information'):
+        extra = api_data.get('extra_information', {})
+        profile = extra.get('profile', api_data)
+    else:
+        profile = api_data
+    
+    # Counters contém followers e outras métricas
+    counters = profile.get('counters', {})
+    
+    # Seguidores está dentro de counters
+    seguidores = counters.get('followers', 0) or profile.get('followers', 0) or 0
     
     # Classificacao baseada em seguidores
     if seguidores < 10000:
@@ -192,25 +220,34 @@ def processar_dados_api(api_data: Dict) -> Dict:
     else:
         classificacao = 'Mega'
     
+    # Taxas já vêm multiplicadas por 100 da API (ex: 105 = 1.05%)
+    # Dividir por 100 para armazenar como percentual real
+    engagement_rate_raw = profile.get('engagement_rate', 0) or 0
+    reach_rate_raw = profile.get('reach_rate', 0) or 0
+    
+    # Se o valor for muito alto (>100), provavelmente está em formato x100
+    engagement_rate = engagement_rate_raw / 100 if engagement_rate_raw > 100 else engagement_rate_raw
+    reach_rate = reach_rate_raw / 100 if reach_rate_raw > 100 else reach_rate_raw
+    
     return {
-        'profile_id': extra.get('profile_id', profile.get('id', '')),
+        'profile_id': profile.get('id', ''),
         'nome': profile.get('name', ''),
         'usuario': profile.get('username', ''),
         'network': profile.get('network', 'instagram'),
         'seguidores': seguidores,
         'foto': profile.get('picture', ''),
         'bio': profile.get('bio', ''),
-        'engagement_rate': profile.get('engagement_rate', 0),
-        'air_score': profile.get('score', 0),  # Score da API = AIR Score
-        'reach_rate': profile.get('reach_rate', 0),
+        'engagement_rate': engagement_rate,
+        'air_score': profile.get('score', 0) or 0,
+        'reach_rate': reach_rate,
         'means': profile.get('means', {}),
         'hashtags': profile.get('hashtags', []),
         'classificacao': classificacao,
-        # Counters (se disponiveis)
-        'total_posts': profile.get('counters', {}).get('posts', 0),
-        'total_likes': profile.get('counters', {}).get('likes', 0),
-        'total_views': profile.get('counters', {}).get('views', 0),
-        'total_comments': profile.get('counters', {}).get('comments', 0),
+        # Counters
+        'total_posts': counters.get('posts', 0) or counters.get('last_posts', 0) or 0,
+        'total_likes': counters.get('likes', 0) or 0,
+        'total_views': counters.get('views', 0) or 0,
+        'total_comments': counters.get('comments', 0) or 0,
     }
 
 
