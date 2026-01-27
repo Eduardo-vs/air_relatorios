@@ -808,6 +808,29 @@ def get_influenciador_por_usuario(usuario: str) -> Optional[Dict]:
     return None
 
 
+def buscar_influenciador_por_profile_id(profile_id: str) -> Optional[Dict]:
+    """Busca influenciador pelo profile_id do AIR"""
+    if not profile_id:
+        return None
+    
+    row = execute_select_one("SELECT * FROM influenciadores WHERE profile_id = ?", (profile_id,))
+    
+    if row:
+        inf = dict(row)
+        if inf.get('means'):
+            try:
+                inf['means'] = json.loads(inf['means'])
+            except:
+                inf['means'] = {}
+        if inf.get('hashtags'):
+            try:
+                inf['hashtags'] = json.loads(inf['hashtags'])
+            except:
+                inf['hashtags'] = []
+        return inf
+    return None
+
+
 def get_influenciadores() -> List[Dict]:
     """Retorna todos os influenciadores (com cache)"""
     # Cache por sessao
