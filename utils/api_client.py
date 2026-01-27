@@ -89,14 +89,24 @@ def buscar_posts(profile_id: str, start_date: str, end_date: str, post_types: Li
         
         data = response.json()
         
+        # DEBUG: Salvar resposta bruta
+        debug_info = {
+            'endpoint': ENDPOINT_GET_POSTS,
+            'payload': payload,
+            'status_code': response.status_code,
+            'response_type': type(data).__name__,
+            'response_keys': list(data.keys()) if isinstance(data, dict) else f'list com {len(data)} itens' if isinstance(data, list) else 'outro',
+            'response_raw': data if not isinstance(data, list) or len(data) < 3 else data[:2]
+        }
+        
         if isinstance(data, list) and len(data) > 0:
-            return {"success": True, "data": data[0]}
-        return {"success": True, "data": data}
+            return {"success": True, "data": data[0], "debug": debug_info}
+        return {"success": True, "data": data, "debug": debug_info}
         
     except requests.exceptions.RequestException as e:
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": str(e), "debug": {"error_type": "request", "endpoint": ENDPOINT_GET_POSTS}}
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": str(e), "debug": {"error_type": "exception"}}
 
 
 def processar_post_api(post_data: Dict) -> Dict:
@@ -348,6 +358,7 @@ def buscar_posts_influenciador(profile_id: str, limite: int = 100, hashtags: Lis
         todos_posts = []
         page = 0
         max_pages = 50  # Limite de segurança
+        api_debug = []  # DEBUG: Guardar info de cada chamada
         
         while len(todos_posts) < limite and page < max_pages:
             # Buscar com os termos de filtro
@@ -371,9 +382,36 @@ def buscar_posts_influenciador(profile_id: str, limite: int = 100, hashtags: Lis
                 )
             
             if not resultado.get('success'):
+                # DEBUG: Capturar erro
+                api_debug.append({
+                    'page': page,
+                    'success': False,
+                    'error': resultado.get('error'),
+                    'debug': resultado.get('debug')
+                })
                 break
             
+            # DEBUG: Capturar resposta
+            api_debug.append({
+                'page': page,
+                'success': True,
+                'debug': resultado.get('debug'),
+                'data_type': type(resultado.get('data')).__name__
+            })
+            
             data = resultado.get('data', {})
+            
+            # DEBUG: Capturar estrutura do data
+            if page == 0:  # So na primeira pagina
+                api_debug.append({
+                    'page': page,
+                    'data_type': type(data).__name__,
+                    'data_keys': list(data.keys()) if isinstance(data, dict) else 'nao e dict',
+                    'posts_key_exists': 'posts' in data if isinstance(data, dict) else False,
+                    'posts_count': len(data.get('posts', [])) if isinstance(data, dict) else 0,
+                    'count_field': data.get('count') if isinstance(data, dict) else None,
+                    'pages_field': data.get('pages') if isinstance(data, dict) else None
+                })
             
             # Extrair posts e info de paginação
             posts_pagina = []
@@ -383,7 +421,12 @@ def buscar_posts_influenciador(profile_id: str, limite: int = 100, hashtags: Lis
                 posts_pagina = data.get('posts', [])
                 total_pages = data.get('pages', 1)
             elif isinstance(data, list):
-                posts_pagina = data
+                # Se data ainda e uma lista, tentar extrair o primeiro item
+                if len(data) > 0 and isinstance(data[0], dict):
+                    posts_pagina = data[0].get('posts', [])
+                    total_pages = data[0].get('pages', 1)
+                else:
+                    posts_pagina = data
             
             if not posts_pagina:
                 break
@@ -468,7 +511,13 @@ def buscar_posts_influenciador(profile_id: str, limite: int = 100, hashtags: Lis
             
             posts_processados.append(post_processado)
         
-        return {"success": True, "posts": posts_processados, "total_encontrados": len(todos_posts)}
+        return {
+            "success": True, 
+            "posts": posts_processados, 
+            "total_encontrados": len(todos_posts),
+            "raw_data": todos_posts[:5],  # Primeiros 5 para debug
+            "api_debug": api_debug  # DEBUG: Info de cada chamada a API
+        }
         
     except Exception as e:
-        return {"success": False, "posts": [], "error": str(e)}
+        return {"success": False, "posts": [], "error": str(e), "api_debug": api_debug if 'api_debug' in dir() else []}

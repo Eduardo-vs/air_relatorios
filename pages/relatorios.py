@@ -232,7 +232,7 @@ def render_secao_insights(pagina: str, dados: dict, campanha_id: int):
     
     with col1:
         filtro_inicio = st.date_input(
-            "📅 De:", 
+            "De:", 
             value=datetime.now() - timedelta(days=90),
             key=f"insights_inicio_{pagina}"
         )
@@ -338,7 +338,7 @@ def render_card_insight(insight: dict):
     tipo = insight.get('tipo', 'info')
     titulo = insight.get('titulo', 'Insight')
     texto = insight.get('texto', '')
-    icone = insight.get('icone', '💡')
+    icone = insight.get('icone', '')
     
     cores = {
         'sucesso': '#dcfce7',
@@ -1386,7 +1386,7 @@ def render_pag5_top_performance(campanhas_list, cores):
         tem_tops = any(top_conteudos.get(f'top{i}_post_id') for i in range(1, 4))
         
         if tem_tops:
-            st.markdown("#### 🏆 Top Conteúdos")
+            st.markdown("#### Top Conteúdos")
             
             cols = st.columns(3)
             
@@ -1420,12 +1420,12 @@ def render_pag5_top_performance(campanhas_list, cores):
                         descricao = top_conteudos.get(f'top{i}_descricao', '')
                         if descricao:
                             desc_curta = descricao[:80] + '...' if len(descricao) > 80 else descricao
-                            st.caption(f"💡 {desc_curta}")
+                            st.caption(f" {desc_curta}")
                         
                         # Link
                         link = top_conteudos.get(f'top{i}_link', '')
                         if link:
-                            st.markdown(f"<a href='{link}' target='_blank' style='font-size: 0.75rem;'>🔗 Ver</a>", unsafe_allow_html=True)
+                            st.markdown(f"<a href='{link}' target='_blank' style='font-size: 0.75rem;'>Ver</a>", unsafe_allow_html=True)
             
             st.markdown("---")
     
@@ -1492,9 +1492,9 @@ def render_pag5_top_performance(campanhas_list, cores):
                 try:
                     st.image(row['foto'], width=40)
                 except:
-                    st.markdown("👤")
+                    st.markdown("")
             else:
-                st.markdown("👤")
+                st.markdown("")
         with col2:
             st.write(f"**{row['nome']}**")
             st.caption(f"@{row['usuario']} | {row['classificacao']}")
@@ -1615,7 +1615,7 @@ def render_pag6_lista_influenciadores(campanhas_list, cores):
     
     # Configuração e edição de colunas personalizadas
     st.markdown("---")
-    with st.expander("⚙️ Configurar Colunas Personalizadas", expanded=False):
+    with st.expander("Configurar Colunas Personalizadas", expanded=False):
         st.caption("Configure os nomes das colunas e preencha os dados para cada influenciador")
         
         # Nomes das colunas
@@ -1665,7 +1665,7 @@ def render_pag6_lista_influenciadores(campanhas_list, cores):
                     )
                     inf_camp['dado_custom2'] = val2
             
-            if st.button("💾 Salvar colunas personalizadas", type="primary"):
+            if st.button("Salvar colunas personalizadas", type="primary"):
                 # Salvar nomes das colunas e dados
                 data_manager.atualizar_campanha(camp_id, {
                     'influenciadores': camp['influenciadores'],
@@ -1972,7 +1972,7 @@ def render_compartilhar(campanha):
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("### 🔗 Link Compartilhavel")
+        st.markdown("### Link Compartilhavel")
         st.caption("Gere um link para o cliente visualizar o relatorio sem precisar de login")
         
         # Configuracoes do link
@@ -2047,7 +2047,7 @@ def render_compartilhar(campanha):
             
             st.markdown(f"""
             <div style='background: #ecfdf5; padding: 1rem; border-radius: 8px; margin-top: 0.5rem;'>
-                <strong>✅ Copie e envie este link para o cliente</strong><br>
+                <strong>Copie e envie este link para o cliente</strong><br>
                 <small>O cliente podera visualizar o relatorio sem precisar de conta</small>
             </div>
             """, unsafe_allow_html=True)
@@ -2093,7 +2093,7 @@ def render_compartilhar(campanha):
         st.markdown("**Configurar KPIs dos Graficos:**")
         
         # KPIs para Big Numbers
-        with st.expander("📊 Big Numbers - Graficos", expanded=False):
+        with st.expander("Big Numbers - Graficos", expanded=False):
             kpi_bn_barras = st.selectbox(
                 "Grafico de Barras (por Formato):",
                 ["Impressoes", "Alcance", "Interacoes", "Interacoes Qualificadas"],
@@ -2106,7 +2106,7 @@ def render_compartilhar(campanha):
             )
         
         # KPIs para pagina de Influenciadores
-        with st.expander("👥 KPIs por Influenciador", expanded=False):
+        with st.expander("KPIs por Influenciador", expanded=False):
             kpi_inf_barras = st.selectbox(
                 "Ranking (Barras):",
                 ["Impressoes", "Alcance", "Interacoes", "Seguidores"],
@@ -2119,7 +2119,7 @@ def render_compartilhar(campanha):
             )
         
         # KPIs para Top Performance
-        with st.expander("🏆 Top Performance", expanded=False):
+        with st.expander("Top Performance", expanded=False):
             kpi_top_ordenar = st.selectbox(
                 "Ordenar Ranking por:",
                 ["Interacoes", "Impressoes", "Alcance", "Taxa Eng. Efetivo", "Custo"],
@@ -2133,7 +2133,7 @@ def render_compartilhar(campanha):
         
         st.markdown("---")
         
-        if st.button("📥 Gerar e Baixar PDF", type="primary", use_container_width=True):
+        if st.button("Gerar e Baixar PDF", type="primary", use_container_width=True):
             try:
                 from utils import pdf_exporter
                 
@@ -2172,7 +2172,7 @@ def render_compartilhar(campanha):
                     nome_arquivo = f"relatorio_{campanha['nome'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.pdf"
                     
                     st.download_button(
-                        label="⬇️ Clique para baixar o PDF",
+                        label="Clique para baixar o PDF",
                         data=pdf_bytes,
                         file_name=nome_arquivo,
                         mime="application/pdf",
@@ -2189,4 +2189,4 @@ def render_compartilhar(campanha):
                 st.error(f"Erro ao gerar PDF: {str(e)}")
         
         st.markdown("---")
-        st.caption("💡 Use os expanders acima para personalizar os KPIs de cada grafico no PDF")
+        st.caption(" Use os expanders acima para personalizar os KPIs de cada grafico no PDF")

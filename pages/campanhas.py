@@ -14,7 +14,7 @@ def render():
     
     col1, col2, col3, col4 = st.columns([1.5, 1, 1, 1])
     with col2:
-        if st.button("🔗 Importar do AIR", use_container_width=True):
+        if st.button("Importar do AIR", use_container_width=True):
             st.session_state.show_import_air = True
     with col3:
         if st.button("📄 Importar CSV", use_container_width=True):
@@ -200,7 +200,7 @@ def render_importar_air():
     import time
     from utils import api_client
     
-    st.subheader("🔗 Importar Campanha do AIR")
+    st.subheader("Importar Campanha do AIR")
     
     col1, col2 = st.columns([3, 1])
     with col2:
@@ -248,7 +248,7 @@ def render_importar_air():
     if link_air:
         codigo = extrair_codigo_air(link_air)
         if codigo:
-            st.caption(f"📋 Código extraído: `{codigo}`")
+            st.caption(f"Código extraído: `{codigo}`")
         else:
             st.error("Não foi possível extrair o código do link. Verifique o formato.")
     
@@ -261,7 +261,7 @@ def render_importar_air():
         cliente_sel = None
         st.caption("Nenhum cliente cadastrado")
     
-    if st.button("🔍 Buscar Dados da Campanha", type="primary", disabled=not link_air):
+    if st.button("Buscar Dados da Campanha", type="primary", disabled=not link_air):
         if not link_air:
             st.error("Cole o link da campanha")
         else:
@@ -278,7 +278,7 @@ def render_importar_air():
                             dados = response.json()
                             
                             # Debug: mostrar resposta raw
-                            with st.expander("🔍 Debug: Resposta do servidor"):
+                            with st.expander("Debug: Resposta do servidor"):
                                 st.json(dados)
                             
                             # O retorno pode ser uma lista ou objeto
@@ -323,7 +323,7 @@ def render_importar_air():
                                     'end_date': end_date,
                                     'cliente': cliente_sel if cliente_sel != "Selecione..." else None
                                 }
-                                st.success(f"✅ Campanha '{nome_camp}' encontrada! {len(inf_ids)} influenciadores")
+                                st.success(f"Campanha '{nome_camp}' encontrada! {len(inf_ids)} influenciadores")
                                 st.rerun()
                             else:
                                 st.error("Campanha não encontrada ou resposta inválida")
@@ -340,7 +340,7 @@ def render_importar_air():
     
     if air_data:
         st.markdown("---")
-        st.markdown("### 📊 Dados da Campanha")
+        st.markdown("### Dados da Campanha")
         
         # Permitir editar o nome
         nome_editado = st.text_input(
@@ -355,7 +355,7 @@ def render_importar_air():
         with col2:
             st.metric("Hashtags", len(air_data.get('hashtags', [])))
         with col3:
-            st.metric("Menções", len(air_data.get('mentions', [])))
+            st.metric("Mencoes", len(air_data.get('mentions', [])))
         
         # Mostrar datas
         start_date = air_data.get('start_date', '')
@@ -364,7 +364,7 @@ def render_importar_air():
             try:
                 start_fmt = datetime.fromisoformat(start_date.replace('Z', '')).strftime('%d/%m/%Y') if start_date else 'N/A'
                 end_fmt = datetime.fromisoformat(end_date.replace('Z', '')).strftime('%d/%m/%Y') if end_date else 'N/A'
-                st.caption(f"📅 Período: {start_fmt} até {end_fmt}")
+                st.caption(f"Periodo: {start_fmt} ate {end_fmt}")
             except:
                 pass
         
@@ -374,49 +374,299 @@ def render_importar_air():
             st.markdown("**Hashtags da campanha:**")
             st.caption(" ".join(hashtags[:15]))
         
-        # Mostrar menções
+        # Mostrar mencoes
         mentions = air_data.get('mentions', [])
         if mentions:
-            st.markdown("**Menções:**")
+            st.markdown("**Mencoes:**")
             st.caption(" ".join(mentions))
         
         st.markdown("---")
         
-        # Opções de importação
-        st.markdown("### ⚙️ Opções de Importação")
+        # Opcoes de importacao
+        st.markdown("### Opcoes de Importacao")
         
         col1, col2 = st.columns(2)
         with col1:
-            buscar_posts = st.checkbox("Buscar posts com as hashtags", value=True, 
-                                       help="Busca posts dos influenciadores que contenham as hashtags da campanha")
             limite_posts = st.number_input("Limite de posts por influenciador:", min_value=5, max_value=100, value=20)
         with col2:
             criar_ausentes = st.checkbox("Cadastrar influenciadores ausentes", value=True,
-                                        help="Se o influenciador não existir na base, busca na API e cadastra")
+                                        help="Se o influenciador nao existir na base, busca na API e cadastra")
         
         st.markdown("---")
         
-        if st.button("🚀 Criar Campanha", type="primary", use_container_width=True):
-            # Usar nome editado
-            air_data['nome'] = nome_editado
-            criar_campanha_do_air(air_data, buscar_posts, criar_ausentes, limite_posts)
+        # Estado para controlar o fluxo
+        if 'air_posts_preview' not in st.session_state:
+            st.session_state.air_posts_preview = None
+        if 'air_influenciadores_preview' not in st.session_state:
+            st.session_state.air_influenciadores_preview = None
+        
+        # Botao para buscar posts (etapa 1)
+        if st.session_state.air_posts_preview is None:
+            if st.button("Buscar Posts", type="primary", use_container_width=True):
+                # Limpar debug anterior
+                st.session_state.debug_api_responses = []
+                air_data['nome'] = nome_editado
+                buscar_posts_preview(air_data, criar_ausentes, limite_posts)
+        
+        # Se ja buscou, mostrar preview e botoes de acao
+        else:
+            preview = st.session_state.air_posts_preview
+            influenciadores = st.session_state.air_influenciadores_preview or []
+            
+            st.markdown("### Preview dos Posts Encontrados")
+            
+            # Resumo geral
+            total_posts = sum(len(inf.get('posts', [])) for inf in influenciadores)
+            total_inf = len(influenciadores)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Influenciadores encontrados", total_inf)
+            with col2:
+                st.metric("Posts encontrados", total_posts)
+            
+            # Mostrar detalhes por influenciador
+            if influenciadores:
+                with st.expander(f"Ver detalhes ({total_inf} influenciadores, {total_posts} posts)", expanded=True):
+                    for inf in influenciadores:
+                        posts = inf.get('posts', [])
+                        nome = inf.get('nome', 'Desconhecido')
+                        usuario = inf.get('usuario', '')
+                        
+                        st.markdown(f"**{nome}** (@{usuario}) - {len(posts)} posts")
+                        
+                        if posts:
+                            # Mostrar primeiros 3 posts como exemplo
+                            for i, post in enumerate(posts[:3]):
+                                formato = post.get('formato', 'Feed')
+                                data_pub = post.get('data_publicacao', '')
+                                views = post.get('views', 0)
+                                alcance = post.get('alcance', 0)
+                                interacoes = post.get('interacoes', 0)
+                                st.caption(f"  - {formato} ({data_pub}) | Views: {views:,} | Alcance: {alcance:,} | Interacoes: {interacoes:,}")
+                            
+                            if len(posts) > 3:
+                                st.caption(f"  ... e mais {len(posts) - 3} posts")
+                        else:
+                            st.caption("  Nenhum post encontrado")
+                        
+                        st.markdown("---")
+            
+            # Avisos se houver
+            if preview.get('erros'):
+                with st.expander(f"Avisos ({len(preview['erros'])})"):
+                    for erro in preview['erros']:
+                        st.warning(erro)
+            
+            # DEBUG: Mostrar respostas da API
+            if st.session_state.get('debug_api_responses'):
+                with st.expander("DEBUG: Respostas da API (clique para ver)", expanded=True):
+                    import json
+                    for i, debug_info in enumerate(st.session_state.debug_api_responses):
+                        st.markdown(f"### {i+1}. {debug_info['influenciador']}")
+                        st.markdown(f"**Profile ID:** `{debug_info['profile_id']}`")
+                        
+                        st.markdown("**Parametros enviados:**")
+                        st.json(debug_info['parametros'])
+                        
+                        resposta = debug_info['resposta_completa']
+                        if isinstance(resposta, dict):
+                            st.markdown("**Resumo da resposta:**")
+                            st.write(f"- success: {resposta.get('success')}")
+                            st.write(f"- error: {resposta.get('error')}")
+                            st.write(f"- total_encontrados: {resposta.get('total_encontrados')}")
+                            st.write(f"- qtd posts processados: {len(resposta.get('posts', []))}")
+                            
+                            # Mostrar debug das chamadas a API
+                            if resposta.get('api_debug'):
+                                st.markdown("**Chamadas a API:**")
+                                for call in resposta['api_debug']:
+                                    st.json(call)
+                            
+                            # Mostrar dados brutos se existirem
+                            if resposta.get('raw_data'):
+                                st.markdown("**Raw data da API (primeiros itens):**")
+                                st.json(resposta.get('raw_data', []))
+                            else:
+                                st.warning("Nenhum raw_data retornado")
+                            
+                            # Mostrar posts processados
+                            if resposta.get('posts'):
+                                st.markdown("**Posts processados (primeiros 2):**")
+                                st.json(resposta['posts'][:2])
+                            else:
+                                st.warning("Nenhum post processado")
+                        else:
+                            st.write(f"Tipo de resposta: {type(resposta)}")
+                            st.write(resposta)
+                        st.markdown("---")
+            
+            st.markdown("---")
+            
+            # Botoes de acao
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Criar Campanha", type="primary", use_container_width=True):
+                    air_data['nome'] = nome_editado
+                    criar_campanha_do_air_com_preview(air_data, influenciadores)
+            
+            with col2:
+                if st.button("Cancelar", use_container_width=True):
+                    st.session_state.air_posts_preview = None
+                    st.session_state.air_influenciadores_preview = None
+                    st.rerun()
 
 
-def criar_campanha_do_air(air_data, buscar_posts=True, criar_ausentes=True, limite_posts=20):
-    """Cria a campanha a partir dos dados do AIR"""
-    import time
+def buscar_posts_preview(air_data, criar_ausentes=True, limite_posts=20):
+    """Busca posts para preview antes de criar a campanha"""
     from utils import api_client
     
     progress = st.progress(0)
     status = st.empty()
     
-    nome_campanha = air_data.get('nome', 'Campanha AIR')
     hashtags = air_data.get('hashtags', [])
     mentions = air_data.get('mentions', [])
     inf_ids_air = air_data.get('influenciadores_ids', [])
+    
+    # Datas do AIR
+    start_date_str = air_data.get('start_date', '')
+    end_date_str = air_data.get('end_date', '')
+    
+    # Converter datas para formato da API
+    api_start_date = None
+    api_end_date = None
+    
+    if start_date_str:
+        try:
+            dt = datetime.fromisoformat(start_date_str.replace('Z', ''))
+            api_start_date = dt.strftime('%Y-%m-%d')
+        except:
+            pass
+    
+    if end_date_str:
+        try:
+            dt = datetime.fromisoformat(end_date_str.replace('Z', ''))
+            api_end_date = dt.strftime('%Y-%m-%d')
+        except:
+            pass
+    
+    # Se nao tem datas, usar periodo padrao
+    if not api_start_date:
+        api_start_date = (datetime.now() - timedelta(days=180)).strftime('%Y-%m-%d')
+    if not api_end_date:
+        api_end_date = datetime.now().strftime('%Y-%m-%d')
+    
+    influenciadores_preview = []
+    erros = []
+    total = len(inf_ids_air)
+    
+    for idx, inf_id_air in enumerate(inf_ids_air):
+        progress.progress((idx + 1) / total)
+        status.text(f"Buscando influenciador {idx + 1}/{total}...")
+        
+        # Buscar influenciador na base local pelo profile_id
+        inf_local = data_manager.buscar_influenciador_por_profile_id(inf_id_air)
+        
+        if not inf_local:
+            if criar_ausentes:
+                # Buscar na API
+                status.text(f"Buscando dados do influenciador {idx + 1}/{total} na API...")
+                resultado = api_client.buscar_por_profile_id(inf_id_air)
+                
+                if resultado.get('success') and resultado.get('data'):
+                    dados_api = resultado['data']
+                    inf_local = {
+                        'id': None,  # Sera criado depois
+                        'nome': dados_api.get('nome', 'Influenciador AIR'),
+                        'usuario': dados_api.get('usuario', f'air_{inf_id_air[:8]}'),
+                        'profile_id': inf_id_air,
+                        'network': dados_api.get('network', 'instagram'),
+                        'seguidores': dados_api.get('seguidores', 0),
+                        'novo': True,  # Flag para indicar que precisa criar
+                        'dados_completos': dados_api
+                    }
+                else:
+                    # Criar com dados minimos
+                    inf_local = {
+                        'id': None,
+                        'nome': 'Influenciador AIR',
+                        'usuario': f'air_{inf_id_air[:8]}',
+                        'profile_id': inf_id_air,
+                        'network': 'instagram',
+                        'seguidores': 0,
+                        'novo': True,
+                        'dados_completos': None
+                    }
+                    erros.append(f"Nao foi possivel buscar dados de {inf_id_air[:12]}...")
+            else:
+                erros.append(f"Influenciador {inf_id_air[:12]}... nao encontrado na base")
+                continue
+        else:
+            inf_local['novo'] = False
+            inf_local['dados_completos'] = None
+        
+        # Buscar posts
+        status.text(f"Buscando posts de {inf_local.get('nome', '')}...")
+        
+        posts_resultado = api_client.buscar_posts_influenciador(
+            inf_local.get('profile_id') or inf_id_air,
+            limite=limite_posts,
+            hashtags=hashtags,
+            mentions=mentions,
+            start_date=api_start_date,
+            end_date=api_end_date
+        )
+        
+        # DEBUG: Salvar resposta da API para visualizacao
+        if 'debug_api_responses' not in st.session_state:
+            st.session_state.debug_api_responses = []
+        
+        st.session_state.debug_api_responses.append({
+            'influenciador': inf_local.get('nome', ''),
+            'profile_id': inf_local.get('profile_id') or inf_id_air,
+            'parametros': {
+                'limite': limite_posts,
+                'hashtags': hashtags,
+                'mentions': mentions,
+                'start_date': api_start_date,
+                'end_date': api_end_date
+            },
+            'resposta_completa': posts_resultado
+        })
+        
+        posts = []
+        if posts_resultado.get('success') and posts_resultado.get('posts'):
+            posts = posts_resultado['posts']
+        elif posts_resultado.get('error'):
+            erros.append(f"Erro ao buscar posts de {inf_local.get('nome', '')}: {posts_resultado['error'][:50]}")
+        
+        inf_local['posts'] = posts
+        influenciadores_preview.append(inf_local)
+    
+    progress.empty()
+    status.empty()
+    
+    # Salvar no session_state
+    st.session_state.air_posts_preview = {
+        'erros': erros,
+        'total_influenciadores': len(influenciadores_preview),
+        'total_posts': sum(len(inf.get('posts', [])) for inf in influenciadores_preview)
+    }
+    st.session_state.air_influenciadores_preview = influenciadores_preview
+    
+    st.rerun()
+
+
+def criar_campanha_do_air_com_preview(air_data, influenciadores_preview):
+    """Cria a campanha usando os dados ja buscados no preview"""
+    
+    progress = st.progress(0)
+    status = st.empty()
+    
+    nome_campanha = air_data.get('nome', 'Campanha AIR')
     cliente_nome = air_data.get('cliente')
     
-    # Datas do AIR (formato ISO) ou usar padrão
+    # Datas do AIR
     start_date_str = air_data.get('start_date', '')
     end_date_str = air_data.get('end_date', '')
     
@@ -450,219 +700,109 @@ def criar_campanha_do_air(air_data, buscar_posts=True, criar_ausentes=True, limi
                 cliente_id = c['id']
                 break
     
-    # Montar objetivo com hashtags e mentions
-    objetivo_parts = ["Campanha importada do AIR."]
-    if hashtags:
-        objetivo_parts.append(f"Hashtags: {', '.join(hashtags[:10])}")
-    if mentions:
-        objetivo_parts.append(f"Menções: {', '.join(mentions)}")
-    
     # Criar campanha
-    nova_campanha = data_manager.criar_campanha({
+    campanha = data_manager.criar_campanha({
         'nome': nome_campanha,
         'cliente_id': cliente_id,
-        'cliente_nome': cliente_nome or '',
-        'objetivo': ' | '.join(objetivo_parts),
+        'cliente_nome': cliente_nome,
         'data_inicio': data_inicio,
         'data_fim': data_fim,
-        'tipo_dados': 'estatico',
-        'status': 'ativa',
-        'metricas_selecionadas': {
-            'views': True, 'alcance': True, 'interacoes': True,
-            'impressoes': True, 'curtidas': True, 'comentarios': True,
-            'compartilhamentos': True, 'saves': True
-        }
+        'objetivo': f"Importado do AIR",
+        'status': 'ativa'
     })
     
-    campanha_id = nova_campanha['id']
-    progress.progress(0.1)
+    campanha_id = campanha['id']
     
-    # Processar influenciadores
-    total_inf = len(inf_ids_air)
     influenciadores_adicionados = 0
     posts_adicionados = 0
     erros = []
     
-    if total_inf == 0:
-        st.warning("Nenhum influenciador para processar")
+    total = len(influenciadores_preview)
     
-    for idx, inf_id_air in enumerate(inf_ids_air):
-        progress.progress(0.1 + (0.8 * (idx + 1) / max(total_inf, 1)))
-        status.text(f"Processando influenciador {idx+1}/{total_inf} (ID: {inf_id_air[:10]}...)...")
+    for idx, inf_data in enumerate(influenciadores_preview):
+        progress.progress((idx + 1) / total)
         
-        # Verificar se existe na base local (por profile_id)
-        inf_local = None
-        todos_inf = data_manager.get_influenciadores()
-        
-        for inf in todos_inf:
-            if inf.get('profile_id') == inf_id_air:
-                inf_local = inf
-                break
-        
-        # Se não existe e deve criar ausentes, buscar na API
-        if not inf_local and criar_ausentes:
-            status.text(f"Buscando influenciador {idx+1}/{total_inf} na API...")
+        # Se e novo, criar primeiro
+        if inf_data.get('novo'):
+            status.text(f"Cadastrando {inf_data.get('nome', '')}...")
             
-            try:
-                # Buscar por ID na API
-                resultado = api_client.buscar_por_profile_id(inf_id_air)
-                
-                if resultado.get('success') and resultado.get('data'):
-                    dados_api = api_client.processar_dados_api(resultado['data'])
-                    dados_api['profile_id'] = inf_id_air
-                    
-                    # Criar influenciador
-                    novo_inf = data_manager.criar_influenciador(dados_api)
-                    inf_local = novo_inf
-                    status.text(f"✅ {dados_api.get('nome', 'Influenciador')} cadastrado!")
-                else:
-                    erro_msg = resultado.get('error', 'Perfil não encontrado na API')
-                    erros.append(f"ID {inf_id_air[:15]}...: {erro_msg}")
-                    
-                    # Criar influenciador com dados mínimos para não perder
-                    dados_minimos = {
-                        'nome': f'Influenciador AIR',
-                        'usuario': f'air_{inf_id_air[:8]}',
-                        'profile_id': inf_id_air,
-                        'network': 'instagram',
-                        'seguidores': 0
-                    }
-                    novo_inf = data_manager.criar_influenciador(dados_minimos)
-                    inf_local = novo_inf
-                    
-            except Exception as e:
-                erros.append(f"Erro ao buscar {inf_id_air[:15]}...: {str(e)}")
-                
-                # Criar influenciador com dados mínimos mesmo com erro
-                try:
-                    dados_minimos = {
-                        'nome': f'Influenciador AIR',
-                        'usuario': f'air_{inf_id_air[:8]}',
-                        'profile_id': inf_id_air,
-                        'network': 'instagram',
-                        'seguidores': 0
-                    }
-                    novo_inf = data_manager.criar_influenciador(dados_minimos)
-                    inf_local = novo_inf
-                except:
-                    pass
-        
-        # Se tem influenciador, adicionar à campanha
-        if inf_local:
-            # Adicionar à campanha
-            try:
-                data_manager.adicionar_influenciador_campanha(campanha_id, inf_local['id'])
-                influenciadores_adicionados += 1
-            except Exception as e:
-                erros.append(f"Erro ao adicionar {inf_local.get('nome', '')}: {str(e)}")
+            dados_criar = inf_data.get('dados_completos') or {
+                'nome': inf_data.get('nome', 'Influenciador AIR'),
+                'usuario': inf_data.get('usuario', ''),
+                'profile_id': inf_data.get('profile_id', ''),
+                'network': inf_data.get('network', 'instagram'),
+                'seguidores': inf_data.get('seguidores', 0)
+            }
             
-            # Buscar posts com hashtags/mentions se habilitado
-            if buscar_posts and (hashtags or mentions):
-                status.text(f"Buscando posts de {inf_local.get('nome', '')} (pode demorar)...")
+            inf_local = data_manager.criar_influenciador(dados_criar)
+            inf_id = inf_local['id']
+        else:
+            inf_id = inf_data['id']
+        
+        # Adicionar a campanha
+        try:
+            status.text(f"Adicionando {inf_data.get('nome', '')} a campanha...")
+            data_manager.adicionar_influenciador_campanha(campanha_id, inf_id)
+            influenciadores_adicionados += 1
+        except Exception as e:
+            erros.append(f"Erro ao adicionar {inf_data.get('nome', '')}: {str(e)}")
+            continue
+        
+        # Adicionar posts
+        posts = inf_data.get('posts', [])
+        if posts:
+            status.text(f"Salvando {len(posts)} posts de {inf_data.get('nome', '')}...")
+            
+            for post_api in posts:
+                post_data = {
+                    'formato': post_api.get('formato') or post_api.get('type', 'Feed'),
+                    'plataforma': 'Instagram',
+                    'data_publicacao': post_api.get('data_publicacao') or post_api.get('date', ''),
+                    'link': post_api.get('link') or post_api.get('permalink', ''),
+                    'views': post_api.get('views', 0) or 0,
+                    'alcance': post_api.get('alcance') or post_api.get('reach', 0) or 0,
+                    'interacoes': post_api.get('interacoes') or post_api.get('engagement', 0) or 0,
+                    'impressoes': post_api.get('impressoes') or post_api.get('impressions', 0) or 0,
+                    'curtidas': post_api.get('curtidas') or post_api.get('likes', 0) or 0,
+                    'comentarios_qtd': post_api.get('comentarios_qtd') or post_api.get('comments', 0) or 0,
+                    'compartilhamentos': post_api.get('compartilhamentos') or post_api.get('shares', 0) or 0,
+                    'saves': post_api.get('saves', 0) or 0,
+                    'imagens': [post_api.get('thumbnail', '')] if post_api.get('thumbnail') else []
+                }
                 
                 try:
-                    # Converter datas para formato YYYY-MM-DD para a API
-                    api_start_date = None
-                    api_end_date = None
-                    
-                    if start_date_str:
-                        try:
-                            dt = datetime.fromisoformat(start_date_str.replace('Z', ''))
-                            api_start_date = dt.strftime('%Y-%m-%d')
-                        except:
-                            pass
-                    
-                    if end_date_str:
-                        try:
-                            dt = datetime.fromisoformat(end_date_str.replace('Z', ''))
-                            api_end_date = dt.strftime('%Y-%m-%d')
-                        except:
-                            pass
-                    
-                    # Se não tem datas, usar período padrão
-                    if not api_start_date:
-                        api_start_date = (datetime.now() - timedelta(days=180)).strftime('%Y-%m-%d')
-                    if not api_end_date:
-                        api_end_date = datetime.now().strftime('%Y-%m-%d')
-                    
-                    # Buscar posts do influenciador com filtro de texto e datas da campanha
-                    posts_resultado = api_client.buscar_posts_influenciador(
-                        inf_local.get('profile_id') or inf_id_air,
-                        limite=limite_posts,
-                        hashtags=hashtags,
-                        mentions=mentions,
-                        start_date=api_start_date,
-                        end_date=api_end_date
-                    )
-                    
-                    total_encontrados = posts_resultado.get('total_encontrados', 0)
-                    
-                    if posts_resultado.get('success') and posts_resultado.get('posts'):
-                        status.text(f"Salvando {len(posts_resultado['posts'])} posts de {inf_local.get('nome', '')}...")
-                        
-                        for post_api in posts_resultado['posts']:
-                            # Adicionar post à campanha
-                            post_data = {
-                                'formato': post_api.get('formato') or post_api.get('type', 'Feed'),
-                                'plataforma': 'Instagram',
-                                'data_publicacao': post_api.get('data_publicacao') or post_api.get('date', ''),
-                                'link': post_api.get('link') or post_api.get('permalink', ''),
-                                'views': post_api.get('views', 0) or 0,
-                                'alcance': post_api.get('alcance') or post_api.get('reach', 0) or 0,
-                                'interacoes': post_api.get('interacoes') or post_api.get('engagement', 0) or 0,
-                                'impressoes': post_api.get('impressoes') or post_api.get('impressions', 0) or 0,
-                                'curtidas': post_api.get('curtidas') or post_api.get('likes', 0) or 0,
-                                'comentarios_qtd': post_api.get('comentarios_qtd') or post_api.get('comments', 0) or 0,
-                                'compartilhamentos': post_api.get('compartilhamentos') or post_api.get('shares', 0) or 0,
-                                'saves': post_api.get('saves', 0) or 0,
-                                'imagens': [post_api.get('thumbnail', '')] if post_api.get('thumbnail') else []
-                            }
-                            
-                            try:
-                                data_manager.adicionar_post(campanha_id, inf_local['id'], post_data)
-                                posts_adicionados += 1
-                            except Exception as pe:
-                                erros.append(f"Erro ao salvar post: {str(pe)[:50]}")
-                    else:
-                        # Sem posts encontrados
-                        erro_posts = posts_resultado.get('error', '')
-                        if erro_posts:
-                            erros.append(f"Posts de {inf_local.get('nome', '')}: {erro_posts[:50]}")
-                            
-                except Exception as e:
-                    erros.append(f"Erro ao buscar posts de {inf_local.get('nome', '')}: {str(e)[:50]}")
-        
-        time.sleep(0.3)  # Evitar rate limit
+                    data_manager.adicionar_post(campanha_id, inf_id, post_data)
+                    posts_adicionados += 1
+                except Exception as pe:
+                    erros.append(f"Erro ao salvar post: {str(pe)[:50]}")
     
-    progress.progress(1.0)
-    status.text("Concluído!")
+    progress.empty()
+    status.empty()
     
-    # Resultado
+    # Limpar session state
+    st.session_state.air_posts_preview = None
+    st.session_state.air_influenciadores_preview = None
+    st.session_state.air_data = None
+    
+    # Mostrar resultado
     st.success(f"""
-    ✅ **Campanha criada com sucesso!**
+    Campanha criada com sucesso!
     
-    - **Nome:** {nome_campanha}
-    - **Influenciadores:** {influenciadores_adicionados} adicionados
-    - **Posts:** {posts_adicionados} vinculados
+    - Nome: {nome_campanha}
+    - Influenciadores: {influenciadores_adicionados} adicionados
+    - Posts: {posts_adicionados} vinculados
     """)
     
     if erros:
-        with st.expander(f"⚠️ {len(erros)} avisos/erros"):
+        with st.expander(f"{len(erros)} avisos/erros"):
             for erro in erros:
-                st.caption(erro)
+                st.warning(erro)
     
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📋 Ir para Central da Campanha", type="primary"):
-            st.session_state.show_import_air = False
-            st.session_state.air_import_data = None
-            st.session_state.campanha_central_id = campanha_id
-            st.session_state.current_page = 'Central da Campanha'
-            st.rerun()
-    with col2:
-        if st.button("Importar outra"):
-            st.session_state.air_import_data = None
-            st.rerun()
+    # Botao para ir para a central
+    if st.button("Ir para Central da Campanha", type="primary"):
+        st.session_state.campanha_selecionada = campanha_id
+        st.session_state.pagina = 'central_campanha'
+        st.rerun()
 
 
 def render_importar_csv():

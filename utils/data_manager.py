@@ -139,7 +139,7 @@ def invalidar_cache():
 
 def diagnostico_db():
     """Mostra diagnostico de conexao com banco"""
-    st.subheader("🔍 Diagnostico de Banco de Dados")
+    st.subheader("Diagnostico de Banco de Dados")
     
     col1, col2 = st.columns(2)
     
@@ -176,7 +176,7 @@ def diagnostico_db():
                     
                     elapsed = time.time() - start
                     tempos.append(elapsed)
-                    st.write(f"Teste {i+1}: {elapsed:.3f}s ✅")
+                    st.write(f"Teste {i+1}: {elapsed:.3f}s")
                 except Exception as e:
                     st.write(f"Teste {i+1}: ERRO - {e}")
             
@@ -185,11 +185,11 @@ def diagnostico_db():
                 st.success(f"**Media: {media:.3f}s** | Min: {min(tempos):.3f}s | Max: {max(tempos):.3f}s")
                 
                 if media > 0.5:
-                    st.warning("⚠️ Conexao lenta! Servidor do banco esta longe do Streamlit Cloud.")
+                    st.warning("Conexao lenta! Servidor do banco esta longe do Streamlit Cloud.")
                 elif media > 0.2:
                     st.info("ℹ️ Conexao moderada.")
                 else:
-                    st.success("✅ Conexao rapida!")
+                    st.success("Conexao rapida!")
     
     # Teste de URL customizada
     st.markdown("---")
@@ -220,18 +220,18 @@ def diagnostico_db():
                     
                     elapsed = time.time() - start
                     tempos.append(elapsed)
-                    st.write(f"Teste {i+1}: {elapsed:.3f}s ✅")
+                    st.write(f"Teste {i+1}: {elapsed:.3f}s")
                 except Exception as e:
                     st.error(f"Teste {i+1}: ERRO - {e}")
             
             if tempos:
                 media = sum(tempos) / len(tempos)
                 if media < 0.2:
-                    st.success(f"🚀 **Excelente! Media: {media:.3f}s** - Use esta URL!")
+                    st.success(f"**Excelente! Media: {media:.3f}s** - Use esta URL!")
                 elif media < 0.5:
-                    st.success(f"✅ **Boa! Media: {media:.3f}s**")
+                    st.success(f"**Boa! Media: {media:.3f}s**")
                 else:
-                    st.warning(f"⚠️ **Lenta: Media: {media:.3f}s** - Tente outra regiao")
+                    st.warning(f"**Lenta: Media: {media:.3f}s** - Tente outra regiao")
 
 
 def execute_query(query: str, params: tuple = (), fetch: bool = False):
@@ -437,7 +437,7 @@ def init_db():
             campanha_id {int_type} NOT NULL,
             pagina {text_type} NOT NULL,
             tipo {text_type} DEFAULT 'info',
-            icone {text_type} DEFAULT '💡',
+            icone {text_type} DEFAULT '',
             titulo {text_type} NOT NULL,
             texto {text_type} NOT NULL,
             fonte {text_type} DEFAULT 'ia',
@@ -1864,7 +1864,7 @@ def adicionar_insight(campanha_id: int, pagina: str, insight: Dict, fonte: str =
         campanha_id,
         pagina,
         insight.get('tipo', 'info'),
-        insight.get('icone', '💡'),
+        insight.get('icone', ''),
         insight.get('titulo', 'Insight'),
         insight.get('texto', ''),
         fonte,

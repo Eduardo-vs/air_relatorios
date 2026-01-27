@@ -210,9 +210,9 @@ def render_modal_adicionar():
                             try:
                                 st.image(dados['foto'], width=50)
                             except:
-                                st.markdown("👤")
+                                st.markdown("")
                         else:
-                            st.markdown("👤")
+                            st.markdown("")
                     with col2:
                         st.write(f"**{dados['nome']}** (@{dados['usuario']})")
                         st.caption(f"{funcoes_auxiliares.formatar_numero(dados.get('seguidores', 0))} seguidores | AIR Score: {dados.get('air_score', 0):.2f}")
@@ -330,11 +330,15 @@ def render_modal_editar():
                 if vinculo_sel != "Nenhum":
                     vinculo_inf = next((i for i in tiktok_disponiveis if f"{i['nome']} (@{i['usuario']})" == vinculo_sel), None)
                     if vinculo_inf and st.button("Salvar Vinculo"):
-                        data_manager.atualizar_influenciador(inf_id, {'vinculo_id': vinculo_inf['id']})
+                        # Atualizar apenas o vinculo_id mantendo os outros dados
+                        dados_atualizados = {**inf, 'vinculo_id': vinculo_inf['id']}
+                        data_manager.atualizar_influenciador(inf_id, dados_atualizados)
                         st.success("Vinculo salvo!")
                         st.rerun()
                 elif vinculo_atual and st.button("Remover Vinculo"):
-                    data_manager.atualizar_influenciador(inf_id, {'vinculo_id': None})
+                    # Atualizar apenas o vinculo_id mantendo os outros dados
+                    dados_atualizados = {**inf, 'vinculo_id': None}
+                    data_manager.atualizar_influenciador(inf_id, dados_atualizados)
                     st.success("Vinculo removido!")
                     st.rerun()
             else:
@@ -364,11 +368,15 @@ def render_modal_editar():
                 if vinculo_sel != "Nenhum":
                     vinculo_inf = next((i for i in insta_disponiveis if f"{i['nome']} (@{i['usuario']})" == vinculo_sel), None)
                     if vinculo_inf and st.button("Salvar Vinculo"):
-                        data_manager.atualizar_influenciador(inf_id, {'vinculo_id': vinculo_inf['id']})
+                        # Atualizar apenas o vinculo_id mantendo os outros dados
+                        dados_atualizados = {**inf, 'vinculo_id': vinculo_inf['id']}
+                        data_manager.atualizar_influenciador(inf_id, dados_atualizados)
                         st.success("Vinculo salvo!")
                         st.rerun()
                 elif vinculo_atual and st.button("Remover Vinculo"):
-                    data_manager.atualizar_influenciador(inf_id, {'vinculo_id': None})
+                    # Atualizar apenas o vinculo_id mantendo os outros dados
+                    dados_atualizados = {**inf, 'vinculo_id': None}
+                    data_manager.atualizar_influenciador(inf_id, dados_atualizados)
                     st.success("Vinculo removido!")
                     st.rerun()
             else:

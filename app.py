@@ -156,7 +156,7 @@ with col3:
     # Menu do usuario
     st.markdown(f"""
     <div style="text-align: right; padding-top: 5px;">
-        <span style="color: #6b7280; font-size: 0.8rem;">👤 {usuario.get('nome', 'Usuario')}</span>
+        <span style="color: #6b7280; font-size: 0.8rem;"> {usuario.get('nome', 'Usuario')}</span>
     </div>
     """, unsafe_allow_html=True)
     

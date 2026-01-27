@@ -91,7 +91,7 @@ def render_influenciadores_posts(campanha):
     # Mostrar classificacoes especificas se existirem
     class_especificas = campanha.get('classificacoes_especificas', {})
     if class_especificas:
-        with st.expander("📋 Classificacoes Especificas da Campanha", expanded=False):
+        with st.expander("Classificacoes Especificas da Campanha", expanded=False):
             for i in range(1, 4):
                 nome = class_especificas.get(f'nome{i}', '')
                 valores = class_especificas.get(f'valores{i}', '')
@@ -121,9 +121,9 @@ def render_influenciadores_posts(campanha):
                     try:
                         st.image(inf['foto'], width=80)
                     except:
-                        st.markdown("### 👤")
+                        st.markdown("### ")
                 else:
-                    st.markdown("### 👤")
+                    st.markdown("### ")
             
             with col2:
                 st.write(f"**Seguidores:** {funcoes_auxiliares.formatar_numero(inf['seguidores'])}")
@@ -253,11 +253,11 @@ def render_influenciadores_posts(campanha):
                         with col6:
                             col_edit, col_del = st.columns(2)
                             with col_edit:
-                                if st.button("✏️", key=f"edit_{post_key}", help="Editar"):
+                                if st.button("", key=f"edit_{post_key}", help="Editar"):
                                     st.session_state[f'editing_post_{post_key}'] = True
                                     st.rerun()
                             with col_del:
-                                if st.button("🗑️", key=f"del_{post_key}", help="Excluir"):
+                                if st.button("", key=f"del_{post_key}", help="Excluir"):
                                     data_manager.remover_post_campanha(campanha['id'], inf['id'], idx)
                                     st.success("Post removido!")
                                     st.rerun()
@@ -729,7 +729,7 @@ def render_form_post_manual(campanha, inf):
         if modo_stories == "Dados consolidados (soma de todas as telas)":
             qtd_telas = st.number_input("Quantidade de telas (Stories)", min_value=1, max_value=50, value=1, key=f"qtd_telas_{inf['id']}")
             if qtd_telas > 1:
-                st.caption(f"✅ Você está adicionando {qtd_telas} telas de Stories do mesmo dia como 1 publicação")
+                st.caption(f"Você está adicionando {qtd_telas} telas de Stories do mesmo dia como 1 publicação")
         else:
             # Modo tela por tela
             st.markdown("**Adicionar telas individualmente:**")
@@ -745,7 +745,7 @@ def render_form_post_manual(campanha, inf):
                 nova_alcance = st.number_input("Alcance desta tela", min_value=0, value=0, key=f"nova_alcance_{inf['id']}")
                 nova_inter = st.number_input("Interações desta tela", min_value=0, value=0, key=f"nova_inter_{inf['id']}")
                 
-                if st.button("➕ Adicionar tela", key=f"add_tela_{inf['id']}"):
+                if st.button("Adicionar tela", key=f"add_tela_{inf['id']}"):
                     st.session_state[key_telas].append({
                         'views': nova_views,
                         'alcance': nova_alcance,
@@ -765,7 +765,7 @@ def render_form_post_manual(campanha, inf):
                         with col_t:
                             st.caption(f"Tela {i+1}: {tela['views']} views")
                         with col_del:
-                            if st.button("🗑️", key=f"del_tela_{inf['id']}_{i}"):
+                            if st.button("", key=f"del_tela_{inf['id']}_{i}"):
                                 st.session_state[key_telas].pop(i)
                                 st.rerun()
                     
@@ -797,7 +797,7 @@ def render_form_post_manual(campanha, inf):
             curtidas = 0
             comentarios_qtd = 0
             
-            st.info(f"📊 Usando dados das {len(telas)} telas adicionadas")
+            st.info(f"Usando dados das {len(telas)} telas adicionadas")
         else:
             if formato == "Stories" and qtd_telas > 1:
                 st.markdown("**Métricas totais (soma de todas as telas):**")
@@ -1229,7 +1229,7 @@ def render_top_conteudos(campanha):
     
     with st.form("form_top_conteudos"):
         for i in range(1, 4):
-            st.markdown(f"#### 🏆 Top {i}")
+            st.markdown(f"#### Top {i}")
             
             col1, col2 = st.columns([1, 2])
             
@@ -1317,7 +1317,7 @@ def render_top_conteudos(campanha):
             with col:
                 post_id = top_conteudos.get(f'top{i}_post_id')
                 if post_id:
-                    st.markdown(f"**🏆 Top {i}**")
+                    st.markdown(f"**Top {i}**")
                     thumb = top_conteudos.get(f'top{i}_thumbnail', '')
                     if thumb:
                         try:
@@ -1363,7 +1363,7 @@ def render_dados_personalizados(campanha):
             key="config_col2_nome_tab"
         )
     
-    if st.button("💾 Salvar Nomes das Colunas", type="primary"):
+    if st.button("Salvar Nomes das Colunas", type="primary"):
         data_manager.atualizar_campanha(campanha_id, {
             'colunas_personalizadas': {
                 'col1_nome': novo_col1_nome,
@@ -1447,7 +1447,7 @@ def render_dados_personalizados(campanha):
     
     st.markdown("---")
     
-    if st.button("💾 Salvar Dados dos Influenciadores", type="primary", use_container_width=True):
+    if st.button("Salvar Dados dos Influenciadores", type="primary", use_container_width=True):
         # Atualizar dados dos influenciadores
         for inf_camp in influenciadores:
             inf_id = inf_camp.get('influenciador_id')
@@ -2037,52 +2037,65 @@ def render_comentarios(campanha):
     # Webhook para classificacao
     WEBHOOK_URL = "https://n8n.air.com.vc/webhook/e19fe530-62b6-44af-b6d1-3aeed59cfe0b"
     
-    # ========== CONFIGURAÇÃO DE LOGIN DO INSTAGRAM ==========
-    with st.expander("⚙️ Configurar Conta do Instagram (Opcional)", expanded=False):
-        st.caption("Configure uma conta para evitar erros de 'login required' ao extrair comentários")
+    # ========== CONFIGURACAO DA API EXPORTCOMMENTS ==========
+    with st.expander("Configurar API ExportComments", expanded=False):
+        st.caption("Configure o token da API ExportComments.com para extrair comentarios")
+        st.markdown("[Obter token em app.exportcomments.com/user/api](https://app.exportcomments.com/user/api)")
         
-        # Verificar se já há sessão salva
-        insta_username = st.session_state.get('insta_username', '')
-        insta_logged_in = st.session_state.get('insta_logged_in', False)
+        # Token salvo em session_state
+        api_key_saved = st.session_state.get('exportcomments_api_key', '')
+        api_key_valid = st.session_state.get('exportcomments_valid', False)
+        api_key_info = st.session_state.get('exportcomments_info', {})
         
-        if insta_logged_in:
-            st.success(f"✅ Logado como @{insta_username}")
-            if st.button("Fazer Logout"):
-                st.session_state['insta_username'] = ''
-                st.session_state['insta_password'] = ''
-                st.session_state['insta_logged_in'] = False
-                st.rerun()
-        else:
-            st.warning("⚠️ Sem login - alguns perfis podem não permitir extração")
+        if api_key_valid and api_key_saved:
+            st.success(f"API configurada - {api_key_info.get('email', 'Token valido')}")
+            if api_key_info.get('credits'):
+                st.caption(f"Creditos disponiveis: {api_key_info.get('credits')}")
             
             col1, col2 = st.columns(2)
             with col1:
-                login_username = st.text_input("Usuário do Instagram:", placeholder="seu_usuario", key="insta_login_user")
+                if st.button("Verificar Creditos"):
+                    from utils.export_comments import ExportCommentsClient
+                    client = ExportCommentsClient(api_key_saved)
+                    user_info = client.get_user_info()
+                    if user_info.get('success'):
+                        st.session_state['exportcomments_info'] = user_info.get('data', {})
+                        st.rerun()
+                    else:
+                        st.error(user_info.get('error'))
             with col2:
-                login_password = st.text_input("Senha:", type="password", key="insta_login_pass")
+                if st.button("Remover Token"):
+                    st.session_state['exportcomments_api_key'] = ''
+                    st.session_state['exportcomments_valid'] = False
+                    st.session_state['exportcomments_info'] = {}
+                    st.rerun()
+        else:
+            api_key_input = st.text_input(
+                "Token da API:", 
+                type="password", 
+                placeholder="Cole seu token aqui",
+                key="exportcomments_input"
+            )
             
-            st.caption("💡 Use uma conta secundária. A sessão fica salva no navegador.")
-            
-            if st.button("Fazer Login"):
-                if login_username and login_password:
-                    with st.spinner("Fazendo login..."):
-                        try:
-                            from utils.comentarios_extractor import ComentariosExtractor
-                            extractor = ComentariosExtractor()
-                            resultado = extractor.login(login_username, login_password)
-                            
-                            if resultado.get('sucesso'):
-                                st.session_state['insta_username'] = login_username
-                                st.session_state['insta_password'] = login_password
-                                st.session_state['insta_logged_in'] = True
-                                st.success(resultado.get('mensagem'))
-                                st.rerun()
-                            else:
-                                st.error(resultado.get('erro'))
-                        except Exception as e:
-                            st.error(f"Erro: {str(e)}")
+            if st.button("Validar Token"):
+                if api_key_input:
+                    with st.spinner("Validando token..."):
+                        from utils.export_comments import verificar_api_key
+                        resultado = verificar_api_key(api_key_input)
+                        
+                        if resultado.get('success'):
+                            st.session_state['exportcomments_api_key'] = api_key_input
+                            st.session_state['exportcomments_valid'] = True
+                            st.session_state['exportcomments_info'] = {
+                                'email': resultado.get('email'),
+                                'credits': resultado.get('credits')
+                            }
+                            st.success(resultado.get('message'))
+                            st.rerun()
+                        else:
+                            st.error(resultado.get('error'))
                 else:
-                    st.error("Preencha usuário e senha")
+                    st.error("Informe o token da API")
     
     st.markdown("---")
     
@@ -2160,35 +2173,33 @@ def render_comentarios(campanha):
     st.markdown("---")
     st.markdown("**1. Extrair Comentarios**")
     
+    # Verificar se API esta configurada
+    api_key = st.session_state.get('exportcomments_api_key', '')
+    api_valid = st.session_state.get('exportcomments_valid', False)
+    
+    # Criar opcoes de posts (sempre, para evitar erro de variavel)
     opcoes_posts = [f"{p['influenciador']} - {p['formato']} ({p['data']})" for p in posts_campanha]
     opcoes_posts.insert(0, "Todos os posts")
     
-    col1, col2 = st.columns([3, 1])
-    with col1:
+    if not api_valid or not api_key:
+        st.warning("Configure o token da API ExportComments acima para extrair comentarios")
+    else:
         post_selecionado = st.selectbox(
             "Selecione o post:",
             opcoes_posts,
             key="select_post_comentarios"
         )
-    with col2:
-        limite_comentarios = st.number_input("Limite por post:", min_value=10, max_value=500, value=100, step=10)
-    
-    # Status de login
-    if st.session_state.get('insta_logged_in'):
-        st.caption(f"✅ Usando conta @{st.session_state.get('insta_username')}")
-    else:
-        st.caption("⚠️ Sem login - configure acima se tiver erros")
-    
-    if st.button("Extrair Comentarios"):
-        st.session_state['extraindo_comentarios'] = True
-        st.session_state['post_selecionado'] = post_selecionado
-        st.session_state['limite_extracao'] = limite_comentarios
-        st.rerun()
+        
+        st.caption("A API ExportComments.com extrai comentarios de posts publicos do Instagram, TikTok, YouTube e outras plataformas")
+        
+        if st.button("Extrair Comentarios"):
+            st.session_state['extraindo_comentarios'] = True
+            st.session_state['post_selecionado'] = post_selecionado
+            st.rerun()
     
     # Processar extracao
-    if st.session_state.get('extraindo_comentarios', False):
+    if st.session_state.get('extraindo_comentarios', False) and api_valid:
         post_sel = st.session_state.get('post_selecionado', '')
-        limite = st.session_state.get('limite_extracao', 100)
         
         # Determinar quais posts extrair
         if post_sel == "Todos os posts":
@@ -2203,48 +2214,51 @@ def render_comentarios(campanha):
         comentarios_por_post = {}
         
         try:
-            from utils.comentarios_extractor import ComentariosExtractor
+            from utils.export_comments import ExportCommentsClient
             
-            # Criar extrator com login se disponível
-            insta_user = st.session_state.get('insta_username', '')
-            insta_pass = st.session_state.get('insta_password', '')
-            
-            if insta_user and insta_pass:
-                extractor = ComentariosExtractor(username=insta_user, password=insta_pass)
-                status_text.text(f"Usando conta @{insta_user}...")
-            else:
-                extractor = ComentariosExtractor()
-                status_text.text("Extraindo sem login...")
+            client = ExportCommentsClient(api_key)
             
             for i, post in enumerate(posts_extrair):
-                status_text.text(f"Extraindo de {post['influenciador']} ({i+1}/{len(posts_extrair)})...")
+                link = post.get('link', '')
+                
+                if not link:
+                    st.warning(f"{post['influenciador']}: Post sem link")
+                    continue
+                
+                status_text.text(f"Criando job para {post['influenciador']} ({i+1}/{len(posts_extrair)})...")
                 progress_bar.progress((i) / len(posts_extrair))
                 
-                resultado = extractor.extrair_comentarios(post['link'], limite=limite)
+                # Callback para atualizar status
+                def progress_callback(status, elapsed, count):
+                    status_text.text(f"{post['influenciador']}: {status} ({int(elapsed)}s) - {count} comentarios...")
                 
-                if resultado.get('sucesso'):
+                # Extrair usando ExportComments
+                resultado = client.extract_comments(
+                    url=link,
+                    timeout=300,
+                    progress_callback=progress_callback
+                )
+                
+                if resultado.get('success'):
                     comentarios = resultado.get('comentarios', [])
+                    
                     # Adicionar info do post aos comentarios
                     for c in comentarios:
-                        c['post_link'] = post['link']
+                        c['post_link'] = link
                         c['influenciador'] = post['influenciador']
                         c['influenciador_id'] = post['influenciador_id']
                     
-                    comentarios_por_post[post['link']] = {
+                    comentarios_por_post[link] = {
                         'comentarios': comentarios,
                         'influenciador': post['influenciador'],
                         'influenciador_id': post['influenciador_id']
                     }
-                    status_text.text(f"{post['influenciador']}: {len(comentarios)} comentarios")
+                    status_text.text(f"{post['influenciador']}: {len(comentarios)} comentarios extraidos")
                 else:
-                    erro_msg = resultado.get('erro', 'Erro desconhecido')
+                    erro_msg = resultado.get('error', 'Erro desconhecido')
                     st.warning(f"{post['influenciador']}: {erro_msg}")
-                    
-                    # Se requer login, avisar
-                    if resultado.get('requer_login'):
-                        st.info("💡 Configure uma conta do Instagram no painel acima para acessar este perfil")
                 
-                time.sleep(1.5)  # Aumentado para evitar rate limit
+                time.sleep(1)  # Pequena pausa entre requests
             
             progress_bar.progress(1.0)
             
@@ -2255,8 +2269,8 @@ def render_comentarios(campanha):
             else:
                 st.warning("Nenhum comentario extraido")
                 
-        except ImportError:
-            st.error("Biblioteca instaloader nao instalada. Execute: pip install instaloader")
+        except ImportError as e:
+            st.error(f"Erro ao importar modulo: {str(e)}")
         except Exception as e:
             st.error(f"Erro na extracao: {str(e)}")
         
@@ -2606,7 +2620,7 @@ def render_form_editar_post(campanha, inf, post_idx, post):
     post_key = f"post_{inf['id']}_{post_idx}"
     
     with st.container():
-        st.markdown("#### ✏️ Editar Post")
+        st.markdown("####  Editar Post")
         
         with st.form(f"form_edit_post_{post_key}"):
             col1, col2 = st.columns(2)
@@ -2713,7 +2727,7 @@ def render_form_editar_post(campanha, inf, post_idx, post):
             
             col1, col2 = st.columns(2)
             with col1:
-                if st.form_submit_button("💾 Salvar Alteracoes", type="primary", use_container_width=True):
+                if st.form_submit_button("Salvar Alteracoes", type="primary", use_container_width=True):
                     post_atualizado = {
                         'formato': formato,
                         'plataforma': plataforma,
