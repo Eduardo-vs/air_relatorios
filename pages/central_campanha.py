@@ -7,6 +7,10 @@ import streamlit as st
 from datetime import datetime, timedelta
 import base64
 from utils import data_manager, funcoes_auxiliares, api_client
+from utils.ui_components import (
+    open_modal, close_modal, is_modal_open, 
+    render_modal_trigger, render_empty_state, render_badge
+)
 
 def render():
     """Renderiza central de controle da campanha"""
@@ -1117,6 +1121,15 @@ def render_configuracoes_campanha(campanha):
         with col2:
             m_cupom = st.checkbox("Conversoes por Cupom", value=metricas.get('cupom_conversoes', False))
         
+        st.markdown("---")
+        st.markdown("**Configuracoes do Relatorio:**")
+        
+        mostrar_aba_categoria = st.checkbox(
+            "Mostrar aba 'KPIs por Categoria' no relatorio",
+            value=campanha.get('mostrar_aba_categoria', True),
+            help="Quando habilitado e existirem influenciadores com categoria definida, exibe uma aba adicional no relatorio agrupando metricas por categoria"
+        )
+        
         submitted = st.form_submit_button("Salvar Configuracoes", type="primary", use_container_width=True)
         
         if submitted:
@@ -1143,7 +1156,8 @@ def render_configuracoes_campanha(campanha):
                 'metricas_selecionadas': novas_metricas,
                 'estimativa_alcance': estimativa_alcance,
                 'estimativa_impressoes': estimativa_impressoes,
-                'investimento_total': investimento_total
+                'investimento_total': investimento_total,
+                'mostrar_aba_categoria': mostrar_aba_categoria
             })
             
             st.success("Configuracoes salvas!")

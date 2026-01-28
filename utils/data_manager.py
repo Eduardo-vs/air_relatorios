@@ -417,6 +417,7 @@ def init_db():
             estimativa_alcance {int_type} DEFAULT 0,
             estimativa_impressoes {int_type} DEFAULT 0,
             investimento_total {real_type} DEFAULT 0,
+            mostrar_aba_categoria {int_type} DEFAULT 1,
             created_at {text_type}
         )
     ''')
@@ -988,6 +989,7 @@ def get_campanha(camp_id: int) -> Optional[Dict]:
             else:
                 camp[field] = {}
         camp['is_aon'] = bool(camp.get('is_aon'))
+        camp['mostrar_aba_categoria'] = bool(camp.get('mostrar_aba_categoria', 1))
         return camp
     return None
 
@@ -1020,6 +1022,7 @@ def get_campanhas() -> List[Dict]:
             else:
                 camp[field] = {}
         camp['is_aon'] = bool(camp.get('is_aon'))
+        camp['mostrar_aba_categoria'] = bool(camp.get('mostrar_aba_categoria', 1))
         campanhas.append(camp)
     
     st.session_state._cache_campanhas = campanhas
@@ -1049,6 +1052,7 @@ def get_campanhas_por_cliente(cliente_id: int) -> List[Dict]:
             else:
                 camp[field] = {}
         camp['is_aon'] = bool(camp.get('is_aon'))
+        camp['mostrar_aba_categoria'] = bool(camp.get('mostrar_aba_categoria', 1))
         campanhas.append(camp)
     
     return campanhas
@@ -1080,7 +1084,8 @@ def atualizar_campanha(camp_id: int, dados: Dict) -> bool:
             status = ?, metricas_selecionadas = ?, insights_config = ?,
             categorias_comentarios = ?, notas = ?, influenciadores = ?,
             top_conteudos = ?, colunas_personalizadas = ?,
-            estimativa_alcance = ?, estimativa_impressoes = ?, investimento_total = ?
+            estimativa_alcance = ?, estimativa_impressoes = ?, investimento_total = ?,
+            mostrar_aba_categoria = ?
         WHERE id = ?
     ''', (
         campanha_atual.get('nome', ''),
@@ -1102,6 +1107,7 @@ def atualizar_campanha(camp_id: int, dados: Dict) -> bool:
         campanha_atual.get('estimativa_alcance', 0),
         campanha_atual.get('estimativa_impressoes', 0),
         campanha_atual.get('investimento_total', 0),
+        1 if campanha_atual.get('mostrar_aba_categoria', True) else 0,
         camp_id
     ))
     return True
@@ -1505,7 +1511,8 @@ def calcular_metricas_por_cliente(cliente_id: int) -> Dict:
 
 
 def calcular_metricas_multiplas_campanhas(campanhas: List[Dict]) -> Dict:
-    """Calcula metricas agregadas de multiplas campanhas"""
+    """Calcula metricas agregadas de multiplas campanhas.
+    Influenciadores vinculados contam como 1 apenas."""
     
     total_influenciadores = 0
     total_seguidores = 0
@@ -1523,17 +1530,34 @@ def calcular_metricas_multiplas_campanhas(campanhas: List[Dict]) -> Dict:
     total_custo = 0
     
     influenciadores_ids = set()
+    vinculos_processados = set()  # Para nao contar vinculados duplicados
     
     for campanha in campanhas:
         influenciadores = campanha.get('influenciadores', [])
         
         for inf_camp in influenciadores:
             inf_id = inf_camp.get('influenciador_id')
+            
             if inf_id not in influenciadores_ids:
                 influenciadores_ids.add(inf_id)
                 inf = get_influenciador(inf_id)
                 if inf:
                     total_seguidores += inf.get('seguidores', 0)
+                    
+                    # Verificar se este influ tem vinculo
+                    vinculo_id = inf.get('vinculo_id')
+                    if vinculo_id:
+                        # Se o vinculado ja foi processado, nao conta este
+                        if vinculo_id in vinculos_processados:
+                            # Ja contou o par, nao incrementa total_influenciadores
+                            pass
+                        else:
+                            # Marca ambos como processados e conta como 1
+                            vinculos_processados.add(inf_id)
+                            vinculos_processados.add(vinculo_id)
+                    else:
+                        # Sem vinculo, conta normalmente (marcando como processado)
+                        vinculos_processados.add(inf_id)
             
             # Custo do influenciador na campanha
             total_custo += inf_camp.get('custo', 0)
@@ -1561,16 +1585,39 @@ def calcular_metricas_multiplas_campanhas(campanhas: List[Dict]) -> Dict:
                 total_conversoes += post.get('conversoes', 0) or 0
                 total_conversoes += post.get('cupom_conversoes', 0) or 0
     
-    total_influenciadores = len(influenciadores_ids)
+    # Conta influenciadores unicos (vinculados = 1)
+    total_influenciadores = len(vinculos_processados) - len([v for v in vinculos_processados if get_influenciador(v) and get_influenciador(v).get('vinculo_id') in vinculos_processados and v > get_influenciador(v).get('vinculo_id', 0)])
+    
+    # Simplificar: contar quantos "grupos" de influenciadores existem
+    # Cada influ sem vinculo = 1, cada par vinculado = 1
+    grupos_contados = set()
+    for inf_id in influenciadores_ids:
+        inf = get_influenciador(inf_id)
+        if inf:
+            vinculo_id = inf.get('vinculo_id')
+            if vinculo_id and vinculo_id in influenciadores_ids:
+                # Par vinculado - usa o menor ID como identificador do grupo
+                grupo_id = min(inf_id, vinculo_id)
+            else:
+                grupo_id = inf_id
+            grupos_contados.add(grupo_id)
+    
+    total_influenciadores = len(grupos_contados)
     
     engajamento_efetivo = 0
     taxa_alcance = 0
     
-    if total_views > 0:
-        engajamento_efetivo = round((total_interacoes / total_views) * 100, 2)
+    total_imp_views = total_impressoes + total_views
+    if total_imp_views > 0:
+        engajamento_efetivo = round((total_interacoes / total_imp_views) * 100, 2)
     
     if total_seguidores > 0:
         taxa_alcance = round((total_alcance / total_seguidores) * 100, 2)
+    
+    # Calcular eficiencia de gasto da campanha
+    cpm_campanha = round((total_custo / total_imp_views * 1000), 2) if total_imp_views > 0 else 0
+    cpe_campanha = round((total_custo / total_interacoes), 2) if total_interacoes > 0 else 0
+    cpa_campanha = round((total_custo / total_alcance * 1000), 2) if total_alcance > 0 else 0
     
     return {
         'total_influenciadores': total_influenciadores,
@@ -1588,7 +1635,10 @@ def calcular_metricas_multiplas_campanhas(campanhas: List[Dict]) -> Dict:
         'total_conversoes': total_conversoes,
         'total_custo': total_custo,
         'engajamento_efetivo': engajamento_efetivo,
-        'taxa_alcance': taxa_alcance
+        'taxa_alcance': taxa_alcance,
+        'cpm_campanha': cpm_campanha,
+        'cpe_campanha': cpe_campanha,
+        'cpa_campanha': cpa_campanha
     }
 
 

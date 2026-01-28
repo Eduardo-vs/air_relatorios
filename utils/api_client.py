@@ -288,7 +288,7 @@ def buscar_por_profile_id(profile_id: str) -> Dict:
         profile_id: ID do perfil no AIR (ex: "67a66fb7a917c05b016cd500")
     
     Returns:
-        Dict com success e data
+        Dict com success e data (ja processado com campos nome, usuario, etc)
     """
     try:
         # Tentar buscar perfil completo
@@ -309,7 +309,9 @@ def buscar_por_profile_id(profile_id: str) -> Dict:
                 items = data
             
             if items and len(items) > 0:
-                return {"success": True, "data": items[0]}
+                # Processar dados para formato padrao do sistema
+                dados_processados = processar_dados_api(items[0])
+                return {"success": True, "data": dados_processados}
         
         # Se não encontrou, retornar erro
         return {"success": False, "error": resultado.get('error', 'Perfil não encontrado na API')}

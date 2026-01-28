@@ -481,28 +481,44 @@ def render_relatorio(campanhas_list, cliente=None):
     metricas = data_manager.calcular_metricas_multiplas_campanhas(campanhas_list)
     cores = funcoes_auxiliares.get_cores_graficos()
     
+    # Verificar se campanha tem categorias e se deve mostrar aba
+    has_categorias = False
+    mostrar_aba_categoria = True  # Default: mostrar se tiver categorias
+    
+    if len(campanhas_list) == 1:
+        campanha = campanhas_list[0]
+        # Verificar configuracao da campanha
+        mostrar_aba_categoria = campanha.get('mostrar_aba_categoria', True)
+        
+        # Verificar se tem influenciadores com categoria
+        for inf_camp in campanha.get('influenciadores', []):
+            inf = data_manager.get_influenciador(inf_camp.get('influenciador_id'))
+            if inf and inf.get('categoria', '').strip():
+                has_categorias = True
+                break
+    
+    # So mostra aba se tiver categorias E configuracao permitir
+    show_categoria_tab = has_categorias and mostrar_aba_categoria
+    
     # Definir tabs
     if has_aon:
-        tabs = st.tabs([
-            "1. Big Numbers",
-            "2. Visao AON",
-            "3. KPIs por Influ",
-            "4. Top Performance",
-            "5. Lista Influs",
-            "Comentarios",
-            "Glossario",
-            "Compartilhar"
-        ])
+        tab_names = ["1. Big Numbers", "2. Visao AON", "3. KPIs por Influ"]
+        if show_categoria_tab:
+            tab_names.append("4. KPIs por Categoria")
+            tab_names.extend(["5. Top Performance", "6. Lista Influs"])
+        else:
+            tab_names.extend(["4. Top Performance", "5. Lista Influs"])
+        tab_names.extend(["Comentarios", "Glossario", "Compartilhar"])
+        tabs = st.tabs(tab_names)
     else:
-        tabs = st.tabs([
-            "1. Big Numbers",
-            "2. KPIs por Influ",
-            "3. Top Performance",
-            "4. Lista Influs",
-            "Comentarios",
-            "Glossario",
-            "Compartilhar"
-        ])
+        tab_names = ["1. Big Numbers", "2. KPIs por Influ"]
+        if show_categoria_tab:
+            tab_names.append("3. KPIs por Categoria")
+            tab_names.extend(["4. Top Performance", "5. Lista Influs"])
+        else:
+            tab_names.extend(["3. Top Performance", "4. Lista Influs"])
+        tab_names.extend(["Comentarios", "Glossario", "Compartilhar"])
+        tabs = st.tabs(tab_names)
     
     tab_idx = 0
     
@@ -522,17 +538,23 @@ def render_relatorio(campanhas_list, cliente=None):
         render_pag4_kpis_influenciador(campanhas_list, cores)
     tab_idx += 1
     
-    # TAB 4: Top Performance
+    # TAB: KPIs por Categoria (condicional)
+    if show_categoria_tab:
+        with tabs[tab_idx]:
+            render_pag_kpis_categoria(campanhas_list, cores)
+        tab_idx += 1
+    
+    # TAB: Top Performance
     with tabs[tab_idx]:
         render_pag5_top_performance(campanhas_list, cores)
     tab_idx += 1
     
-    # TAB 5: Lista Influenciadores
+    # TAB: Lista Influenciadores
     with tabs[tab_idx]:
         render_pag6_lista_influenciadores(campanhas_list, cores)
     tab_idx += 1
     
-    # TAB 6: Comentarios
+    # TAB: Comentarios
     with tabs[tab_idx]:
         try:
             render_comentarios(campanhas_list, cores)
@@ -540,7 +562,7 @@ def render_relatorio(campanhas_list, cliente=None):
             st.error(f"Erro em Comentarios: {str(e)}")
     tab_idx += 1
     
-    # TAB 7: Glossario
+    # TAB: Glossario
     with tabs[tab_idx]:
         try:
             render_glossario()
@@ -548,7 +570,7 @@ def render_relatorio(campanhas_list, cliente=None):
             st.error(f"Erro em Glossario: {str(e)}")
     tab_idx += 1
     
-    # TAB 8: Compartilhar
+    # TAB: Compartilhar
     with tabs[tab_idx]:
         try:
             if len(campanhas_list) == 1:
@@ -660,6 +682,29 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
         st.markdown(render_card("T. COMENTARIOS", funcoes_auxiliares.formatar_numero(metricas['total_comentarios'])), unsafe_allow_html=True)
     with col8:
         st.markdown(render_card("T. COMPARTILH.", funcoes_auxiliares.formatar_numero(metricas['total_compartilhamentos'])), unsafe_allow_html=True)
+    
+    # ========== EFICIENCIA DE GASTO DA CAMPANHA ==========
+    if metricas.get('total_custo', 0) > 0:
+        st.markdown("---")
+        st.markdown("### Eficiencia de Gasto da Campanha")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        cpm = metricas.get('cpm_campanha', 0)
+        cpe = metricas.get('cpe_campanha', 0)
+        cpa = metricas.get('cpa_campanha', 0)
+        total_custo = metricas.get('total_custo', 0)
+        
+        with col1:
+            st.markdown(render_card("INVESTIMENTO", f"R$ {funcoes_auxiliares.formatar_numero(total_custo)}"), unsafe_allow_html=True)
+        with col2:
+            st.markdown(render_card("CPM", f"R$ {cpm:.2f}"), unsafe_allow_html=True)
+        with col3:
+            st.markdown(render_card("CPE", f"R$ {cpe:.2f}"), unsafe_allow_html=True)
+        with col4:
+            st.markdown(render_card("CPA (x1000)", f"R$ {cpa:.2f}"), unsafe_allow_html=True)
+        
+        st.caption("CPM = Custo por Mil Impressoes | CPE = Custo por Engajamento | CPA = Custo por Mil Alcance")
     
     st.markdown("---")
     
@@ -1228,23 +1273,37 @@ def render_pag4_kpis_influenciador(campanhas_list, cores):
     
     df_filtrado = df_filtrado.sort_values('impressoes', ascending=False).head(15)
     
+    # Garantir que nao ha nomes duplicados (adicionar sufixo se necessario)
+    df_filtrado = df_filtrado.reset_index(drop=True)
+    nomes_vistos = {}
+    nomes_unicos = []
+    for nome in df_filtrado['nome']:
+        if nome in nomes_vistos:
+            nomes_vistos[nome] += 1
+            nomes_unicos.append(f"{nome} ({nomes_vistos[nome]})")
+        else:
+            nomes_vistos[nome] = 1
+            nomes_unicos.append(nome)
+    df_filtrado['nome_display'] = nomes_unicos
+    
     kpi_map = {'Seguidores': 'seguidores', 'Impressoes': 'impressoes', 'Alcance': 'alcance', 'Interacoes': 'interacoes', 'Interacoes Qualificadas': 'interacoes_qualif'}
     campo_barra = kpi_map.get(kpi_barra, 'seguidores')
     
     # Calcular taxa de visualizacao (impressoes / seguidores)
     df_filtrado['taxa_views'] = (df_filtrado['impressoes'] / df_filtrado['seguidores'] * 100).round(2).fillna(0)
     
-    df_sorted = df_filtrado.sort_values(campo_barra, ascending=False)
+    df_sorted = df_filtrado.sort_values(campo_barra, ascending=False).reset_index(drop=True)
     
     fig1 = go.Figure()
-    # Barras VERTICAIS
+    # Barras VERTICAIS - usar nome_display para evitar duplicatas
     fig1.add_trace(go.Bar(
-        x=df_sorted['nome'], 
+        x=df_sorted['nome_display'], 
         y=df_sorted[campo_barra], 
         name=kpi_barra, 
         marker_color=cores[0], 
         text=[funcoes_auxiliares.formatar_numero(v) for v in df_sorted[campo_barra]], 
-        textposition='outside'
+        textposition='outside',
+        textfont=dict(size=9)
     ))
     
     if kpi_linha == "Taxa Eng. Efetivo":
@@ -1258,24 +1317,37 @@ def render_pag4_kpis_influenciador(campanhas_list, cores):
     else:
         y_linha = df_sorted['taxa_eng_geral']
     
+    # Calcular range do eixo Y2 para linha ficar na parte superior
+    max_taxa = y_linha.max() if len(y_linha) > 0 else 10
+    min_taxa = y_linha.min() if len(y_linha) > 0 else 0
+    
     fig1.add_trace(go.Scatter(
-        x=df_sorted['nome'], 
+        x=df_sorted['nome_display'], 
         y=y_linha, 
         mode='lines+markers+text', 
         name=kpi_linha, 
         text=[f"{v:.1f}%" for v in y_linha],
         textposition='top center',
+        textfont=dict(size=9),
         yaxis='y2', 
-        line=dict(color=cores[1], width=2), 
-        marker=dict(size=8)
+        line=dict(color=cores[1], width=3), 
+        marker=dict(size=10)
     ))
+    
     fig1.update_layout(
         xaxis=dict(title='Influenciador', tickangle=-45), 
-        yaxis=dict(title=kpi_barra), 
-        yaxis2=dict(title=kpi_linha, overlaying='y', side='right'), 
+        yaxis=dict(title=kpi_barra, side='left'), 
+        yaxis2=dict(
+            title=kpi_linha, 
+            overlaying='y', 
+            side='right',
+            range=[0, max_taxa * 1.3],  # Range maior para texto caber
+            showgrid=False
+        ), 
         height=500, 
-        legend=dict(orientation='h', yanchor='bottom', y=1.02),
-        bargap=0.5  # Barras mais finas
+        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5),
+        bargap=0.4,
+        margin=dict(t=80)
     )
     st.plotly_chart(fig1, use_container_width=True)
     
@@ -1370,6 +1442,159 @@ def render_pag4_kpis_influenciador(campanhas_list, cores):
         dados_ia = preparar_dados_pagina("kpis_influenciador", campanhas_list)
         dados_ia["top_15_influenciadores"] = dados_inf[:15] if len(dados_inf) > 15 else dados_inf
         render_secao_insights("kpis_influenciador", dados_ia, campanhas_list[0]['id'])
+
+
+def render_pag_kpis_categoria(campanhas_list, cores):
+    """Pagina KPIs por Categoria - agrupa influenciadores por categoria"""
+    
+    st.subheader("KPIs por Categoria")
+    
+    # Coletar dados dos influenciadores
+    dados_inf = coletar_dados_influenciadores(campanhas_list)
+    
+    if not dados_inf:
+        st.info("Nenhum dado disponivel")
+        return
+    
+    df = pd.DataFrame(dados_inf)
+    
+    # Verificar se tem categorias preenchidas
+    df['categoria'] = df['categoria'].fillna('').str.strip()
+    df_com_categoria = df[df['categoria'] != '']
+    
+    if df_com_categoria.empty:
+        st.info("Nenhum influenciador possui categoria definida. Configure as categorias na Central da Campanha.")
+        return
+    
+    # Agregar dados por categoria
+    df_categoria = df_com_categoria.groupby('categoria').agg({
+        'seguidores': 'sum',
+        'impressoes': 'sum',
+        'alcance_total': 'sum',
+        'interacoes': 'sum',
+        'curtidas': 'sum',
+        'custo': 'sum',
+        'posts': 'sum',
+        'taxa_eng': 'mean',
+        'taxa_alcance': 'mean',
+        'id': 'count'  # Quantidade de influenciadores
+    }).reset_index()
+    
+    df_categoria = df_categoria.rename(columns={'id': 'qtd_influenciadores'})
+    
+    # Recalcular taxas baseadas nos totais (mais preciso que media)
+    df_categoria['taxa_eng_calc'] = (df_categoria['interacoes'] / df_categoria['impressoes'] * 100).round(2).fillna(0)
+    df_categoria['taxa_alcance_calc'] = (df_categoria['alcance_total'] / df_categoria['seguidores'] * 100).round(2).fillna(0)
+    
+    st.markdown(f"**{len(df_categoria)} categorias encontradas** com {len(df_com_categoria)} influenciadores")
+    
+    st.markdown("### Grafico: Performance por Categoria")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        kpi_barra = st.selectbox(
+            "KPI Barras:", 
+            ["Impressoes", "Alcance", "Interacoes", "Seguidores", "Investimento"], 
+            key="kpi_barra_cat"
+        )
+    with col2:
+        kpi_linha = st.selectbox(
+            "KPI Linha:", 
+            ["Taxa Eng. Efetivo", "Taxa Alcance", "Taxa Eng. Media"], 
+            key="kpi_linha_cat"
+        )
+    
+    # Mapear KPIs
+    kpi_map_barra = {
+        'Impressoes': 'impressoes', 
+        'Alcance': 'alcance_total', 
+        'Interacoes': 'interacoes',
+        'Seguidores': 'seguidores',
+        'Investimento': 'custo'
+    }
+    campo_barra = kpi_map_barra.get(kpi_barra, 'impressoes')
+    
+    # Ordenar por KPI selecionado
+    df_sorted = df_categoria.sort_values(campo_barra, ascending=False)
+    
+    # Selecionar dados da linha
+    if kpi_linha == "Taxa Eng. Efetivo":
+        y_linha = df_sorted['taxa_eng_calc']
+    elif kpi_linha == "Taxa Alcance":
+        y_linha = df_sorted['taxa_alcance_calc']
+    else:
+        y_linha = df_sorted['taxa_eng']  # Media simples
+    
+    # Calcular range do eixo Y2
+    max_taxa = y_linha.max() if len(y_linha) > 0 else 10
+    
+    fig = go.Figure()
+    
+    # Barras
+    fig.add_trace(go.Bar(
+        x=df_sorted['categoria'],
+        y=df_sorted[campo_barra],
+        name=kpi_barra,
+        marker_color=cores[0],
+        text=[funcoes_auxiliares.formatar_numero(v) for v in df_sorted[campo_barra]],
+        textposition='outside',
+        textfont=dict(size=10)
+    ))
+    
+    # Linha
+    fig.add_trace(go.Scatter(
+        x=df_sorted['categoria'],
+        y=y_linha,
+        mode='lines+markers+text',
+        name=kpi_linha,
+        text=[f"{v:.1f}%" for v in y_linha],
+        textposition='top center',
+        textfont=dict(size=9),
+        yaxis='y2',
+        line=dict(color=cores[1], width=3),
+        marker=dict(size=10)
+    ))
+    
+    fig.update_layout(
+        xaxis=dict(title='Categoria', tickangle=-45 if len(df_sorted) > 5 else 0),
+        yaxis=dict(title=kpi_barra, side='left'),
+        yaxis2=dict(
+            title=kpi_linha,
+            overlaying='y',
+            side='right',
+            range=[0, max_taxa * 1.3],
+            showgrid=False
+        ),
+        height=500,
+        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5),
+        bargap=0.4,
+        margin=dict(t=80)
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Tabela resumo
+    st.markdown("### Tabela Resumo por Categoria")
+    
+    df_exibir = df_sorted[['categoria', 'qtd_influenciadores', 'seguidores', 'impressoes', 'alcance_total', 'interacoes', 'custo', 'taxa_eng_calc']].copy()
+    df_exibir.columns = ['Categoria', 'Qtd Influs', 'Seguidores', 'Impressoes', 'Alcance', 'Interacoes', 'Invest. (R$)', 'Taxa Eng. %']
+    
+    # Formatar numeros
+    for col in ['Seguidores', 'Impressoes', 'Alcance', 'Interacoes', 'Invest. (R$)']:
+        df_exibir[col] = df_exibir[col].apply(lambda x: f"{x:,.0f}".replace(",", "."))
+    df_exibir['Taxa Eng. %'] = df_exibir['Taxa Eng. %'].apply(lambda x: f"{x:.2f}")
+    
+    st.dataframe(df_exibir, use_container_width=True, hide_index=True)
+    
+    # Detalhamento por categoria
+    with st.expander("Ver influenciadores por categoria"):
+        for cat in df_sorted['categoria'].tolist():
+            df_cat = df_com_categoria[df_com_categoria['categoria'] == cat]
+            st.markdown(f"**{cat}** ({len(df_cat)} influenciadores)")
+            
+            nomes = ", ".join(df_cat['nome'].tolist())
+            st.caption(nomes)
+            st.markdown("---")
 
 
 def render_pag5_top_performance(campanhas_list, cores):
@@ -1527,13 +1752,26 @@ def render_pag6_lista_influenciadores(campanhas_list, cores):
     
     st.subheader("Lista de Influenciadores")
     
-    col1, col2 = st.columns(2)
+    # Coletar formatos disponiveis
+    formatos_disponiveis = set()
+    for camp in campanhas_list:
+        for inf_camp in camp.get('influenciadores', []):
+            for post in inf_camp.get('posts', []):
+                formato = post.get('formato', 'Outro')
+                if formato:
+                    formatos_disponiveis.add(formato)
+    formatos_disponiveis = sorted(list(formatos_disponiveis)) if formatos_disponiveis else ['Reels', 'Feed', 'Stories', 'Carrossel']
+    
+    col1, col2, col3 = st.columns(3)
     with col1:
         filtro_class = st.multiselect("Classificacao:", ["Nano", "Micro", "Mid", "Macro", "Mega"], key="class_pag6")
     with col2:
+        filtro_formato = st.multiselect("Formato:", formatos_disponiveis, key="formato_pag6", help="Filtra influenciadores que tem posts neste formato")
+    with col3:
         ordenar = st.selectbox("Ordenar:", ["Impressoes", "Alcance Total", "Interacoes", "Taxa Eng.", "Investimento"], key="ord_pag6")
     
-    dados = coletar_dados_influenciadores(campanhas_list)
+    # Coletar dados com filtro de formato
+    dados = coletar_dados_influenciadores(campanhas_list, filtro_formato=filtro_formato if filtro_formato else None)
     
     if not dados:
         st.info("Nenhum influenciador")
@@ -1833,8 +2071,13 @@ def coletar_dados_temporais(campanhas_list, data_ini, data_fim):
     return dados
 
 
-def coletar_dados_influenciadores(campanhas_list):
-    """Coleta dados por influenciador. Stories do mesmo dia contam como 1 publicacao."""
+def coletar_dados_influenciadores(campanhas_list, filtro_formato=None):
+    """Coleta dados por influenciador. Stories do mesmo dia contam como 1 publicacao.
+    
+    Args:
+        campanhas_list: Lista de campanhas
+        filtro_formato: Lista de formatos para filtrar (ex: ['Reels', 'Stories'])
+    """
     dados_inf = {}
     
     for camp in campanhas_list:
@@ -1843,6 +2086,14 @@ def coletar_dados_influenciadores(campanhas_list):
             if not inf:
                 continue
             inf_id = inf['id']
+            
+            # Se tem filtro de formato, verificar se o influ tem posts nesse formato
+            posts_filtrados = camp_inf.get('posts', [])
+            if filtro_formato:
+                posts_filtrados = [p for p in posts_filtrados if p.get('formato', 'Outro') in filtro_formato]
+                if not posts_filtrados:
+                    continue  # Pula influenciador que nao tem posts no formato filtrado
+            
             if inf_id not in dados_inf:
                 dados_inf[inf_id] = {
                     'id': inf_id, 
@@ -1867,7 +2118,7 @@ def coletar_dados_influenciadores(campanhas_list):
                 }
             dados_inf[inf_id]['custo'] += camp_inf.get('custo', 0)
             
-            for post in camp_inf.get('posts', []):
+            for post in posts_filtrados:
                 formato = post.get('formato', 'Outro')
                 data_post = post.get('data_publicacao', '')
                 
@@ -2086,6 +2337,7 @@ def render_compartilhar(campanha):
         pdf_kpis = st.checkbox("KPIs por Influenciador", value=True, key="pdf_kpis")
         pdf_top = st.checkbox("Top Performance", value=True, key="pdf_top")
         pdf_lista = st.checkbox("Lista de Influenciadores", value=True, key="pdf_lista")
+        pdf_stories = st.checkbox("Stories Detalhado", value=False, key="pdf_stories")
         pdf_comentarios = st.checkbox("Comentarios", value=True, key="pdf_com")
         pdf_glossario = st.checkbox("Glossario", value=True, key="pdf_glos")
         
@@ -2143,6 +2395,7 @@ def render_compartilhar(campanha):
                 if pdf_kpis: paginas_pdf.append('kpis_influenciador')
                 if pdf_top: paginas_pdf.append('top_performance')
                 if pdf_lista: paginas_pdf.append('lista_influenciadores')
+                if pdf_stories: paginas_pdf.append('stories_detalhado')
                 if pdf_comentarios: paginas_pdf.append('comentarios')
                 if pdf_glossario: paginas_pdf.append('glossario')
                 
