@@ -72,7 +72,7 @@ def render():
                 objetivo = st.text_area("Objetivo", value=camp_edit.get('objetivo', '') if camp_edit else "", height=100)
             
             st.markdown("**Metricas a Coletar:**")
-            metricas_cfg = camp_edit.get('metricas_selecionadas', {}) if camp_edit else {}
+            metricas_cfg = (camp_edit.get('metricas_selecionadas') or {}) if camp_edit else {}
             
             col1, col2, col3, col4 = st.columns(4)
             with col1:
