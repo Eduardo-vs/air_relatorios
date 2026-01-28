@@ -413,17 +413,19 @@ def buscar_posts_influenciador(profile_id: str, limite: int = 100, hashtags: Lis
                     'pages_field': data.get('pages') if isinstance(data, dict) else None
                 })
             
-            # Extrair posts e info de paginação
+            # Extrair posts e info de paginacao
+            # API pode retornar em 'items' ou 'posts'
             posts_pagina = []
             total_pages = 1
             
             if isinstance(data, dict):
-                posts_pagina = data.get('posts', [])
+                # Tentar 'items' primeiro (formato atual da API), depois 'posts'
+                posts_pagina = data.get('items', []) or data.get('posts', [])
                 total_pages = data.get('pages', 1)
             elif isinstance(data, list):
                 # Se data ainda e uma lista, tentar extrair o primeiro item
                 if len(data) > 0 and isinstance(data[0], dict):
-                    posts_pagina = data[0].get('posts', [])
+                    posts_pagina = data[0].get('items', []) or data[0].get('posts', [])
                     total_pages = data[0].get('pages', 1)
                 else:
                     posts_pagina = data

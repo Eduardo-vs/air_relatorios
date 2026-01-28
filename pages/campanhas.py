@@ -204,7 +204,7 @@ def render_importar_air():
     
     col1, col2 = st.columns([3, 1])
     with col2:
-        if st.button("Cancelar", use_container_width=True):
+        if st.button("Cancelar", use_container_width=True, key="btn_cancelar_import_air"):
             st.session_state.show_import_air = False
             st.session_state.air_import_data = None
             st.rerun()
@@ -511,7 +511,7 @@ def render_importar_air():
                     criar_campanha_do_air_com_preview(air_data, influenciadores)
             
             with col2:
-                if st.button("Cancelar", use_container_width=True):
+                if st.button("Cancelar", use_container_width=True, key="btn_cancelar_preview_air"):
                     st.session_state.air_posts_preview = None
                     st.session_state.air_influenciadores_preview = None
                     st.rerun()
@@ -812,7 +812,7 @@ def render_importar_csv():
     
     col1, col2 = st.columns([3, 1])
     with col2:
-        if st.button("Cancelar", use_container_width=True):
+        if st.button("Cancelar", use_container_width=True, key="btn_cancelar_import_csv"):
             st.session_state.show_import_csv = False
             st.rerun()
     
