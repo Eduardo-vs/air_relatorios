@@ -705,7 +705,8 @@ def render_form_post_manual(campanha, inf):
     st.markdown("---")
     st.markdown("#### Adicionar Post Manualmente")
     
-    metricas_config = campanha.get('metricas_selecionadas', {})
+    metricas_raw = campanha.get('metricas_selecionadas')
+    metricas_config = metricas_raw if isinstance(metricas_raw, dict) else {}
     
     # Escolher formato primeiro para mostrar opcoes de Stories
     col_fmt, col_plat = st.columns(2)
@@ -1093,7 +1094,8 @@ def render_configuracoes_campanha(campanha):
         st.markdown("---")
         st.markdown("**Metricas a Coletar:**")
         
-        metricas = campanha.get('metricas_selecionadas', {})
+        metricas_raw = campanha.get('metricas_selecionadas')
+        metricas = metricas_raw if isinstance(metricas_raw, dict) else {}
         
         col1, col2, col3, col4 = st.columns(4)
         with col1:

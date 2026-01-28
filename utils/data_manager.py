@@ -921,7 +921,7 @@ def criar_campanha(dados: Dict) -> Dict:
     invalidar_cache()
     now = datetime.now().isoformat()
     
-    metricas_json = json.dumps(dados.get('metricas_selecionadas', []))
+    metricas_json = json.dumps(dados.get('metricas_selecionadas', {}))
     insights_json = json.dumps(dados.get('insights_config', {}))
     categorias_json = json.dumps(dados.get('categorias_comentarios', []))
     influenciadores_json = json.dumps(dados.get('influenciadores', []))
@@ -1066,7 +1066,7 @@ def atualizar_campanha(camp_id: int, dados: Dict) -> bool:
     for key, value in dados.items():
         campanha_atual[key] = value
     
-    metricas_json = json.dumps(campanha_atual.get('metricas_selecionadas', []))
+    metricas_json = json.dumps(campanha_atual.get('metricas_selecionadas', {}))
     insights_json = json.dumps(campanha_atual.get('insights_config', {}))
     categorias_json = json.dumps(campanha_atual.get('categorias_comentarios', []))
     influenciadores_json = json.dumps(campanha_atual.get('influenciadores', []))
