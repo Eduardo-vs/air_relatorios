@@ -2,6 +2,7 @@
 PDF Exporter para Relatorios AIR
 Gera PDFs extraiveis com todas as informacoes do relatorio web
 Inclui graficos como imagens e tabelas divididas em no maximo 6 colunas
+Usa matplotlib para gerar graficos (compativel com Streamlit Cloud)
 """
 
 import io
@@ -9,16 +10,39 @@ import base64
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 import pandas as pd
+import numpy as np
 
 # WeasyPrint para geracao de PDF
 from weasyprint import HTML, CSS
 
-# Plotly para graficos
-import plotly.express as px
-import plotly.graph_objects as go
-import plotly.io as pio
+# Matplotlib para graficos (nao precisa de Chrome)
+import matplotlib
+matplotlib.use('Agg')  # Backend sem GUI
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from matplotlib.patches import Wedge
 
 from utils import data_manager, funcoes_auxiliares
+
+
+# Cores padrao
+CORES_PADRAO = ['#7c3aed', '#fb923c', '#22c55e', '#3b82f6', '#ef4444', '#8b5cf6', '#f97316', '#14b8a6']
+CORES_CLASSIFICACAO = {
+    'Nano': '#22c55e', 'Micro': '#3b82f6', 'Inter 1': '#8b5cf6',
+    'Inter 2': '#a855f7', 'Macro': '#f97316', 'Mega 1': '#ef4444',
+    'Mega 2': '#dc2626', 'Super Mega': '#991b1b', 'Mid': '#8b5cf6',
+    'Mega': '#ef4444', 'Desconhecido': '#9ca3af'
+}
+
+
+def fig_to_base64(fig) -> str:
+    """Converte figura matplotlib para base64."""
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='white', edgecolor='none')
+    buf.seek(0)
+    img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+    plt.close(fig)
+    return img_base64
 
 
 def calcular_impressoes_post(post: Dict) -> int:
@@ -149,7 +173,7 @@ def calcular_metricas_gerais(campanhas_list: List[Dict]) -> Dict:
 
 
 def gerar_grafico_barras_formato(campanhas_list: List[Dict], kpi: str = "Impressoes") -> Optional[str]:
-    """Gera grafico de barras empilhadas por formato/classificacao e retorna como base64."""
+    """Gera grafico de barras empilhadas por formato/classificacao."""
     todos_influs_camp = []
     for camp in campanhas_list:
         for inf_camp in camp.get('influenciadores', []):
@@ -187,38 +211,45 @@ def gerar_grafico_barras_formato(campanhas_list: List[Dict], kpi: str = "Impress
     df = pd.DataFrame(dados_grafico)
     df_agg = df.groupby(['Formato', 'Classificacao'])['Valor'].sum().reset_index()
     
-    df_total = df_agg.groupby('Formato')['Valor'].sum().reset_index()
-    df_total.columns = ['Formato', 'Total']
-    df_agg = df_agg.merge(df_total, on='Formato')
-    df_agg['Percentual'] = (df_agg['Valor'] / df_agg['Total'] * 100).round(1)
+    # Pivotar para ter classificacoes como colunas
+    df_pivot = df_agg.pivot(index='Formato', columns='Classificacao', values='Valor').fillna(0)
     
-    cores_classif = {
-        'Nano': '#22c55e', 'Micro': '#3b82f6', 'Inter 1': '#8b5cf6',
-        'Inter 2': '#a855f7', 'Macro': '#f97316', 'Mega 1': '#ef4444',
-        'Mega 2': '#dc2626', 'Super Mega': '#991b1b', 'Mid': '#8b5cf6',
-        'Mega': '#ef4444', 'Desconhecido': '#9ca3af'
-    }
+    # Calcular percentuais
+    df_pct = df_pivot.div(df_pivot.sum(axis=1), axis=0) * 100
     
-    fig = px.bar(
-        df_agg, x='Formato', y='Percentual', color='Classificacao',
-        color_discrete_map=cores_classif, barmode='stack',
-        text=df_agg['Percentual'].apply(lambda x: f"{x:.0f}%")
-    )
-    fig.update_traces(textposition='inside')
-    fig.update_layout(
-        height=400, width=600,
-        xaxis_title="", yaxis_title=f"{kpi} (%)",
-        legend_title="Classificacao",
-        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5),
-        margin=dict(l=40, r=40, t=60, b=40)
-    )
+    fig, ax = plt.subplots(figsize=(8, 5))
     
-    img_bytes = pio.to_image(fig, format='png', scale=2)
-    return base64.b64encode(img_bytes).decode('utf-8')
+    formatos = df_pct.index.tolist()
+    x = np.arange(len(formatos))
+    width = 0.6
+    
+    bottom = np.zeros(len(formatos))
+    
+    for classif in df_pct.columns:
+        valores = df_pct[classif].values
+        cor = CORES_CLASSIFICACAO.get(classif, '#9ca3af')
+        bars = ax.bar(x, valores, width, bottom=bottom, label=classif, color=cor)
+        
+        # Adicionar labels dentro das barras
+        for i, (bar, val) in enumerate(zip(bars, valores)):
+            if val > 5:  # So mostra se > 5%
+                ax.text(bar.get_x() + bar.get_width()/2, bottom[i] + val/2,
+                       f'{val:.0f}%', ha='center', va='center', fontsize=8, color='white')
+        
+        bottom += valores
+    
+    ax.set_xticks(x)
+    ax.set_xticklabels(formatos, rotation=45, ha='right')
+    ax.set_ylabel(f'{kpi} (%)')
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.15), ncol=4, fontsize=8)
+    ax.set_ylim(0, 100)
+    
+    plt.tight_layout()
+    return fig_to_base64(fig)
 
 
 def gerar_grafico_radar_classificacao(campanhas_list: List[Dict]) -> Optional[str]:
-    """Gera grafico de radar por classificacao e retorna como base64."""
+    """Gera grafico de radar por classificacao."""
     todos_influs_camp = []
     classificacoes = set()
     
@@ -244,24 +275,28 @@ def gerar_grafico_radar_classificacao(campanhas_list: List[Dict]) -> Optional[st
     categorias = list(dados_classif.keys())
     valores = list(dados_classif.values())
     
-    fig = go.Figure()
-    fig.add_trace(go.Scatterpolar(
-        r=valores + [valores[0]],
-        theta=categorias + [categorias[0]],
-        fill='toself',
-        fillcolor='rgba(124, 58, 237, 0.3)',
-        line=dict(color='#7c3aed', width=2),
-        name='Interacoes'
-    ))
-    fig.update_layout(
-        polar=dict(radialaxis=dict(visible=True)),
-        showlegend=False,
-        height=400, width=500,
-        margin=dict(l=60, r=60, t=40, b=40)
-    )
+    # Normalizar valores para 0-100
+    max_val = max(valores) if valores else 1
+    valores_norm = [v / max_val * 100 for v in valores]
     
-    img_bytes = pio.to_image(fig, format='png', scale=2)
-    return base64.b64encode(img_bytes).decode('utf-8')
+    # Fechar o poligono
+    valores_norm += valores_norm[:1]
+    
+    # Angulos
+    angles = np.linspace(0, 2 * np.pi, len(categorias), endpoint=False).tolist()
+    angles += angles[:1]
+    
+    fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
+    
+    ax.fill(angles, valores_norm, color='#7c3aed', alpha=0.3)
+    ax.plot(angles, valores_norm, color='#7c3aed', linewidth=2)
+    
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(categorias, fontsize=9)
+    ax.set_ylim(0, 100)
+    
+    plt.tight_layout()
+    return fig_to_base64(fig)
 
 
 def gerar_grafico_barras_influenciadores(campanhas_list: List[Dict], kpi: str = "Impressoes", top_n: int = 15) -> Optional[str]:
@@ -278,23 +313,22 @@ def gerar_grafico_barras_influenciadores(campanhas_list: List[Dict], kpi: str = 
     
     df = df.sort_values(campo, ascending=False).head(top_n)
     
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        x=df['nome'],
-        y=df[campo],
-        marker_color='#7c3aed',
-        text=[funcoes_auxiliares.formatar_numero(v) for v in df[campo]],
-        textposition='outside'
-    ))
-    fig.update_layout(
-        height=400, width=800,
-        xaxis_title="", yaxis_title=kpi,
-        xaxis_tickangle=-45,
-        margin=dict(l=40, r=40, t=40, b=100)
-    )
+    fig, ax = plt.subplots(figsize=(10, 6))
     
-    img_bytes = pio.to_image(fig, format='png', scale=2)
-    return base64.b64encode(img_bytes).decode('utf-8')
+    x = np.arange(len(df))
+    bars = ax.bar(x, df[campo], color='#7c3aed')
+    
+    # Adicionar valores no topo das barras
+    for bar, val in zip(bars, df[campo]):
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height(),
+               funcoes_auxiliares.formatar_numero(val), ha='center', va='bottom', fontsize=8)
+    
+    ax.set_xticks(x)
+    ax.set_xticklabels(df['nome'], rotation=45, ha='right', fontsize=8)
+    ax.set_ylabel(kpi)
+    
+    plt.tight_layout()
+    return fig_to_base64(fig)
 
 
 def gerar_grafico_linha_taxa(campanhas_list: List[Dict], top_n: int = 15) -> Optional[str]:
@@ -306,26 +340,21 @@ def gerar_grafico_linha_taxa(campanhas_list: List[Dict], top_n: int = 15) -> Opt
     df = pd.DataFrame(dados)
     df = df.sort_values('impressoes', ascending=False).head(top_n)
     
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=df['nome'],
-        y=df['taxa_eng'],
-        mode='lines+markers+text',
-        line=dict(color='#fb923c', width=3),
-        marker=dict(size=10),
-        text=[f"{v:.1f}%" for v in df['taxa_eng']],
-        textposition='top center',
-        name='Taxa Eng. %'
-    ))
-    fig.update_layout(
-        height=350, width=800,
-        xaxis_title="", yaxis_title="Taxa Engajamento (%)",
-        xaxis_tickangle=-45,
-        margin=dict(l=40, r=40, t=40, b=100)
-    )
+    fig, ax = plt.subplots(figsize=(10, 5))
     
-    img_bytes = pio.to_image(fig, format='png', scale=2)
-    return base64.b64encode(img_bytes).decode('utf-8')
+    x = np.arange(len(df))
+    ax.plot(x, df['taxa_eng'], marker='o', color='#fb923c', linewidth=2, markersize=8)
+    
+    # Adicionar valores
+    for i, val in enumerate(df['taxa_eng']):
+        ax.text(i, val + 0.3, f'{val:.1f}%', ha='center', fontsize=8)
+    
+    ax.set_xticks(x)
+    ax.set_xticklabels(df['nome'], rotation=45, ha='right', fontsize=8)
+    ax.set_ylabel('Taxa Engajamento (%)')
+    
+    plt.tight_layout()
+    return fig_to_base64(fig)
 
 
 def gerar_grafico_dispersao(campanhas_list: List[Dict]) -> Optional[str]:
@@ -338,34 +367,70 @@ def gerar_grafico_dispersao(campanhas_list: List[Dict]) -> Optional[str]:
     if df.empty:
         return None
     
-    # Cores por classificacao
-    cores_classif = {
-        'Nano': '#22c55e', 'Micro': '#3b82f6', 'Inter 1': '#8b5cf6',
-        'Inter 2': '#a855f7', 'Macro': '#f97316', 'Mega 1': '#ef4444',
-        'Mega 2': '#dc2626', 'Super Mega': '#991b1b', 'Mid': '#8b5cf6',
-        'Mega': '#ef4444', 'Desconhecido': '#9ca3af'
-    }
+    fig, ax = plt.subplots(figsize=(9, 6))
     
-    fig = px.scatter(
-        df, 
-        x='taxa_alcance', 
-        y='taxa_eng', 
-        size='impressoes',
-        color='classificacao',
-        hover_name='nome',
-        text='nome',
-        labels={'taxa_alcance': 'Taxa de Alcance (%)', 'taxa_eng': 'Taxa de Engajamento (%)'},
-        color_discrete_map=cores_classif
-    )
-    fig.update_traces(textposition='top center', textfont_size=8)
-    fig.update_layout(
-        height=450, width=700,
-        margin=dict(l=40, r=40, t=40, b=40),
-        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5)
-    )
+    # Plotar por classificacao
+    for classif in df['classificacao'].unique():
+        df_c = df[df['classificacao'] == classif]
+        cor = CORES_CLASSIFICACAO.get(classif, '#9ca3af')
+        
+        # Tamanho proporcional as impressoes
+        sizes = (df_c['impressoes'] / df_c['impressoes'].max() * 300 + 50).fillna(50)
+        
+        ax.scatter(df_c['taxa_alcance'], df_c['taxa_eng'], s=sizes, c=cor, alpha=0.6, label=classif)
+        
+        # Labels com nomes
+        for _, row in df_c.iterrows():
+            ax.annotate(row['nome'][:10], (row['taxa_alcance'], row['taxa_eng']), 
+                       fontsize=7, ha='center', va='bottom')
     
-    img_bytes = pio.to_image(fig, format='png', scale=2)
-    return base64.b64encode(img_bytes).decode('utf-8')
+    ax.set_xlabel('Taxa de Alcance (%)')
+    ax.set_ylabel('Taxa de Engajamento (%)')
+    ax.legend(loc='upper right', fontsize=8)
+    
+    plt.tight_layout()
+    return fig_to_base64(fig)
+
+
+def gerar_grafico_barras_combo(campanhas_list: List[Dict], kpi_barra: str = "Impressoes", kpi_linha: str = "Taxa Eng.", top_n: int = 15) -> Optional[str]:
+    """Gera grafico combo barras + linha por influenciador."""
+    dados = coletar_dados_influenciadores(campanhas_list)
+    if not dados:
+        return None
+    
+    df = pd.DataFrame(dados)
+    
+    kpi_map = {'Seguidores': 'seguidores', 'Impressoes': 'impressoes', 'Alcance': 'alcance_total', 'Interacoes': 'interacoes'}
+    campo_barra = kpi_map.get(kpi_barra, 'impressoes')
+    
+    df = df.sort_values(campo_barra, ascending=False).head(top_n)
+    
+    fig, ax1 = plt.subplots(figsize=(10, 6))
+    
+    x = np.arange(len(df))
+    
+    # Barras
+    bars = ax1.bar(x, df[campo_barra], color='#7c3aed', alpha=0.7, label=kpi_barra)
+    ax1.set_ylabel(kpi_barra, color='#7c3aed')
+    ax1.tick_params(axis='y', labelcolor='#7c3aed')
+    
+    # Linha no eixo secundario
+    ax2 = ax1.twinx()
+    ax2.plot(x, df['taxa_eng'], color='#fb923c', marker='o', linewidth=2, label='Taxa Eng.')
+    ax2.set_ylabel('Taxa Engajamento (%)', color='#fb923c')
+    ax2.tick_params(axis='y', labelcolor='#fb923c')
+    
+    # Labels
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(df['nome'], rotation=45, ha='right', fontsize=8)
+    
+    # Legenda combinada
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper right')
+    
+    plt.tight_layout()
+    return fig_to_base64(fig)
 
 
 def gerar_grafico_eficiencia_gasto(campanhas_list: List[Dict], metrica: str = "CPM") -> Optional[str]:
@@ -392,245 +457,28 @@ def gerar_grafico_eficiencia_gasto(campanhas_list: List[Dict], metrica: str = "C
     if df.empty:
         return None
     
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        x=df['valor'],
-        y=df['nome'],
-        orientation='h',
-        marker_color='#7c3aed',
-        text=[f"R$ {v:.2f}" for v in df['valor']],
-        textposition='outside'
-    ))
-    fig.update_layout(
-        height=max(300, len(df) * 30),
-        width=600,
-        title=f'{metrica} por Influenciador (R$)',
-        xaxis_title=f'{metrica} (R$)',
-        yaxis_title='',
-        margin=dict(l=120, r=60, t=50, b=40)
-    )
+    fig, ax = plt.subplots(figsize=(8, max(4, len(df) * 0.4)))
     
-    img_bytes = pio.to_image(fig, format='png', scale=2)
-    return base64.b64encode(img_bytes).decode('utf-8')
-
-
-def gerar_grafico_barras_combo(campanhas_list: List[Dict], kpi_barra: str = "Impressoes", kpi_linha: str = "Taxa Eng. Efetivo", top_n: int = 15) -> Optional[str]:
-    """Gera grafico combo barras + linha por influenciador."""
-    dados = coletar_dados_influenciadores(campanhas_list)
-    if not dados:
-        return None
+    y = np.arange(len(df))
+    bars = ax.barh(y, df['valor'], color='#7c3aed')
     
-    df = pd.DataFrame(dados)
+    # Adicionar valores
+    for bar, val in zip(bars, df['valor']):
+        ax.text(bar.get_width(), bar.get_y() + bar.get_height()/2,
+               f' R$ {val:.2f}', ha='left', va='center', fontsize=8)
     
-    kpi_map = {'Seguidores': 'seguidores', 'Impressoes': 'impressoes', 'Alcance': 'alcance_total', 'Interacoes': 'interacoes'}
-    campo_barra = kpi_map.get(kpi_barra, 'impressoes')
+    ax.set_yticks(y)
+    ax.set_yticklabels(df['nome'], fontsize=8)
+    ax.set_xlabel(f'{metrica} (R$)')
     
-    df = df.sort_values(campo_barra, ascending=False).head(top_n)
-    
-    fig = go.Figure()
-    
-    # Barras
-    fig.add_trace(go.Bar(
-        x=df['nome'],
-        y=df[campo_barra],
-        name=kpi_barra,
-        marker_color='#7c3aed',
-        text=[funcoes_auxiliares.formatar_numero(v) for v in df[campo_barra]],
-        textposition='outside'
-    ))
-    
-    # Linha
-    if kpi_linha == "Taxa Eng. Efetivo":
-        y_linha = df['taxa_eng']
-    elif kpi_linha == "Taxa Alcance":
-        y_linha = df['taxa_alcance']
-    else:
-        y_linha = df['taxa_eng']
-    
-    fig.add_trace(go.Scatter(
-        x=df['nome'],
-        y=y_linha,
-        mode='lines+markers+text',
-        name=kpi_linha,
-        text=[f"{v:.1f}%" for v in y_linha],
-        textposition='top center',
-        yaxis='y2',
-        line=dict(color='#fb923c', width=2),
-        marker=dict(size=8)
-    ))
-    
-    fig.update_layout(
-        height=450, width=800,
-        xaxis=dict(title='', tickangle=-45),
-        yaxis=dict(title=kpi_barra),
-        yaxis2=dict(title=kpi_linha, overlaying='y', side='right'),
-        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5),
-        margin=dict(l=60, r=60, t=60, b=120)
-    )
-    
-    img_bytes = pio.to_image(fig, format='png', scale=2)
-    return base64.b64encode(img_bytes).decode('utf-8')
-
-
-def gerar_grafico_formato_kpi(campanhas_list: List[Dict], kpi1: str = "Impressoes", kpi2: str = "Taxa Eng. Efetivo") -> Optional[str]:
-    """Gera grafico de barras + linha por formato."""
-    todos_posts = []
-    todos_influs_camp = []
-    
-    for camp in campanhas_list:
-        for inf_camp in camp.get('influenciadores', []):
-            inf = data_manager.get_influenciador(inf_camp.get('influenciador_id'))
-            if inf:
-                todos_influs_camp.append({'inf': inf, 'posts': inf_camp.get('posts', [])})
-    
-    dados_formato = {}
-    for inf_data in todos_influs_camp:
-        for post in inf_data['posts']:
-            formato = post.get('formato', 'Outro')
-            if formato:
-                formato = formato.capitalize()
-            if formato not in dados_formato:
-                dados_formato[formato] = {'impressoes': 0, 'alcance': 0, 'interacoes': 0, 'curtidas': 0}
-            
-            dados_formato[formato]['impressoes'] += calcular_impressoes_post(post)
-            dados_formato[formato]['alcance'] += post.get('alcance', 0) or 0
-            dados_formato[formato]['interacoes'] += post.get('interacoes', 0) or 0
-            dados_formato[formato]['curtidas'] += post.get('curtidas', 0) or 0
-    
-    if not dados_formato:
-        return None
-    
-    df = pd.DataFrame([
-        {'formato': k, **v} for k, v in dados_formato.items()
-    ])
-    
-    # Calcular taxas
-    df['taxa_eng'] = (df['interacoes'] / df['impressoes'] * 100).round(2).fillna(0)
-    
-    kpi_map = {'Impressoes': 'impressoes', 'Alcance': 'alcance', 'Interacoes': 'interacoes'}
-    campo1 = kpi_map.get(kpi1, 'impressoes')
-    
-    fig = go.Figure()
-    
-    fig.add_trace(go.Bar(
-        x=df['formato'],
-        y=df[campo1],
-        name=kpi1,
-        marker_color='#7c3aed',
-        text=[funcoes_auxiliares.formatar_numero(v) for v in df[campo1]],
-        textposition='outside'
-    ))
-    
-    if kpi2 == "Taxa Eng. Efetivo":
-        y2 = df['taxa_eng']
-    else:
-        y2 = df['taxa_eng']
-    
-    fig.add_trace(go.Scatter(
-        x=df['formato'],
-        y=y2,
-        mode='lines+markers',
-        name=kpi2,
-        yaxis='y2',
-        line=dict(color='#fb923c', width=3),
-        marker=dict(size=10)
-    ))
-    
-    fig.update_layout(
-        height=400, width=600,
-        yaxis=dict(title=kpi1),
-        yaxis2=dict(title=kpi2, overlaying='y', side='right'),
-        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5),
-        margin=dict(l=60, r=60, t=60, b=40)
-    )
-    
-    img_bytes = pio.to_image(fig, format='png', scale=2)
-    return base64.b64encode(img_bytes).decode('utf-8')
-
-
-def gerar_grafico_classificacao_kpi(campanhas_list: List[Dict], kpi1: str = "Impressoes", kpi2: str = "Taxa Eng. Efetivo") -> Optional[str]:
-    """Gera grafico de barras + linha por classificacao."""
-    todos_influs_camp = []
-    
-    for camp in campanhas_list:
-        for inf_camp in camp.get('influenciadores', []):
-            inf = data_manager.get_influenciador(inf_camp.get('influenciador_id'))
-            if inf:
-                todos_influs_camp.append({'inf': inf, 'posts': inf_camp.get('posts', [])})
-    
-    dados_classif = {}
-    for inf_data in todos_influs_camp:
-        classif = inf_data['inf'].get('classificacao', 'Desconhecido')
-        if classif not in dados_classif:
-            dados_classif[classif] = {'impressoes': 0, 'alcance': 0, 'interacoes': 0}
-        
-        for post in inf_data['posts']:
-            dados_classif[classif]['impressoes'] += calcular_impressoes_post(post)
-            dados_classif[classif]['alcance'] += post.get('alcance', 0) or 0
-            dados_classif[classif]['interacoes'] += post.get('interacoes', 0) or 0
-    
-    if not dados_classif:
-        return None
-    
-    df = pd.DataFrame([
-        {'classificacao': k, **v} for k, v in dados_classif.items()
-    ])
-    
-    df['taxa_eng'] = (df['interacoes'] / df['impressoes'] * 100).round(2).fillna(0)
-    
-    kpi_map = {'Impressoes': 'impressoes', 'Alcance': 'alcance', 'Interacoes': 'interacoes'}
-    campo1 = kpi_map.get(kpi1, 'impressoes')
-    
-    fig = go.Figure()
-    
-    fig.add_trace(go.Bar(
-        x=df['classificacao'],
-        y=df[campo1],
-        name=kpi1,
-        marker_color='#7c3aed',
-        text=[funcoes_auxiliares.formatar_numero(v) for v in df[campo1]],
-        textposition='outside'
-    ))
-    
-    if kpi2 == "Taxa Eng. Efetivo":
-        y2 = df['taxa_eng']
-    else:
-        y2 = df['taxa_eng']
-    
-    fig.add_trace(go.Scatter(
-        x=df['classificacao'],
-        y=y2,
-        mode='lines+markers',
-        name=kpi2,
-        yaxis='y2',
-        line=dict(color='#fb923c', width=3),
-        marker=dict(size=10)
-    ))
-    
-    fig.update_layout(
-        height=400, width=600,
-        yaxis=dict(title=kpi1),
-        yaxis2=dict(title=kpi2, overlaying='y', side='right'),
-        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5),
-        margin=dict(l=60, r=60, t=60, b=40)
-    )
-    
-    img_bytes = pio.to_image(fig, format='png', scale=2)
-    return base64.b64encode(img_bytes).decode('utf-8')
+    plt.tight_layout()
+    return fig_to_base64(fig)
 
 
 def dividir_tabela_html(df: pd.DataFrame, max_cols: int = 6, col_identificadora: str = None) -> List[str]:
     """
     Divide um DataFrame em multiplas tabelas HTML com no maximo max_cols colunas.
     A primeira coluna (col_identificadora) e repetida em todas as tabelas.
-    
-    Args:
-        df: DataFrame a ser dividido
-        max_cols: Numero maximo de colunas por tabela (default 6)
-        col_identificadora: Nome da coluna a repetir (default: primeira coluna)
-    
-    Returns:
-        Lista de strings HTML com as tabelas
     """
     if col_identificadora is None:
         col_identificadora = df.columns[0]
@@ -725,9 +573,8 @@ def render_big_numbers_html(campanhas_list: List[Dict], metricas: Dict, config_k
     
     html += '</div>'
     
-    # Graficos - Linha 1
+    # Graficos
     kpi_barras = config_kpis.get('big_numbers', {}).get('barras', 'Impressoes')
-    kpi_radar = config_kpis.get('big_numbers', {}).get('classificacao', 'Impressoes')
     
     html += '<h3>Graficos</h3><div class="graficos-container">'
     
@@ -751,29 +598,6 @@ def render_big_numbers_html(campanhas_list: List[Dict], metricas: Dict, config_k
     
     html += '</div>'
     
-    # Graficos - Linha 2 (KPI por Formato e Classificacao)
-    html += '<div class="graficos-container" style="margin-top: 20px;">'
-    
-    img_formato = gerar_grafico_formato_kpi(campanhas_list, kpi_barras, "Taxa Eng. Efetivo")
-    if img_formato:
-        html += f'''
-        <div class="grafico">
-            <h4>{kpi_barras} por Formato</h4>
-            <img src="data:image/png;base64,{img_formato}" alt="Grafico Formato"/>
-        </div>
-        '''
-    
-    img_classif = gerar_grafico_classificacao_kpi(campanhas_list, kpi_barras, "Taxa Eng. Efetivo")
-    if img_classif:
-        html += f'''
-        <div class="grafico">
-            <h4>{kpi_barras} por Classificacao</h4>
-            <img src="data:image/png;base64,{img_classif}" alt="Grafico Classificacao"/>
-        </div>
-        '''
-    
-    html += '</div>'
-    
     html += '</div>'
     return html
 
@@ -787,11 +611,10 @@ def render_kpis_influenciador_html(campanhas_list: List[Dict], config_kpis: Dict
     
     html = '<div class="secao"><h2>KPIs por Influenciador (Top 15)</h2>'
     
-    # Graficos
     kpi_barras = config_kpis.get('kpis_influenciador', {}).get('barras', 'Impressoes')
     
-    # Grafico 1: Combo Barras + Linha
-    img_combo = gerar_grafico_barras_combo(campanhas_list, kpi_barras, "Taxa Eng. Efetivo", 15)
+    # Grafico combo
+    img_combo = gerar_grafico_barras_combo(campanhas_list, kpi_barras, "Taxa Eng.", 15)
     if img_combo:
         html += f'''
         <div class="grafico-full">
@@ -800,32 +623,13 @@ def render_kpis_influenciador_html(campanhas_list: List[Dict], config_kpis: Dict
         </div>
         '''
     
-    # Grafico 2: Eficiencia de Gasto (CPM)
+    # Grafico CPM
     img_cpm = gerar_grafico_eficiencia_gasto(campanhas_list, "CPM")
     if img_cpm:
         html += f'''
         <div class="grafico-full">
             <h3>Eficiencia de Gasto - CPM</h3>
             <img src="data:image/png;base64,{img_cpm}" alt="Grafico CPM"/>
-        </div>
-        '''
-    
-    # Grafico antigo de barras (backup)
-    img_barras = gerar_grafico_barras_influenciadores(campanhas_list, kpi_barras, 15)
-    if img_barras:
-        html += f'''
-        <div class="grafico-full">
-            <h3>Performance por Influenciador - {kpi_barras}</h3>
-            <img src="data:image/png;base64,{img_barras}" alt="Grafico de Barras Influenciadores"/>
-        </div>
-        '''
-    
-    img_linha = gerar_grafico_linha_taxa(campanhas_list, 15)
-    if img_linha:
-        html += f'''
-        <div class="grafico-full">
-            <h3>Taxa de Engajamento por Influenciador</h3>
-            <img src="data:image/png;base64,{img_linha}" alt="Grafico de Linha Taxa"/>
         </div>
         '''
     
@@ -861,7 +665,7 @@ def render_top_performance_html(campanhas_list: List[Dict], config_kpis: Dict) -
     
     html = '<div class="secao"><h2>Top Performance</h2>'
     
-    # Top 3 destacados (novo formato com campos individuais)
+    # Top 3 destacados
     tem_tops = any(top_conteudos.get(f'top{i}_post_id') for i in range(1, 4))
     
     if tem_tops:
@@ -875,9 +679,6 @@ def render_top_performance_html(campanhas_list: List[Dict], config_kpis: Dict) -
                 curtidas = top_conteudos.get(f'top{i}_curtidas', 0) or 0
                 comentarios = top_conteudos.get(f'top{i}_comentarios', 0) or 0
                 interacoes = top_conteudos.get(f'top{i}_interacoes', 0) or 0
-                descricao = top_conteudos.get(f'top{i}_descricao', '')
-                
-                desc_curta = descricao[:60] + '...' if len(descricao) > 60 else descricao
                 
                 html += f'''
                 <div class="top-card">
@@ -922,11 +723,27 @@ def render_top_performance_html(campanhas_list: List[Dict], config_kpis: Dict) -
         df = pd.DataFrame(todos_posts)
         df = df.sort_values(campo_ord, ascending=False).head(20)
         
-        df_exibir = df[['influenciador_nome', 'formato', 'impressoes_total', 'alcance', 'interacoes', 'curtidas', 'data_publicacao']].copy()
-        df_exibir.columns = ['Influenciador', 'Formato', 'Impressoes', 'Alcance', 'Interacoes', 'Curtidas', 'Data']
+        # Selecionar apenas colunas que existem
+        colunas_disponiveis = ['influenciador_nome', 'formato', 'impressoes_total', 'alcance', 'interacoes', 'curtidas', 'data_publicacao']
+        colunas_usar = [c for c in colunas_disponiveis if c in df.columns]
+        
+        df_exibir = df[colunas_usar].copy()
+        
+        # Renomear colunas
+        rename_map = {
+            'influenciador_nome': 'Influenciador',
+            'formato': 'Formato',
+            'impressoes_total': 'Impressoes',
+            'alcance': 'Alcance',
+            'interacoes': 'Interacoes',
+            'curtidas': 'Curtidas',
+            'data_publicacao': 'Data'
+        }
+        df_exibir = df_exibir.rename(columns=rename_map)
         
         for col in ['Impressoes', 'Alcance', 'Interacoes', 'Curtidas']:
-            df_exibir[col] = df_exibir[col].apply(lambda x: f"{x:,.0f}".replace(",", ".") if pd.notna(x) else "0")
+            if col in df_exibir.columns:
+                df_exibir[col] = df_exibir[col].apply(lambda x: f"{x:,.0f}".replace(",", ".") if pd.notna(x) else "0")
         
         html += '<h3>Lista de Top Performance</h3>'
         tabelas = dividir_tabela_html(df_exibir, max_cols=6, col_identificadora='Influenciador')
@@ -1011,7 +828,6 @@ def render_lista_influenciadores_html(campanhas_list: List[Dict]) -> str:
 def render_stories_detalhado_html(campanhas_list: List[Dict]) -> str:
     """Renderiza secao de Stories Detalhado como HTML."""
     
-    # Coletar todos os stories
     stories_data = []
     
     for camp in campanhas_list:
@@ -1029,8 +845,6 @@ def render_stories_detalhado_html(campanhas_list: List[Dict]) -> str:
                         'impressoes': calcular_impressoes_post(post),
                         'interacoes': post.get('interacoes', 0) or 0,
                         'clique_link': post.get('clique_link', 0) or 0,
-                        'respostas': post.get('respostas', 0) or 0,
-                        'compartilhamentos': post.get('compartilhamentos', 0) or 0
                     })
     
     if not stories_data:
@@ -1039,7 +853,6 @@ def render_stories_detalhado_html(campanhas_list: List[Dict]) -> str:
     html = '<div class="secao"><h2>Stories Detalhado</h2>'
     html += f'<p>Total de stories: {len(stories_data)}</p>'
     
-    # Agrupar por influenciador
     df = pd.DataFrame(stories_data)
     
     # Resumo por influenciador
@@ -1054,27 +867,11 @@ def render_stories_detalhado_html(campanhas_list: List[Dict]) -> str:
     df_resumo.columns = ['Influenciador', 'Views', 'Alcance', 'Impressoes', 'Interacoes', 'Cliques Link', 'Qtd Stories']
     df_resumo = df_resumo.sort_values('Impressoes', ascending=False)
     
-    # Formatar numeros
     for col in ['Views', 'Alcance', 'Impressoes', 'Interacoes', 'Cliques Link']:
         df_resumo[col] = df_resumo[col].apply(lambda x: f"{x:,.0f}".replace(",", "."))
     
     html += '<h3>Resumo por Influenciador</h3>'
     tabelas = dividir_tabela_html(df_resumo, max_cols=6, col_identificadora='Influenciador')
-    for i, tabela in enumerate(tabelas):
-        if len(tabelas) > 1:
-            html += f'<p class="tabela-parte">Parte {i+1} de {len(tabelas)}</p>'
-        html += tabela
-    
-    # Tabela detalhada (top 50)
-    df_det = df.sort_values('impressoes', ascending=False).head(50)
-    df_det_exibir = df_det[['influenciador', 'data', 'views', 'alcance', 'interacoes', 'clique_link']].copy()
-    df_det_exibir.columns = ['Influenciador', 'Data', 'Views', 'Alcance', 'Interacoes', 'Cliques']
-    
-    for col in ['Views', 'Alcance', 'Interacoes', 'Cliques']:
-        df_det_exibir[col] = df_det_exibir[col].apply(lambda x: f"{x:,.0f}".replace(",", "."))
-    
-    html += '<h3>Stories Individuais (Top 50)</h3>'
-    tabelas = dividir_tabela_html(df_det_exibir, max_cols=6, col_identificadora='Influenciador')
     for i, tabela in enumerate(tabelas):
         if len(tabelas) > 1:
             html += f'<p class="tabela-parte">Parte {i+1} de {len(tabelas)}</p>'
@@ -1106,24 +903,23 @@ def render_comentarios_html(campanhas_list: List[Dict]) -> str:
                             })
     
     if not todos_comentarios:
-        return '<div class="secao"><h2>Comentarios</h2><p>Nenhum comentario extraido</p></div>'
+        return '<div class="secao"><h2>Comentarios</h2><p>Nenhum comentario encontrado</p></div>'
     
     html = '<div class="secao"><h2>Comentarios</h2>'
     html += f'<p>Total de comentarios: {len(todos_comentarios)}</p>'
     
-    # Mostrar ate 100 comentarios
-    for com in todos_comentarios[:100]:
+    # Mostrar primeiros 50
+    for com in todos_comentarios[:50]:
+        texto_safe = com['texto'][:200] + '...' if len(com['texto']) > 200 else com['texto']
         html += f'''
         <div class="comentario">
-            <div class="com-header">
-                <strong>{com['autor']}</strong> em post de <em>{com['influenciador']}</em>
-            </div>
-            <div class="com-texto">{com['texto']}</div>
+            <div class="com-header"><strong>{com['autor']}</strong> em {com['influenciador']}</div>
+            <div class="com-texto">{texto_safe}</div>
         </div>
         '''
     
-    if len(todos_comentarios) > 100:
-        html += f'<p class="aviso">... e mais {len(todos_comentarios) - 100} comentarios</p>'
+    if len(todos_comentarios) > 50:
+        html += f'<p class="aviso">... e mais {len(todos_comentarios) - 50} comentarios</p>'
     
     html += '</div>'
     return html
@@ -1133,43 +929,40 @@ def render_glossario_html() -> str:
     """Renderiza glossario como HTML."""
     
     termos = [
-        ("Impressoes", "Numero total de vezes que o conteudo foi exibido (views + impressoes)"),
+        ("Impressoes", "Numero total de vezes que o conteudo foi exibido"),
         ("Alcance", "Numero de contas unicas que viram o conteudo"),
         ("Interacoes", "Soma de curtidas, comentarios, compartilhamentos e salvamentos"),
-        ("Taxa de Engajamento", "Porcentagem de interacoes em relacao as impressoes"),
-        ("Taxa de Alcance", "Porcentagem de alcance em relacao aos seguidores"),
-        ("Engajamento Efetivo", "Taxa de interacoes sobre impressoes totais"),
-        ("AIR Score", "Indice de performance do influenciador calculado pelo AIR"),
-        ("Interacoes Qualificadas", "Interacoes excluindo curtidas (comentarios + compartilhamentos + salvamentos)"),
-        ("Classificacao", "Categoria do influenciador por numero de seguidores (Nano, Micro, Mid, Macro, Mega)")
+        ("Taxa de Engajamento", "Percentual de interacoes em relacao as impressoes"),
+        ("Taxa de Alcance", "Percentual de alcance em relacao ao total de seguidores"),
+        ("CPM", "Custo por mil impressoes"),
+        ("CPE", "Custo por engajamento/interacao"),
+        ("AIR Score", "Metrica proprietaria que avalia a performance do influenciador"),
     ]
     
-    html = '<div class="secao"><h2>Glossario</h2><div class="glossario">'
+    html = '<div class="secao glossario"><h2>Glossario</h2>'
     
-    for termo, definicao in termos:
-        html += f'''
-        <div class="termo">
-            <strong>{termo}:</strong> {definicao}
-        </div>
-        '''
+    for termo, descricao in termos:
+        html += f'<div class="termo"><strong>{termo}:</strong> {descricao}</div>'
     
-    html += '</div></div>'
+    html += '</div>'
     return html
 
 
-def gerar_pdf_relatorio(campanha_id: int, paginas: List[str], config_kpis: Dict) -> bytes:
+def gerar_pdf_relatorio(campanha_id: int, paginas: List[str], config_kpis: Dict = None) -> bytes:
     """
     Gera PDF do relatorio.
     
     Args:
         campanha_id: ID da campanha
-        paginas: Lista de paginas a incluir ['big_numbers', 'kpis_influenciador', 'top_performance', 
-                 'lista_influenciadores', 'comentarios', 'glossario']
+        paginas: Lista de paginas a incluir
         config_kpis: Configuracoes de KPIs para graficos
     
     Returns:
         bytes do PDF gerado
     """
+    
+    if config_kpis is None:
+        config_kpis = {}
     
     # Carregar campanha
     campanha = data_manager.get_campanha(campanha_id)
@@ -1271,7 +1064,7 @@ def gerar_pdf_relatorio(campanha_id: int, paginas: List[str], config_kpis: Dict)
     }
     
     .grafico img {
-        max-width: 280px;
+        max-width: 300px;
         height: auto;
     }
     
