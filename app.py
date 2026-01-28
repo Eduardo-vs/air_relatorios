@@ -1,7 +1,7 @@
 """
-AIR Relatorios v8.9
+AIR Relatorios v9.0
 Sistema Completo de Analise de Campanhas
-Com autenticacao por login - Sem sidebar
+Com design moderno e modais
 """
 
 import streamlit as st
@@ -14,6 +14,7 @@ sys.path.insert(0, str(root_dir))
 from pages import dashboard, clientes, influenciadores, campanhas, configuracoes, relatorios, central_campanha
 from pages import relatorio_publico, auth
 from utils import funcoes_auxiliares, data_manager
+from utils.ui_components import inject_modern_styles
 
 # URL base do app
 APP_URL = "https://airrelatoriosgit-csve5an6pncvhztci8rbn9.streamlit.app"
@@ -25,6 +26,9 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+# Injetar estilos modernos globais
+inject_modern_styles()
 
 # CSS para esconder sidebar completamente
 st.markdown("""
