@@ -2041,84 +2041,21 @@ def preparar_dados_para_ia(campanha: dict, filtro_periodo: dict = None) -> dict:
 
 
 def render_comentarios(campanha):
-    """Extrair e classificar comentarios de posts da campanha"""
+    """Upload de CSV de comentarios por post e classificacao automatica com IA"""
     import time
     import requests
+    import pandas as pd
     
-    st.subheader("Extracao e Classificacao de Comentarios")
-    st.caption("Extraia comentarios dos posts da campanha e classifique-os com IA")
+    st.subheader("Comentarios por Conteudo")
+    st.caption("Faca upload do CSV de comentarios de cada conteudo. O sistema classifica automaticamente com IA.")
     
     campanha_id = campanha['id']
     
     # Webhook para classificacao
     WEBHOOK_URL = "https://n8n.air.com.vc/webhook/e19fe530-62b6-44af-b6d1-3aeed59cfe0b"
     
-    # ========== CONFIGURACAO DA API EXPORTCOMMENTS ==========
-    with st.expander("Configurar API ExportComments", expanded=False):
-        st.caption("Configure o token da API ExportComments.com para extrair comentarios")
-        st.markdown("[Obter token em app.exportcomments.com/user/api](https://app.exportcomments.com/user/api)")
-        
-        # Token salvo em session_state
-        api_key_saved = st.session_state.get('exportcomments_api_key', '')
-        api_key_valid = st.session_state.get('exportcomments_valid', False)
-        api_key_info = st.session_state.get('exportcomments_info', {})
-        
-        if api_key_valid and api_key_saved:
-            st.success(f"API configurada - {api_key_info.get('email', 'Token valido')}")
-            if api_key_info.get('credits'):
-                st.caption(f"Creditos disponiveis: {api_key_info.get('credits')}")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("Verificar Creditos"):
-                    from utils.export_comments import ExportCommentsClient
-                    client = ExportCommentsClient(api_key_saved)
-                    user_info = client.get_user_info()
-                    if user_info.get('success'):
-                        st.session_state['exportcomments_info'] = user_info.get('data', {})
-                        st.rerun()
-                    else:
-                        st.error(user_info.get('error'))
-            with col2:
-                if st.button("Remover Token"):
-                    st.session_state['exportcomments_api_key'] = ''
-                    st.session_state['exportcomments_valid'] = False
-                    st.session_state['exportcomments_info'] = {}
-                    st.rerun()
-        else:
-            api_key_input = st.text_input(
-                "Token da API:", 
-                type="password", 
-                placeholder="Cole seu token aqui",
-                key="exportcomments_input"
-            )
-            
-            if st.button("Validar Token"):
-                if api_key_input:
-                    with st.spinner("Validando token..."):
-                        from utils.export_comments import verificar_api_key
-                        resultado = verificar_api_key(api_key_input)
-                        
-                        if resultado.get('success'):
-                            st.session_state['exportcomments_api_key'] = api_key_input
-                            st.session_state['exportcomments_valid'] = True
-                            st.session_state['exportcomments_info'] = {
-                                'email': resultado.get('email'),
-                                'credits': resultado.get('credits')
-                            }
-                            st.success(resultado.get('message'))
-                            st.rerun()
-                        else:
-                            st.error(resultado.get('error'))
-                else:
-                    st.error("Informe o token da API")
-    
-    st.markdown("---")
-    
-    # Categorias configuradas (formato novo com descricao)
+    # Categorias configuradas
     categorias_raw = campanha.get('categorias_comentarios', [])
-    
-    # Converter para formato com descricao se necessario
     if categorias_raw and isinstance(categorias_raw[0], str):
         categorias = [{'nome': cat, 'descricao': ''} for cat in categorias_raw]
     elif categorias_raw and isinstance(categorias_raw[0], dict):
@@ -2127,305 +2064,120 @@ def render_comentarios(campanha):
         categorias = []
     
     if not categorias:
-        st.warning("Configure as categorias de comentarios na aba 'Categorias de Comentarios' antes de classificar.")
+        st.warning("Configure as categorias na aba 'Categorias de Comentarios' antes de importar.")
         return
     
-    # Buscar influenciadores e posts da campanha
+    cats_texto = ", ".join([c.get('nome', '') for c in categorias[:10]])
+    st.caption(f"Categorias: {cats_texto}")
+    
+    st.markdown("---")
+    
+    # Buscar influenciadores e posts
     influenciadores = data_manager.get_influenciadores_campanha(campanha_id)
     
-    # Coletar todos os posts com links
     posts_campanha = []
     for inf in influenciadores:
         for idx, post in enumerate(inf.get('posts', [])):
-            # Verificar todos os campos possíveis de link
             link = post.get('link', '') or post.get('link_post', '') or post.get('permalink', '') or post.get('url', '') or ''
-            
-            # Aceitar links do Instagram e TikTok
-            if link and ('instagram.com' in link or 'tiktok.com' in link):
-                posts_campanha.append({
-                    'influenciador': inf.get('nome', ''),
-                    'influenciador_id': inf.get('id'),
-                    'usuario': inf.get('usuario', ''),
-                    'link': link,
-                    'formato': post.get('formato', ''),
-                    'data': post.get('data_publicacao', ''),
-                    'curtidas': post.get('curtidas', 0),
-                    'comentarios_qtd': post.get('comentarios', 0) or post.get('comentarios_qtd', 0),
-                    'post_idx': idx
-                })
+            posts_campanha.append({
+                'influenciador': inf.get('nome', ''),
+                'influenciador_id': inf.get('id'),
+                'usuario': inf.get('usuario', ''),
+                'link': link,
+                'formato': post.get('formato', ''),
+                'data': post.get('data_publicacao', ''),
+                'post_idx': idx
+            })
     
     if not posts_campanha:
-        st.warning("Nenhum post com link do Instagram ou TikTok encontrado na campanha.")
-        st.caption("Adicione links aos posts dos influenciadores para extrair comentarios.")
+        st.info("Nenhum post encontrado na campanha.")
         return
     
-    # Mostrar categorias configuradas
-    st.markdown(f"**Categorias configuradas ({len(categorias)}):**")
-    cats_texto = ", ".join([c.get('nome', '') for c in categorias[:10]])
-    st.caption(cats_texto)
-    
-    st.markdown("---")
-    
-    # Posts disponiveis
-    st.markdown(f"**Posts da Campanha ({len(posts_campanha)} com link)**")
-    
-    import pandas as pd
-    
-    df_posts = pd.DataFrame([
-        {
-            'Influenciador': p['influenciador'],
-            'Formato': p['formato'],
-            'Data': p['data'],
-            'Curtidas': p['curtidas'],
-            'Coments': p['comentarios_qtd'],
-            'Link': p['link'][:50] + '...' if len(p['link']) > 50 else p['link']
-        }
-        for p in posts_campanha
-    ])
-    
-    st.dataframe(df_posts, use_container_width=True, hide_index=True)
-    
-    # Selecionar post para extrair
-    st.markdown("---")
-    st.markdown("**1. Extrair Comentarios**")
-    
-    # Verificar se API esta configurada
-    api_key = st.session_state.get('exportcomments_api_key', '')
-    api_valid = st.session_state.get('exportcomments_valid', False)
-    
-    # Criar opcoes de posts (sempre, para evitar erro de variavel)
-    opcoes_posts = [f"{p['influenciador']} - {p['formato']} ({p['data']})" for p in posts_campanha]
-    opcoes_posts.insert(0, "Todos os posts")
-    
-    if not api_valid or not api_key:
-        st.warning("Configure o token da API ExportComments acima para extrair comentarios")
-    else:
-        post_selecionado = st.selectbox(
-            "Selecione o post:",
-            opcoes_posts,
-            key="select_post_comentarios"
-        )
-        
-        st.caption("A API ExportComments.com extrai comentarios de posts publicos do Instagram, TikTok, YouTube e outras plataformas")
-        
-        if st.button("Extrair Comentarios"):
-            st.session_state['extraindo_comentarios'] = True
-            st.session_state['post_selecionado'] = post_selecionado
-            st.rerun()
-    
-    # Processar extracao
-    if st.session_state.get('extraindo_comentarios', False) and api_valid:
-        post_sel = st.session_state.get('post_selecionado', '')
-        
-        # Determinar quais posts extrair
-        if post_sel == "Todos os posts":
-            posts_extrair = posts_campanha
-        else:
-            idx = opcoes_posts.index(post_sel) - 1
-            posts_extrair = [posts_campanha[idx]]
-        
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        comentarios_por_post = {}
-        
-        try:
-            from utils.export_comments import ExportCommentsClient
-            
-            client = ExportCommentsClient(api_key)
-            
-            for i, post in enumerate(posts_extrair):
-                link = post.get('link', '')
-                
-                if not link:
-                    st.warning(f"{post['influenciador']}: Post sem link")
-                    continue
-                
-                status_text.text(f"Criando job para {post['influenciador']} ({i+1}/{len(posts_extrair)})...")
-                progress_bar.progress((i) / len(posts_extrair))
-                
-                # Callback para atualizar status
-                def progress_callback(status, elapsed, count):
-                    status_text.text(f"{post['influenciador']}: {status} ({int(elapsed)}s) - {count} comentarios...")
-                
-                # Extrair usando ExportComments
-                resultado = client.extract_comments(
-                    url=link,
-                    timeout=300,
-                    progress_callback=progress_callback
-                )
-                
-                if resultado.get('success'):
-                    comentarios = resultado.get('comentarios', [])
-                    
-                    # Adicionar info do post aos comentarios
-                    for c in comentarios:
-                        c['post_link'] = link
-                        c['influenciador'] = post['influenciador']
-                        c['influenciador_id'] = post['influenciador_id']
-                    
-                    comentarios_por_post[link] = {
-                        'comentarios': comentarios,
-                        'influenciador': post['influenciador'],
-                        'influenciador_id': post['influenciador_id']
-                    }
-                    status_text.text(f"{post['influenciador']}: {len(comentarios)} comentarios extraidos")
-                else:
-                    erro_msg = resultado.get('error', 'Erro desconhecido')
-                    st.warning(f"{post['influenciador']}: {erro_msg}")
-                
-                time.sleep(1)  # Pequena pausa entre requests
-            
-            progress_bar.progress(1.0)
-            
-            total = sum(len(p['comentarios']) for p in comentarios_por_post.values())
-            if total > 0:
-                st.session_state['comentarios_por_post'] = comentarios_por_post
-                st.success(f"Total: {total} comentarios de {len(comentarios_por_post)} posts")
-            else:
-                st.warning("Nenhum comentario extraido")
-                
-        except ImportError as e:
-            st.error(f"Erro ao importar modulo: {str(e)}")
-        except Exception as e:
-            st.error(f"Erro na extracao: {str(e)}")
-        
-        st.session_state['extraindo_comentarios'] = False
-        time.sleep(1)
-        st.rerun()
-    
-    # Mostrar comentarios extraidos e classificar
-    comentarios_por_post = st.session_state.get('comentarios_por_post', {})
-    
-    if comentarios_por_post:
-        total = sum(len(p['comentarios']) for p in comentarios_por_post.values())
-        
-        st.markdown("---")
-        st.markdown(f"**Comentarios Extraidos: {total} de {len(comentarios_por_post)} posts**")
-        
-        # Preview
-        with st.expander("Ver preview"):
-            for post_link, dados in list(comentarios_por_post.items())[:3]:
-                st.markdown(f"**{dados['influenciador']}** ({len(dados['comentarios'])} comentarios)")
-                for c in dados['comentarios'][:3]:
-                    st.caption(f"@{c.get('usuario', '')}: {c.get('texto', '')[:100]}")
-                st.markdown("---")
-        
-        # Classificar
-        st.markdown("**2. Classificar com IA**")
-        st.caption("Envia os comentarios de cada post em lote para a IA classificar")
-        
-        if st.button("Classificar Comentarios", type="primary"):
-            st.session_state['classificando'] = True
-            st.rerun()
-        
-        # Processar classificacao
-        if st.session_state.get('classificando', False):
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            
-            total_posts = len(comentarios_por_post)
-            total_classificados = 0
-            
-            for idx, (post_link, dados) in enumerate(comentarios_por_post.items()):
-                status_text.text(f"Classificando {dados['influenciador']} ({idx+1}/{total_posts})...")
-                progress_bar.progress(idx / total_posts)
-                
-                comentarios = dados['comentarios']
-                
-                # Preparar payload para o webhook
-                # Envia todos os comentarios do post + categorias com descricoes
-                payload = {
-                    "acao": "classificar_comentarios",
-                    "campanha_id": campanha_id,
-                    "post_url": post_link,
-                    "influenciador": dados['influenciador'],
-                    "comentarios": [
-                        {
-                            "id": c.get('id', ''),
-                            "usuario": c.get('usuario', ''),
-                            "texto": c.get('texto', ''),
-                            "likes": c.get('likes', 0)
-                        }
-                        for c in comentarios
-                    ],
-                    "categorias": [
-                        {
-                            "nome": cat.get('nome', ''),
-                            "descricao": cat.get('descricao', '')
-                        }
-                        for cat in categorias[:10]
-                    ],
-                    "timestamp": datetime.now().isoformat()
-                }
-                
-                try:
-                    response = requests.post(
-                        WEBHOOK_URL,
-                        json=payload,
-                        timeout=180,
-                        headers={"Content-Type": "application/json"}
-                    )
-                    
-                    if response.status_code == 200:
-                        resultado = response.json()
-                        
-                        # Processar resposta
-                        # Formato esperado: lista de classificacoes por comentario
-                        # Cada classificacao tem {"categoria_nome": {"teste": true/false}}
-                        classificacoes = extrair_classificacoes_webhook(resultado)
-                        
-                        # Aplicar classificacoes aos comentarios
-                        comentarios_classificados = aplicar_classificacoes(comentarios, classificacoes, categorias)
-                        
-                        # Salvar no banco
-                        salvos = data_manager.salvar_comentarios(
-                            campanha_id,
-                            post_link,
-                            comentarios_classificados,
-                            influenciador_id=dados['influenciador_id'],
-                            post_shortcode=post_link.split('/')[-2] if '/' in post_link else ''
-                        )
-                        total_classificados += salvos
-                        
-                    else:
-                        st.warning(f"{dados['influenciador']}: Erro HTTP {response.status_code}")
-                        
-                except requests.exceptions.Timeout:
-                    st.warning(f"{dados['influenciador']}: Timeout")
-                except Exception as e:
-                    st.warning(f"{dados['influenciador']}: {str(e)[:50]}")
-                
-                time.sleep(0.5)
-            
-            progress_bar.progress(1.0)
-            st.success(f"{total_classificados} comentarios classificados e salvos!")
-            
-            # Limpar extraidos
-            st.session_state['comentarios_por_post'] = {}
-            st.session_state['classificando'] = False
-            time.sleep(1)
-            st.rerun()
-    
-    # Comentarios salvos
-    st.markdown("---")
-    st.markdown("**Comentarios Salvos**")
-    
+    # Comentarios salvos no banco (por post)
     comentarios_salvos = data_manager.get_comentarios_campanha(campanha_id)
     
-    if comentarios_salvos:
+    # Agrupar comentarios salvos por post_url
+    coments_por_post = {}
+    for c in comentarios_salvos:
+        post_url = c.get('post_url', '')
+        if post_url not in coments_por_post:
+            coments_por_post[post_url] = []
+        coments_por_post[post_url].append(c)
+    
+    # Resumo geral
+    total_coments = len(comentarios_salvos)
+    total_classificados = len([c for c in comentarios_salvos if c.get('categoria') and c.get('categoria') != 'Nao Classificado'])
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Comentarios", total_coments)
+    with col2:
+        st.metric("Classificados", total_classificados)
+    with col3:
+        st.metric("Posts com Coments", len(coments_por_post))
+    
+    st.markdown("---")
+    
+    # Lista de posts com upload
+    st.markdown(f"**Conteudos da Campanha ({len(posts_campanha)})**")
+    
+    for i, post in enumerate(posts_campanha):
+        link = post['link']
+        nome = post['influenciador']
+        formato = post['formato']
+        data_post = post['data']
+        qtd_salvos = len(coments_por_post.get(link, []))
+        
+        # Link curto para exibicao
+        link_curto = link[:60] + '...' if len(link) > 60 else link
+        
+        # Card do post
+        col_info, col_link, col_status, col_upload = st.columns([2, 3, 1, 2])
+        
+        with col_info:
+            st.markdown(f"**{nome}**")
+            st.caption(f"{formato} | {data_post}")
+        
+        with col_link:
+            if link:
+                st.markdown(f"<a href='{link}' target='_blank' style='font-size:11px;color:#374151;word-break:break-all;'>{link_curto}</a>", unsafe_allow_html=True)
+            else:
+                st.caption("Sem link")
+        
+        with col_status:
+            if qtd_salvos > 0:
+                st.markdown(f"<span style='font-size:12px;color:#16a34a;font-weight:500;'>{qtd_salvos} coments</span>", unsafe_allow_html=True)
+            else:
+                st.caption("-")
+        
+        with col_upload:
+            uploaded = st.file_uploader(
+                "CSV",
+                type=["csv"],
+                key=f"csv_upload_{campanha_id}_{i}",
+                label_visibility="collapsed"
+            )
+            
+            if uploaded is not None:
+                # Processar CSV
+                _processar_csv_comentarios(
+                    uploaded, campanha_id, post, categorias, 
+                    WEBHOOK_URL, i
+                )
+        
+        # Separador sutil
+        if i < len(posts_campanha) - 1:
+            st.markdown("<hr style='margin:0.5rem 0;border-color:#f3f4f6;'>", unsafe_allow_html=True)
+    
+    # Secao: comentarios salvos
+    if total_coments > 0:
+        st.markdown("---")
+        st.markdown("**Resumo de Comentarios Salvos**")
+        
+        # Estatisticas por categoria
         stats = data_manager.get_estatisticas_comentarios(campanha_id)
         
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Total", stats.get('total', 0))
-        with col2:
-            classificados = len([c for c in comentarios_salvos if c.get('categoria')])
-            st.metric("Classificados", classificados)
-        
-        # Por categoria
         if stats.get('por_categoria'):
-            st.markdown("**Por Categoria:**")
             for cat, dados in stats['por_categoria'].items():
                 col1, col2 = st.columns([3, 1])
                 with col1:
@@ -2433,12 +2185,12 @@ def render_comentarios(campanha):
                 with col2:
                     st.caption(f"{cat}: {dados['quantidade']} ({dados['percentual']}%)")
         
-        # Tabela
-        with st.expander(f"Ver todos ({len(comentarios_salvos)})"):
+        # Tabela completa em expander
+        with st.expander(f"Ver todos ({total_coments} comentarios)"):
             df = pd.DataFrame([
                 {
                     'Usuario': c.get('usuario', ''),
-                    'Texto': c.get('texto', '')[:60] + '...' if len(c.get('texto', '')) > 60 else c.get('texto', ''),
+                    'Texto': c.get('texto', '')[:80] + '...' if len(c.get('texto', '')) > 80 else c.get('texto', ''),
                     'Categoria': c.get('categoria', '-'),
                     'Likes': c.get('likes', 0)
                 }
@@ -2446,16 +2198,170 @@ def render_comentarios(campanha):
             ])
             st.dataframe(df, use_container_width=True, hide_index=True)
         
-        # Excluir
-        col1, col2 = st.columns([3, 1])
+        # Botao excluir
+        col1, col2 = st.columns([4, 1])
         with col2:
-            if st.button("Excluir todos", type="secondary"):
+            if st.button("Excluir todos", key="btn_excluir_coments"):
                 data_manager.excluir_comentarios_campanha(campanha_id)
-                st.success("Excluidos!")
+                st.success("Comentarios excluidos!")
+                import time
                 time.sleep(1)
                 st.rerun()
-    else:
-        st.info("Nenhum comentario salvo. Extraia e classifique os comentarios dos posts acima.")
+
+
+def _processar_csv_comentarios(uploaded_file, campanha_id, post_info, categorias, webhook_url, post_index):
+    """Processa CSV de comentarios e envia para classificacao"""
+    import pandas as pd
+    import requests
+    import time
+    
+    try:
+        # Ler CSV
+        df = pd.read_csv(uploaded_file, encoding='utf-8-sig')
+        
+        # Validar colunas obrigatorias
+        colunas_necessarias = ['Comment']
+        colunas_presentes = [c for c in df.columns if c in ['Comment', 'Username', 'Name', 'Date', 'Likes', 'Comment ID', 'Profile URL', 'Comment URL']]
+        
+        if 'Comment' not in df.columns:
+            st.error("CSV invalido: coluna 'Comment' nao encontrada. Use o formato CSV do ExportComments.")
+            return
+        
+        # Filtrar linhas vazias
+        df = df[df['Comment'].notna() & (df['Comment'].str.strip() != '')]
+        
+        if len(df) == 0:
+            st.warning("Nenhum comentario valido no CSV.")
+            return
+        
+        st.info(f"{len(df)} comentarios encontrados no CSV de {post_info['influenciador']}")
+        
+        # Converter para lista de comentarios
+        comentarios = []
+        for _, row in df.iterrows():
+            comentarios.append({
+                'id': str(row.get('Comment ID', '')),
+                'usuario': str(row.get('Username', row.get('Name', ''))),
+                'texto': str(row.get('Comment', '')),
+                'likes': int(row.get('Likes', 0)) if pd.notna(row.get('Likes', 0)) else 0,
+                'data': str(row.get('Date', '')),
+                'perfil_url': str(row.get('Profile URL', '')),
+                'comentario_url': str(row.get('Comment URL', '')),
+                'post_link': post_info['link'],
+                'influenciador': post_info['influenciador'],
+                'influenciador_id': post_info['influenciador_id']
+            })
+        
+        # Enviar para webhook de classificacao automaticamente
+        progress = st.progress(0)
+        status = st.empty()
+        
+        status.text(f"Classificando {len(comentarios)} comentarios com IA...")
+        progress.progress(0.3)
+        
+        # Preparar payload
+        payload = {
+            "acao": "classificar_comentarios",
+            "campanha_id": campanha_id,
+            "post_url": post_info['link'],
+            "influenciador": post_info['influenciador'],
+            "comentarios": [
+                {
+                    "id": c.get('id', ''),
+                    "usuario": c.get('usuario', ''),
+                    "texto": c.get('texto', ''),
+                    "likes": c.get('likes', 0)
+                }
+                for c in comentarios
+            ],
+            "categorias": [
+                {
+                    "nome": cat.get('nome', ''),
+                    "descricao": cat.get('descricao', '')
+                }
+                for cat in categorias[:10]
+            ],
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        progress.progress(0.5)
+        
+        try:
+            response = requests.post(
+                webhook_url,
+                json=payload,
+                timeout=180,
+                headers={"Content-Type": "application/json"}
+            )
+            
+            progress.progress(0.8)
+            
+            if response.status_code == 200:
+                resultado = response.json()
+                
+                # Processar classificacoes
+                classificacoes = extrair_classificacoes_webhook(resultado)
+                comentarios_classificados = aplicar_classificacoes(comentarios, classificacoes, categorias)
+                
+                # Salvar no banco
+                salvos = data_manager.salvar_comentarios(
+                    campanha_id,
+                    post_info['link'],
+                    comentarios_classificados,
+                    influenciador_id=post_info['influenciador_id'],
+                    post_shortcode=post_info['link'].split('/')[-2] if '/' in post_info['link'] else ''
+                )
+                
+                progress.progress(1.0)
+                status.empty()
+                st.success(f"{salvos} comentarios classificados e salvos!")
+                time.sleep(1.5)
+                st.rerun()
+            else:
+                progress.progress(1.0)
+                status.empty()
+                st.error(f"Erro na classificacao: HTTP {response.status_code}")
+                
+                # Salvar sem classificacao
+                for c in comentarios:
+                    c['categoria'] = 'Nao Classificado'
+                    c['classificado'] = 0
+                
+                salvos = data_manager.salvar_comentarios(
+                    campanha_id,
+                    post_info['link'],
+                    comentarios,
+                    influenciador_id=post_info['influenciador_id'],
+                    post_shortcode=post_info['link'].split('/')[-2] if '/' in post_info['link'] else ''
+                )
+                st.warning(f"{salvos} comentarios salvos sem classificacao (erro no webhook)")
+                time.sleep(1.5)
+                st.rerun()
+                
+        except requests.exceptions.Timeout:
+            progress.progress(1.0)
+            status.empty()
+            st.error("Timeout na classificacao. Salvando comentarios sem classificacao...")
+            
+            for c in comentarios:
+                c['categoria'] = 'Nao Classificado'
+                c['classificado'] = 0
+            
+            data_manager.salvar_comentarios(
+                campanha_id, post_info['link'], comentarios,
+                influenciador_id=post_info['influenciador_id'],
+                post_shortcode=post_info['link'].split('/')[-2] if '/' in post_info['link'] else ''
+            )
+            time.sleep(1.5)
+            st.rerun()
+            
+        except Exception as e:
+            progress.progress(1.0)
+            status.empty()
+            st.error(f"Erro: {str(e)}")
+    
+    except Exception as e:
+        st.error(f"Erro ao ler CSV: {str(e)}. Verifique se o arquivo esta no formato correto (CSV do ExportComments).")
 
 
 def extrair_classificacoes_webhook(resultado) -> list:
