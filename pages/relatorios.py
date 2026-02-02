@@ -2287,11 +2287,13 @@ def render_comentarios(campanhas_list, cores):
             else:
                 st.info(f"Nenhum comentario para o formato {formato_sel}")
     
-    # Nuvem de palavras (30% centralizada)
+    # Nuvem de palavras (circular, preta, centralizada)
     try:
         from wordcloud import WordCloud
         import matplotlib.pyplot as plt
+        import matplotlib
         import re
+        import numpy as np
         
         todos_textos = " ".join([c.get('texto', '') for c in comentarios])
         
@@ -2305,31 +2307,47 @@ def render_comentarios(campanhas_list, cores):
             'me', 'ti', 'lhe', 'pra', 'pro', 'the', 'and', 'is', 'to', 'of', 'in',
             'it', 'you', 'that', 'this', 'for', 'are', 'was', 'with', 'on', 'at',
             'kk', 'kkk', 'kkkk', 'kkkkk', 'haha', 'hahaha', 'rs', 'rsrs',
-            'ne', 'ai', 'eh', 'ta', 'tb', 'vc', 'vcs', 'q', 'pq', 'tbm'
+            'ne', 'ai', 'eh', 'ta', 'tb', 'vc', 'vcs', 'q', 'pq', 'tbm',
+            'nan', 'none', 'null'
         }
         
         texto_limpo = re.sub(r'[^\w\s]', ' ', todos_textos.lower())
         texto_limpo = re.sub(r'\s+', ' ', texto_limpo).strip()
         
         if texto_limpo and len(texto_limpo.split()) > 5:
+            # Mascara circular
+            size = 600
+            center = size // 2
+            Y, X = np.ogrid[:size, :size]
+            dist = np.sqrt((X - center)**2 + (Y - center)**2)
+            mask = np.full((size, size), 255, dtype=np.uint8)
+            mask[dist <= center] = 0
+            
+            # Cor preta fixa
+            def black_color_func(**kwargs):
+                return "rgb(17, 24, 39)"
+            
             wc = WordCloud(
-                width=600, height=300,
+                width=size, height=size,
                 background_color='white',
                 stopwords=stopwords_ptbr,
-                max_words=60,
-                colormap='Greys',
-                prefer_horizontal=0.7,
-                min_font_size=10
+                mask=mask,
+                max_words=150,
+                color_func=black_color_func,
+                prefer_horizontal=0.6,
+                min_font_size=8,
+                max_font_size=80,
+                relative_scaling=0.5,
+                contour_width=0,
             ).generate(texto_limpo)
             
-            fig_wc, ax_wc = plt.subplots(figsize=(5, 2.5))
+            fig_wc, ax_wc = plt.subplots(figsize=(5, 5))
             ax_wc.imshow(wc, interpolation='bilinear')
             ax_wc.axis('off')
             plt.tight_layout(pad=0)
             
-            # Centralizar em 30% da pagina
-            col_l, col_wc, col_r = st.columns([3.5, 3, 3.5])
-            with col_wc:
+            col_l, col_wc_c, col_r = st.columns([3.5, 3, 3.5])
+            with col_wc_c:
                 st.pyplot(fig_wc)
             plt.close(fig_wc)
     except Exception as e:

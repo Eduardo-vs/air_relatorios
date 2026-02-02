@@ -451,17 +451,31 @@ def buscar_posts_influenciador(profile_id: str, limite: int = 100, hashtags: Lis
             # Extrair dados do post
             caption = post_raw.get('caption', '') or ''
             post_type = post_raw.get('type', 'post') or 'post'
-            permalink = post_raw.get('permalink', '') or ''
+            permalink = post_raw.get('permalink', '') or post_raw.get('link', '') or post_raw.get('url', '') or ''
             thumbnail = post_raw.get('thumbnail', '') or post_raw.get('image', '') or ''
-            short_code = post_raw.get('short_code', '') or ''
+            short_code = post_raw.get('short_code', '') or post_raw.get('shortcode', '') or post_raw.get('code', '') or ''
             network = post_raw.get('network', 'instagram') or 'instagram'
+            post_id = post_raw.get('id', '') or post_raw.get('post_id', '') or ''
+            username = post_raw.get('username', '') or post_raw.get('user', '') or ''
             
-            # Se não tem permalink mas tem short_code, construir
+            # Se nao tem permalink, tentar construir de varias formas
             if not permalink and short_code:
                 if network == 'instagram':
                     permalink = f"https://www.instagram.com/p/{short_code}/"
                 elif network == 'tiktok':
-                    permalink = f"https://www.tiktok.com/@user/video/{short_code}"
+                    permalink = f"https://www.tiktok.com/@{username}/video/{short_code}"
+            
+            # Se ainda nao tem permalink, tentar extrair do thumbnail (instagram CDN as vezes tem o shortcode)
+            if not permalink and post_id and network == 'instagram':
+                # Tentar usar o post_id como shortcode
+                permalink = f"https://www.instagram.com/p/{post_id}/"
+            
+            # Se ainda nao tem, tentar extrair shortcode da URL do thumbnail
+            if not permalink and thumbnail and 'instagram' in thumbnail:
+                import re as _re
+                match = _re.search(r'/p/([A-Za-z0-9_-]+)/', thumbnail)
+                if match:
+                    permalink = f"https://www.instagram.com/p/{match.group(1)}/"
             
             # Mapear tipo para formato
             formato_map = {
@@ -519,8 +533,18 @@ def buscar_posts_influenciador(profile_id: str, limite: int = 100, hashtags: Lis
             "success": True, 
             "posts": posts_processados, 
             "total_encontrados": len(todos_posts),
-            "raw_data": todos_posts[:5],  # Primeiros 5 para debug
-            "api_debug": api_debug  # DEBUG: Info de cada chamada a API
+            "raw_data": todos_posts[:3],  # Primeiros 3 para debug
+            "raw_keys": list(todos_posts[0].keys()) if todos_posts else [],
+            "first_post_link_fields": {
+                'permalink': todos_posts[0].get('permalink', 'VAZIO') if todos_posts else 'SEM POSTS',
+                'link': todos_posts[0].get('link', 'VAZIO') if todos_posts else 'SEM POSTS',
+                'url': todos_posts[0].get('url', 'VAZIO') if todos_posts else 'SEM POSTS',
+                'short_code': todos_posts[0].get('short_code', 'VAZIO') if todos_posts else 'SEM POSTS',
+                'shortcode': todos_posts[0].get('shortcode', 'VAZIO') if todos_posts else 'SEM POSTS',
+                'code': todos_posts[0].get('code', 'VAZIO') if todos_posts else 'SEM POSTS',
+                'id': todos_posts[0].get('id', 'VAZIO') if todos_posts else 'SEM POSTS',
+            } if todos_posts else {},
+            "api_debug": api_debug
         }
         
     except Exception as e:
