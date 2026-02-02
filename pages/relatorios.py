@@ -2165,19 +2165,33 @@ def coletar_dados_influenciadores(campanhas_list, filtro_formato=None):
 def render_comentarios(campanhas_list, cores):
     st.subheader("Analise de Comentarios")
     
-    # Buscar comentarios da tabela comentarios_posts
+    # Buscar comentarios e mapear formatos por post_url
     comentarios = []
+    formatos_por_url = {}
+    
     for camp in campanhas_list:
         camp_id = camp.get('id')
-        if camp_id:
-            coments_banco = data_manager.get_comentarios_campanha(camp_id, apenas_classificados=True)
-            for c in coments_banco:
-                comentarios.append({
-                    'usuario': c.get('usuario', ''),
-                    'texto': c.get('texto', ''),
-                    'categoria': c.get('categoria', 'Geral'),
-                    'likes': c.get('likes', 0)
-                })
+        if not camp_id:
+            continue
+        
+        # Mapear post_url -> formato
+        for camp_inf in camp.get('influenciadores', []):
+            for post in camp_inf.get('posts', []):
+                link = post.get('link', '') or post.get('link_post', '') or post.get('permalink', '') or post.get('url', '') or ''
+                fmt = post.get('formato', 'Outro') or 'Outro'
+                if link:
+                    formatos_por_url[link] = fmt
+        
+        coments_banco = data_manager.get_comentarios_campanha(camp_id, apenas_classificados=True)
+        for c in coments_banco:
+            post_url = c.get('post_url', '')
+            comentarios.append({
+                'usuario': c.get('usuario', ''),
+                'texto': c.get('texto', ''),
+                'categoria': c.get('categoria', 'Geral'),
+                'likes': c.get('likes', 0),
+                'formato': formatos_por_url.get(post_url, 'Outro')
+            })
     
     if not comentarios:
         st.info("Nenhum comentario classificado")
@@ -2199,35 +2213,88 @@ def render_comentarios(campanhas_list, cores):
                 comentarios_por_cat[cat].append(c)
     
     # Metricas
-    col1, col2 = st.columns([1, 3])
-    with col1:
-        st.metric("Total Classificados", total)
-    with col2:
-        cats_texto = ", ".join([f"{cat}: {qtd}" for cat, qtd in categorias_count.most_common(6)])
-        st.caption(cats_texto)
+    st.metric("Total Classificados", total)
     
-    # Grafico de barras por categoria
+    # Graficos lado a lado: barras + pizza com filtro
     if categorias_count:
-        df_cat = pd.DataFrame(categorias_count.most_common(), columns=['Categoria', 'Quantidade'])
-        fig = go.Figure()
-        fig.add_trace(go.Bar(
-            x=df_cat['Categoria'], 
-            y=df_cat['Quantidade'], 
-            marker_color=cores[:len(df_cat)]
-        ))
-        fig.update_layout(title='Comentarios por Categoria', height=350)
-        st.plotly_chart(fig, use_container_width=True)
+        col_barras, col_pizza = st.columns(2)
+        
+        # Grafico de barras com valores absolutos
+        with col_barras:
+            df_cat = pd.DataFrame(categorias_count.most_common(), columns=['Categoria', 'Quantidade'])
+            fig_bar = go.Figure()
+            fig_bar.add_trace(go.Bar(
+                x=df_cat['Categoria'], 
+                y=df_cat['Quantidade'], 
+                marker_color=cores[:len(df_cat)],
+                text=df_cat['Quantidade'],
+                textposition='outside',
+                textfont=dict(size=11)
+            ))
+            fig_bar.update_layout(
+                title='Comentarios por Categoria',
+                height=400,
+                yaxis=dict(visible=False),
+                margin=dict(t=40, b=10)
+            )
+            st.plotly_chart(fig_bar, use_container_width=True)
+        
+        # Pizza com filtro de formato
+        with col_pizza:
+            formatos_disponiveis = sorted(set(c.get('formato', 'Outro') for c in comentarios))
+            formatos_disponiveis.insert(0, "Todos")
+            
+            formato_sel = st.selectbox(
+                "Formato:", formatos_disponiveis, 
+                key="filtro_formato_coments",
+                label_visibility="collapsed"
+            )
+            
+            # Filtrar por formato
+            if formato_sel == "Todos":
+                coments_filtrados = comentarios
+            else:
+                coments_filtrados = [c for c in comentarios if c.get('formato') == formato_sel]
+            
+            # Recontar categorias filtradas
+            cat_count_filtrado = Counter()
+            for c in coments_filtrados:
+                cats = c.get('categoria', 'Geral').split(' | ')
+                for cat in cats:
+                    cat = cat.strip()
+                    if cat and cat not in ('Pendente', 'Nao Classificado'):
+                        cat_count_filtrado[cat] += 1
+            
+            if cat_count_filtrado:
+                df_pizza = pd.DataFrame(cat_count_filtrado.most_common(), columns=['Categoria', 'Quantidade'])
+                fig_pie = go.Figure()
+                fig_pie.add_trace(go.Pie(
+                    labels=df_pizza['Categoria'],
+                    values=df_pizza['Quantidade'],
+                    marker=dict(colors=cores[:len(df_pizza)]),
+                    textinfo='label+percent',
+                    textfont=dict(size=11),
+                    hole=0.3
+                ))
+                titulo_pizza = f'Participacao por Categoria ({formato_sel})' if formato_sel != "Todos" else 'Participacao por Categoria'
+                fig_pie.update_layout(
+                    title=titulo_pizza,
+                    height=380,
+                    showlegend=False,
+                    margin=dict(t=40, b=10)
+                )
+                st.plotly_chart(fig_pie, use_container_width=True)
+            else:
+                st.info(f"Nenhum comentario para o formato {formato_sel}")
     
-    # Nuvem de palavras
+    # Nuvem de palavras (30% centralizada)
     try:
         from wordcloud import WordCloud
         import matplotlib.pyplot as plt
         import re
         
-        # Juntar todos os textos
         todos_textos = " ".join([c.get('texto', '') for c in comentarios])
         
-        # Stopwords pt-br
         stopwords_ptbr = {
             'a', 'o', 'e', 'de', 'do', 'da', 'dos', 'das', 'em', 'no', 'na', 'nos', 'nas',
             'um', 'uma', 'uns', 'umas', 'que', 'para', 'com', 'por', 'se', 'mais', 'mas',
@@ -2241,26 +2308,29 @@ def render_comentarios(campanhas_list, cores):
             'ne', 'ai', 'eh', 'ta', 'tb', 'vc', 'vcs', 'q', 'pq', 'tbm'
         }
         
-        # Limpar texto
         texto_limpo = re.sub(r'[^\w\s]', ' ', todos_textos.lower())
         texto_limpo = re.sub(r'\s+', ' ', texto_limpo).strip()
         
         if texto_limpo and len(texto_limpo.split()) > 5:
             wc = WordCloud(
-                width=800, height=350,
+                width=600, height=300,
                 background_color='white',
                 stopwords=stopwords_ptbr,
-                max_words=80,
+                max_words=60,
                 colormap='Greys',
                 prefer_horizontal=0.7,
                 min_font_size=10
             ).generate(texto_limpo)
             
-            fig_wc, ax_wc = plt.subplots(figsize=(10, 4.5))
+            fig_wc, ax_wc = plt.subplots(figsize=(5, 2.5))
             ax_wc.imshow(wc, interpolation='bilinear')
             ax_wc.axis('off')
             plt.tight_layout(pad=0)
-            st.pyplot(fig_wc)
+            
+            # Centralizar em 30% da pagina
+            col_l, col_wc, col_r = st.columns([3.5, 3, 3.5])
+            with col_wc:
+                st.pyplot(fig_wc)
             plt.close(fig_wc)
     except Exception as e:
         st.caption(f"Nuvem de palavras indisponivel: {str(e)[:60]}")
@@ -2274,7 +2344,6 @@ def render_comentarios(campanhas_list, cores):
         if not coments_cat:
             continue
         
-        # Pegar 3 exemplos (priorizando os com mais likes)
         exemplos = sorted(coments_cat, key=lambda x: x.get('likes', 0), reverse=True)[:3]
         
         st.markdown(f"**{cat}** ({categorias_count[cat]} comentarios)")
