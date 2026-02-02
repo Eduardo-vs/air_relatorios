@@ -1,6 +1,7 @@
 """
 UI Components - Sistema de Design Moderno
 Componentes reutilizaveis com modais, botoes e estilos consistentes
+Identidade Visual: AIR (preto/cinza escuro)
 """
 
 import streamlit as st
@@ -9,7 +10,7 @@ import uuid
 
 
 def inject_modern_styles():
-    """Injeta estilos CSS modernos globais"""
+    """Injeta estilos CSS modernos globais - Identidade AIR"""
     st.markdown("""
     <style>
     /* ========== FONTE GLOBAL ========== */
@@ -51,27 +52,27 @@ def inject_modern_styles():
         color: #6b7280 !important;
     }
     
-    /* ========== BOTOES MODERNOS ========== */
+    /* ========== BOTOES MODERNOS - AIR ========== */
     .stButton > button {
         font-family: 'Inter', sans-serif !important;
         font-size: 12px !important;
         font-weight: 500 !important;
         padding: 0.45rem 0.9rem !important;
         border-radius: 8px !important;
-        border: 1px solid transparent !important;
+        border: 1px solid #e5e7eb !important;
         transition: all 0.2s ease !important;
         white-space: nowrap !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
         min-height: 36px !important;
-        background: #f8f9fa !important;
+        background: #fafafa !important;
         color: #374151 !important;
     }
     
     .stButton > button:hover {
-        background: rgba(124, 58, 237, 0.08) !important;
-        border-color: rgba(124, 58, 237, 0.3) !important;
-        color: #7c3aed !important;
+        background: rgba(17, 24, 39, 0.06) !important;
+        border-color: #111827 !important;
+        color: #111827 !important;
         transform: translateY(-1px) !important;
     }
     
@@ -79,18 +80,18 @@ def inject_modern_styles():
         transform: translateY(0) !important;
     }
     
-    /* Botao primario */
+    /* Botao primario - AIR Black */
     .stButton > button[kind="primary"],
     .stButton > button[data-testid="baseButton-primary"] {
-        background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%) !important;
+        background: #111827 !important;
         color: white !important;
         border: none !important;
     }
     
     .stButton > button[kind="primary"]:hover,
     .stButton > button[data-testid="baseButton-primary"]:hover {
-        background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%) !important;
-        box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3) !important;
+        background: #1f2937 !important;
+        box-shadow: 0 4px 12px rgba(17, 24, 39, 0.25) !important;
         color: white !important;
     }
     
@@ -110,8 +111,8 @@ def inject_modern_styles():
     .stTextInput > div > div > input:focus,
     .stNumberInput > div > div > input:focus,
     .stTextArea > div > div > textarea:focus {
-        border-color: #7c3aed !important;
-        box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1) !important;
+        border-color: #111827 !important;
+        box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08) !important;
         outline: none !important;
     }
     
@@ -124,6 +125,10 @@ def inject_modern_styles():
         border-radius: 8px !important;
         border-color: #e5e7eb !important;
         background: white !important;
+    }
+    
+    .stSelectbox [data-baseweb="select"] > div:hover {
+        border-color: #111827 !important;
     }
     
     /* ========== LABELS ========== */
@@ -145,7 +150,7 @@ def inject_modern_styles():
         font-size: 13px !important;
     }
     
-    /* ========== TABS MODERNAS ========== */
+    /* ========== TABS MODERNAS - AIR ========== */
     .stTabs [data-baseweb="tab-list"] {
         gap: 0 !important;
         background: #f3f4f6 !important;
@@ -166,13 +171,13 @@ def inject_modern_styles():
     }
     
     .stTabs [data-baseweb="tab"]:hover {
-        color: #7c3aed !important;
-        background: rgba(124, 58, 237, 0.05) !important;
+        color: #111827 !important;
+        background: rgba(17, 24, 39, 0.04) !important;
     }
     
     .stTabs [aria-selected="true"] {
         background: white !important;
-        color: #7c3aed !important;
+        color: #111827 !important;
         box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
     }
     
@@ -192,6 +197,7 @@ def inject_modern_styles():
     [data-testid="stMetricValue"] {
         font-size: 1.4rem !important;
         font-weight: 600 !important;
+        color: #111827 !important;
     }
     
     [data-testid="stMetricLabel"] {
@@ -250,18 +256,18 @@ def inject_modern_styles():
         font-size: 12px !important;
         padding: 0.45rem 0.9rem !important;
         border-radius: 8px !important;
-        background: #f8f9fa !important;
+        background: #fafafa !important;
         border: 1px solid #e5e7eb !important;
         color: #374151 !important;
     }
     
     .stDownloadButton > button:hover {
-        background: rgba(124, 58, 237, 0.08) !important;
-        border-color: rgba(124, 58, 237, 0.3) !important;
-        color: #7c3aed !important;
+        background: rgba(17, 24, 39, 0.06) !important;
+        border-color: #111827 !important;
+        color: #111827 !important;
     }
     
-    /* ========== BADGES ========== */
+    /* ========== BADGES - AIR ========== */
     .badge {
         display: inline-flex;
         align-items: center;
@@ -273,7 +279,7 @@ def inject_modern_styles():
         letter-spacing: 0.03em;
     }
     
-    .badge-purple { background: rgba(124, 58, 237, 0.1); color: #7c3aed; }
+    .badge-black { background: rgba(17, 24, 39, 0.1); color: #111827; }
     .badge-green { background: rgba(34, 197, 94, 0.1); color: #16a34a; }
     .badge-orange { background: rgba(249, 115, 22, 0.1); color: #ea580c; }
     .badge-red { background: rgba(239, 68, 68, 0.1); color: #dc2626; }
@@ -367,6 +373,21 @@ def inject_modern_styles():
     
     ::-webkit-scrollbar-thumb:hover {
         background: #a1a1a1;
+    }
+    
+    /* ========== LINKS ========== */
+    a {
+        color: #111827 !important;
+        text-decoration: none !important;
+    }
+    
+    a:hover {
+        text-decoration: underline !important;
+    }
+    
+    /* ========== PROGRESS BAR ========== */
+    .stProgress > div > div > div {
+        background: #111827 !important;
     }
     
     /* ========== RESPONSIVE ========== */

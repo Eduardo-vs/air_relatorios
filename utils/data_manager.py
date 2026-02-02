@@ -530,9 +530,51 @@ def init_db():
     
     conn.commit()
     
+    # ========== MIGRACOES ==========
+    # Adicionar colunas novas em tabelas existentes (para bancos ja em producao)
+    _run_migrations(cursor, conn)
+    
     # Só fecha conexão se for SQLite (PostgreSQL usa conexão compartilhada)
     if not USING_POSTGRES:
         conn.close()
+
+
+def _run_migrations(cursor, conn):
+    """Executa migracoes para adicionar colunas em tabelas existentes"""
+    
+    migrations = [
+        # (tabela, coluna, tipo, default)
+        ("campanhas", "mostrar_aba_categoria", "INTEGER", "1"),
+    ]
+    
+    for table, column, col_type, default in migrations:
+        try:
+            # Verificar se coluna existe
+            if USING_POSTGRES:
+                cursor.execute(f"""
+                    SELECT column_name FROM information_schema.columns 
+                    WHERE table_name = '{table}' AND column_name = '{column}'
+                """)
+            else:
+                cursor.execute(f"PRAGMA table_info({table})")
+            
+            columns = cursor.fetchall()
+            
+            # Para SQLite, verificar de forma diferente
+            if USING_POSTGRES:
+                column_exists = len(columns) > 0
+            else:
+                column_exists = any(col[1] == column for col in columns)
+            
+            if not column_exists:
+                # Adicionar coluna
+                alter_sql = f"ALTER TABLE {table} ADD COLUMN {column} {col_type} DEFAULT {default}"
+                cursor.execute(alter_sql)
+                conn.commit()
+                print(f"Migracao: Adicionada coluna {column} na tabela {table}")
+        except Exception as e:
+            # Ignorar erros (coluna ja pode existir)
+            print(f"Migracao {table}.{column}: {str(e)}")
 
 
 # ========================================
