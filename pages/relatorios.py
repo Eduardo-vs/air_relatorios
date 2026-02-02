@@ -2164,35 +2164,63 @@ def coletar_dados_influenciadores(campanhas_list, filtro_formato=None):
 
 def render_comentarios(campanhas_list, cores):
     st.subheader("Analise de Comentarios")
+    
+    # Buscar comentarios da tabela comentarios_posts
     comentarios = []
     for camp in campanhas_list:
-        for camp_inf in camp.get('influenciadores', []):
-            inf = data_manager.get_influenciador(camp_inf.get('influenciador_id'))
-            for post in camp_inf.get('posts', []):
-                for com in post.get('comentarios', []):
-                    comentarios.append({'influenciador': inf['nome'] if inf else 'Desconhecido', 'texto': com.get('texto', ''), 'polaridade': com.get('polaridade', 'neutro'), 'categoria': com.get('categoria', 'Geral')})
+        camp_id = camp.get('id')
+        if camp_id:
+            coments_banco = data_manager.get_comentarios_campanha(camp_id, apenas_classificados=True)
+            for c in coments_banco:
+                comentarios.append({
+                    'usuario': c.get('usuario', ''),
+                    'texto': c.get('texto', ''),
+                    'categoria': c.get('categoria', 'Geral'),
+                    'likes': c.get('likes', 0)
+                })
+    
     if not comentarios:
-        st.info("Nenhum comentario")
+        st.info("Nenhum comentario classificado")
         return
+    
     total = len(comentarios)
-    positivos = len([c for c in comentarios if c['polaridade'] == 'positivo'])
-    neutros = len([c for c in comentarios if c['polaridade'] == 'neutro'])
-    negativos = len([c for c in comentarios if c['polaridade'] == 'negativo'])
-    col1, col2, col3, col4 = st.columns(4)
+    
+    # Contagem por categoria (split no " | " para multiplas)
+    categorias_count = Counter()
+    for c in comentarios:
+        cats = c.get('categoria', 'Geral').split(' | ')
+        for cat in cats:
+            cat = cat.strip()
+            if cat and cat not in ('Pendente', 'Nao Classificado'):
+                categorias_count[cat] += 1
+    
+    # Metricas
+    col1, col2 = st.columns([1, 3])
     with col1:
-        st.metric("Total", total)
+        st.metric("Total Classificados", total)
     with col2:
-        st.metric("Positivos", f"{positivos} ({positivos/total*100:.0f}%)")
-    with col3:
-        st.metric("Neutros", f"{neutros} ({neutros/total*100:.0f}%)")
-    with col4:
-        st.metric("Negativos", f"{negativos} ({negativos/total*100:.0f}%)")
-    categorias_count = Counter([c['categoria'] for c in comentarios])
-    df_cat = pd.DataFrame(categorias_count.items(), columns=['Categoria', 'Quantidade'])
-    fig = go.Figure()
-    fig.add_trace(go.Bar(x=df_cat['Categoria'], y=df_cat['Quantidade'], marker_color=cores[:len(df_cat)]))
-    fig.update_layout(title='Comentarios por Categoria', height=350)
-    st.plotly_chart(fig, use_container_width=True)
+        cats_texto = ", ".join([f"{cat}: {qtd}" for cat, qtd in categorias_count.most_common(6)])
+        st.caption(cats_texto)
+    
+    # Grafico de barras por categoria
+    if categorias_count:
+        df_cat = pd.DataFrame(categorias_count.most_common(), columns=['Categoria', 'Quantidade'])
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=df_cat['Categoria'], 
+            y=df_cat['Quantidade'], 
+            marker_color=cores[:len(df_cat)]
+        ))
+        fig.update_layout(title='Comentarios por Categoria', height=350)
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Top comentarios por likes
+    top_coments = sorted(comentarios, key=lambda x: x.get('likes', 0), reverse=True)[:10]
+    if top_coments and any(c.get('likes', 0) > 0 for c in top_coments):
+        with st.expander("Top comentarios por likes"):
+            for c in top_coments:
+                if c.get('likes', 0) > 0:
+                    st.caption(f"@{c.get('usuario', '')} ({c.get('likes', 0)} likes) [{c.get('categoria', '')}]: {c.get('texto', '')[:120]}")
 
 
 def render_glossario():
