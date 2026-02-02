@@ -2185,14 +2185,18 @@ def render_comentarios(campanhas_list, cores):
     
     total = len(comentarios)
     
-    # Contagem por categoria (split no " | " para multiplas)
+    # Agrupar por categoria (split no " | " para multiplas)
     categorias_count = Counter()
+    comentarios_por_cat = {}
     for c in comentarios:
         cats = c.get('categoria', 'Geral').split(' | ')
         for cat in cats:
             cat = cat.strip()
             if cat and cat not in ('Pendente', 'Nao Classificado'):
                 categorias_count[cat] += 1
+                if cat not in comentarios_por_cat:
+                    comentarios_por_cat[cat] = []
+                comentarios_por_cat[cat].append(c)
     
     # Metricas
     col1, col2 = st.columns([1, 3])
@@ -2214,13 +2218,71 @@ def render_comentarios(campanhas_list, cores):
         fig.update_layout(title='Comentarios por Categoria', height=350)
         st.plotly_chart(fig, use_container_width=True)
     
-    # Top comentarios por likes
-    top_coments = sorted(comentarios, key=lambda x: x.get('likes', 0), reverse=True)[:10]
-    if top_coments and any(c.get('likes', 0) > 0 for c in top_coments):
-        with st.expander("Top comentarios por likes"):
-            for c in top_coments:
-                if c.get('likes', 0) > 0:
-                    st.caption(f"@{c.get('usuario', '')} ({c.get('likes', 0)} likes) [{c.get('categoria', '')}]: {c.get('texto', '')[:120]}")
+    # Nuvem de palavras
+    try:
+        from wordcloud import WordCloud
+        import matplotlib.pyplot as plt
+        import re
+        
+        # Juntar todos os textos
+        todos_textos = " ".join([c.get('texto', '') for c in comentarios])
+        
+        # Stopwords pt-br
+        stopwords_ptbr = {
+            'a', 'o', 'e', 'de', 'do', 'da', 'dos', 'das', 'em', 'no', 'na', 'nos', 'nas',
+            'um', 'uma', 'uns', 'umas', 'que', 'para', 'com', 'por', 'se', 'mais', 'mas',
+            'como', 'ou', 'ao', 'aos', 'ja', 'muito', 'bem', 'so', 'tambem', 'eu', 'voce',
+            'ele', 'ela', 'nos', 'eles', 'elas', 'meu', 'minha', 'seu', 'sua', 'isso',
+            'esse', 'essa', 'este', 'esta', 'aqui', 'ali', 'la', 'nao', 'sim', 'tem',
+            'ter', 'foi', 'ser', 'esta', 'vai', 'vou', 'tudo', 'todo', 'toda', 'te',
+            'me', 'ti', 'lhe', 'pra', 'pro', 'the', 'and', 'is', 'to', 'of', 'in',
+            'it', 'you', 'that', 'this', 'for', 'are', 'was', 'with', 'on', 'at',
+            'kk', 'kkk', 'kkkk', 'kkkkk', 'haha', 'hahaha', 'rs', 'rsrs',
+            'ne', 'ai', 'eh', 'ta', 'tb', 'vc', 'vcs', 'q', 'pq', 'tbm'
+        }
+        
+        # Limpar texto
+        texto_limpo = re.sub(r'[^\w\s]', ' ', todos_textos.lower())
+        texto_limpo = re.sub(r'\s+', ' ', texto_limpo).strip()
+        
+        if texto_limpo and len(texto_limpo.split()) > 5:
+            wc = WordCloud(
+                width=800, height=350,
+                background_color='white',
+                stopwords=stopwords_ptbr,
+                max_words=80,
+                colormap='Greys',
+                prefer_horizontal=0.7,
+                min_font_size=10
+            ).generate(texto_limpo)
+            
+            fig_wc, ax_wc = plt.subplots(figsize=(10, 4.5))
+            ax_wc.imshow(wc, interpolation='bilinear')
+            ax_wc.axis('off')
+            plt.tight_layout(pad=0)
+            st.pyplot(fig_wc)
+            plt.close(fig_wc)
+    except Exception as e:
+        st.caption(f"Nuvem de palavras indisponivel: {str(e)[:60]}")
+    
+    # Exemplos por categoria (3 de cada)
+    st.markdown("---")
+    st.markdown("**Exemplos por Categoria**")
+    
+    for cat, _ in categorias_count.most_common():
+        coments_cat = comentarios_por_cat.get(cat, [])
+        if not coments_cat:
+            continue
+        
+        # Pegar 3 exemplos (priorizando os com mais likes)
+        exemplos = sorted(coments_cat, key=lambda x: x.get('likes', 0), reverse=True)[:3]
+        
+        st.markdown(f"**{cat}** ({categorias_count[cat]} comentarios)")
+        for ex in exemplos:
+            texto = ex.get('texto', '')[:150]
+            usuario = ex.get('usuario', '')
+            st.caption(f"@{usuario}: {texto}")
+        st.markdown("")
 
 
 def render_glossario():
