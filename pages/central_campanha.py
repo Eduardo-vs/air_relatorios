@@ -2106,7 +2106,8 @@ def render_comentarios(campanha):
     
     # Resumo geral
     total_coments = len(comentarios_salvos)
-    total_classificados = len([c for c in comentarios_salvos if c.get('categoria') and c.get('categoria') != 'Nao Classificado'])
+    total_classificados = len([c for c in comentarios_salvos if c.get('categoria') and c.get('categoria') not in ('Nao Classificado', 'Pendente')])
+    total_pendentes = len([c for c in comentarios_salvos if c.get('categoria') in ('Pendente', 'Nao Classificado', '', None)])
     
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -2114,7 +2115,7 @@ def render_comentarios(campanha):
     with col2:
         st.metric("Classificados", total_classificados)
     with col3:
-        st.metric("Posts com Coments", len(coments_por_post))
+        st.metric("Pendentes", total_pendentes)
     
     st.markdown("---")
     
@@ -2124,19 +2125,16 @@ def render_comentarios(campanha):
     for i, post in enumerate(posts_campanha):
         link = post['link']
         nome = post['influenciador']
-        formato = post['formato']
-        data_post = post['data']
         qtd_salvos = len(coments_por_post.get(link, []))
         
         # Link curto para exibicao
-        link_curto = link[:60] + '...' if len(link) > 60 else link
+        link_curto = link[:55] + '...' if len(link) > 55 else link
         
         # Card do post
-        col_info, col_link, col_status, col_upload = st.columns([2, 3, 1, 2])
+        col_info, col_link, col_status, col_upload, col_del = st.columns([2, 3, 1, 2, 0.5])
         
         with col_info:
             st.markdown(f"**{nome}**")
-            st.caption(f"{formato} | {data_post}")
         
         with col_link:
             if link:
@@ -2146,7 +2144,12 @@ def render_comentarios(campanha):
         
         with col_status:
             if qtd_salvos > 0:
-                st.markdown(f"<span style='font-size:12px;color:#16a34a;font-weight:500;'>{qtd_salvos} coments</span>", unsafe_allow_html=True)
+                coments_post = coments_por_post.get(link, [])
+                pendentes_post = len([c for c in coments_post if c.get('categoria') in ('Pendente', 'Nao Classificado', '', None)])
+                if pendentes_post > 0:
+                    st.markdown(f"<span style='font-size:11px;color:#ea580c;font-weight:500;'>{qtd_salvos} ({pendentes_post} pendentes)</span>", unsafe_allow_html=True)
+                else:
+                    st.markdown(f"<span style='font-size:11px;color:#16a34a;font-weight:500;'>{qtd_salvos} classificados</span>", unsafe_allow_html=True)
             else:
                 st.caption("-")
         
@@ -2159,11 +2162,16 @@ def render_comentarios(campanha):
             )
             
             if uploaded is not None:
-                # Processar CSV
                 _processar_csv_comentarios(
                     uploaded, campanha_id, post, categorias, 
                     WEBHOOK_URL, i
                 )
+        
+        with col_del:
+            if qtd_salvos > 0:
+                if st.button("X", key=f"del_coments_{campanha_id}_{i}", help="Excluir comentarios deste post"):
+                    data_manager.excluir_comentarios_post(link)
+                    st.rerun()
         
         # Separador sutil
         if i < len(posts_campanha) - 1:
@@ -2210,7 +2218,7 @@ def render_comentarios(campanha):
 
 
 def _processar_csv_comentarios(uploaded_file, campanha_id, post_info, categorias, webhook_url, post_index):
-    """Processa CSV de comentarios e envia para classificacao"""
+    """Processa CSV de comentarios: salva na base como Pendente e dispara webhook assincrono"""
     import pandas as pd
     import requests
     import time
@@ -2219,12 +2227,8 @@ def _processar_csv_comentarios(uploaded_file, campanha_id, post_info, categorias
         # Ler CSV
         df = pd.read_csv(uploaded_file, encoding='utf-8-sig')
         
-        # Validar colunas obrigatorias
-        colunas_necessarias = ['Comment']
-        colunas_presentes = [c for c in df.columns if c in ['Comment', 'Username', 'Name', 'Date', 'Likes', 'Comment ID', 'Profile URL', 'Comment URL']]
-        
         if 'Comment' not in df.columns:
-            st.error("CSV invalido: coluna 'Comment' nao encontrada. Use o formato CSV do ExportComments.")
+            st.error("CSV invalido: coluna 'Comment' nao encontrada. O arquivo deve ser CSV com as colunas do ExportComments.")
             return
         
         # Filtrar linhas vazias
@@ -2234,9 +2238,7 @@ def _processar_csv_comentarios(uploaded_file, campanha_id, post_info, categorias
             st.warning("Nenhum comentario valido no CSV.")
             return
         
-        st.info(f"{len(df)} comentarios encontrados no CSV de {post_info['influenciador']}")
-        
-        # Converter para lista de comentarios
+        # Converter para lista
         comentarios = []
         for _, row in df.iterrows():
             comentarios.append({
@@ -2249,17 +2251,24 @@ def _processar_csv_comentarios(uploaded_file, campanha_id, post_info, categorias
                 'comentario_url': str(row.get('Comment URL', '')),
                 'post_link': post_info['link'],
                 'influenciador': post_info['influenciador'],
-                'influenciador_id': post_info['influenciador_id']
+                'influenciador_id': post_info['influenciador_id'],
+                'categoria': 'Pendente'
             })
         
-        # Enviar para webhook de classificacao automaticamente
-        progress = st.progress(0)
-        status = st.empty()
+        # 1. Salvar na base como "Pendente" (pula duplicados automaticamente)
+        salvos = data_manager.salvar_comentarios(
+            campanha_id,
+            post_info['link'],
+            comentarios,
+            influenciador_id=post_info['influenciador_id'],
+            post_shortcode=post_info['link'].split('/')[-2] if '/' in post_info['link'] else ''
+        )
         
-        status.text(f"Classificando {len(comentarios)} comentarios com IA...")
-        progress.progress(0.3)
+        if salvos == 0:
+            st.info("Todos os comentarios desse CSV ja estao na base.")
+            return
         
-        # Preparar payload - formato: coments + classifications
+        # 2. Disparar webhook para classificacao (assincrono - nao espera resposta)
         payload = {
             "coments": [
                 {
@@ -2279,115 +2288,48 @@ def _processar_csv_comentarios(uploaded_file, campanha_id, post_info, categorias
             ]
         }
         
-        progress.progress(0.5)
-        
         try:
-            response = requests.post(
+            # Timeout curto - so dispara, nao espera processar tudo
+            requests.post(
                 webhook_url,
                 json=payload,
-                timeout=180,
+                timeout=10,
                 headers={"Content-Type": "application/json"}
             )
-            
-            progress.progress(0.8)
-            
-            if response.status_code == 200:
-                resultado = response.json()
-                
-                # Processar classificacoes
-                classificacoes = extrair_classificacoes_webhook(resultado)
-                comentarios_classificados = aplicar_classificacoes(comentarios, classificacoes, categorias)
-                
-                # Salvar no banco
-                salvos = data_manager.salvar_comentarios(
-                    campanha_id,
-                    post_info['link'],
-                    comentarios_classificados,
-                    influenciador_id=post_info['influenciador_id'],
-                    post_shortcode=post_info['link'].split('/')[-2] if '/' in post_info['link'] else ''
-                )
-                
-                progress.progress(1.0)
-                status.empty()
-                st.success(f"{salvos} comentarios classificados e salvos!")
-                time.sleep(1.5)
-                st.rerun()
-            else:
-                progress.progress(1.0)
-                status.empty()
-                st.error(f"Erro na classificacao: HTTP {response.status_code}")
-                
-                # Salvar sem classificacao
-                for c in comentarios:
-                    c['categoria'] = 'Nao Classificado'
-                    c['classificado'] = 0
-                
-                salvos = data_manager.salvar_comentarios(
-                    campanha_id,
-                    post_info['link'],
-                    comentarios,
-                    influenciador_id=post_info['influenciador_id'],
-                    post_shortcode=post_info['link'].split('/')[-2] if '/' in post_info['link'] else ''
-                )
-                st.warning(f"{salvos} comentarios salvos sem classificacao (erro no webhook)")
-                time.sleep(1.5)
-                st.rerun()
-                
         except requests.exceptions.Timeout:
-            progress.progress(1.0)
-            status.empty()
-            st.error("Timeout na classificacao. Salvando comentarios sem classificacao...")
-            
-            for c in comentarios:
-                c['categoria'] = 'Nao Classificado'
-                c['classificado'] = 0
-            
-            data_manager.salvar_comentarios(
-                campanha_id, post_info['link'], comentarios,
-                influenciador_id=post_info['influenciador_id'],
-                post_shortcode=post_info['link'].split('/')[-2] if '/' in post_info['link'] else ''
-            )
-            time.sleep(1.5)
-            st.rerun()
-            
+            # Esperado - o webhook recebeu mas ainda esta processando
+            pass
         except Exception as e:
-            progress.progress(1.0)
-            status.empty()
-            st.error(f"Erro: {str(e)}")
+            st.warning(f"Webhook disparado mas com possivel erro: {str(e)[:60]}")
+        
+        st.success(f"{salvos} comentarios novos salvos. Classificacao em andamento pela IA...")
+        time.sleep(1.5)
+        st.rerun()
     
     except Exception as e:
-        st.error(f"Erro ao ler CSV: {str(e)}. Verifique se o arquivo esta no formato correto (CSV do ExportComments).")
+        st.error(f"Erro ao ler CSV: {str(e)}. O arquivo deve ser CSV com as colunas: Comment, Username, Comment ID, etc.")
 
 
 def extrair_classificacoes_webhook(resultado) -> list:
     """
-    Extrai classificacoes da resposta do webhook
-    Formato esperado do n8n: [{"output": {"classificacoes": [...]}}]
-    ou {"classificacoes": [...]}
-    
-    Cada item em classificacoes:
-    {
-        "comment_id": "123",
-        "categorias": {
-            "Elogio ao Produto": {"teste": true},
-            "Intencao de Compra": {"teste": false},
-            ...
-        }
-    }
+    Extrai classificacoes da resposta do endpoint de IA.
+    Formato esperado:
+    [
+        {"comment_id": "123", "classification": "Elogio ao Produto"},
+        {"comment_id": "123", "classification": "Conexao Emocional"},
+        {"comment_id": "456", "classification": "Geral"}
+    ]
+    Um comentario pode ter mais de uma classificacao.
     """
     try:
-        if isinstance(resultado, list) and len(resultado) > 0:
-            primeiro = resultado[0]
-            if isinstance(primeiro, dict):
-                if 'output' in primeiro:
-                    return primeiro['output'].get('classificacoes', [])
-                elif 'classificacoes' in primeiro:
-                    return primeiro['classificacoes']
+        if isinstance(resultado, list):
+            return resultado
         elif isinstance(resultado, dict):
-            if 'output' in resultado:
-                return resultado['output'].get('classificacoes', [])
-            elif 'classificacoes' in resultado:
-                return resultado['classificacoes']
+            # Caso venha encapsulado
+            if 'data' in resultado:
+                return resultado['data'] if isinstance(resultado['data'], list) else []
+            elif 'output' in resultado:
+                return resultado['output'] if isinstance(resultado['output'], list) else []
     except:
         pass
     return []
@@ -2395,37 +2337,33 @@ def extrair_classificacoes_webhook(resultado) -> list:
 
 def aplicar_classificacoes(comentarios: list, classificacoes: list, categorias: list) -> list:
     """
-    Aplica classificacoes aos comentarios
-    Encontra a categoria com teste=true para cada comentario
+    Aplica classificacoes aos comentarios.
+    Formato: [{"comment_id": "123", "classification": "Elogio ao Produto"}, ...]
+    Um comentario pode ter multiplas classificacoes, juntamos com " | ".
     """
-    # Criar mapa de classificacoes por comment_id
+    # Agrupar classificacoes por comment_id
     mapa_class = {}
-    for classif in classificacoes:
-        comment_id = str(classif.get('comment_id', classif.get('id', '')))
-        if comment_id:
-            mapa_class[comment_id] = classif.get('categorias', {})
+    for item in classificacoes:
+        cid = str(item.get('comment_id', ''))
+        cat = item.get('classification', '')
+        if cid and cat:
+            if cid not in mapa_class:
+                mapa_class[cid] = []
+            if cat not in mapa_class[cid]:
+                mapa_class[cid].append(cat)
     
     # Aplicar aos comentarios
     comentarios_result = []
     for c in comentarios:
         comment_id = str(c.get('id', ''))
-        categoria_encontrada = None
+        cats_encontradas = mapa_class.get(comment_id, [])
         
-        if comment_id in mapa_class:
-            cats = mapa_class[comment_id]
-            # Encontrar categoria com teste=true
-            for cat_nome, cat_result in cats.items():
-                if isinstance(cat_result, dict) and cat_result.get('teste', False):
-                    categoria_encontrada = cat_nome
-                    break
-                elif cat_result == True:
-                    categoria_encontrada = cat_nome
-                    break
+        categoria_str = " | ".join(cats_encontradas) if cats_encontradas else 'Nao Classificado'
         
         comentarios_result.append({
             **c,
-            'categoria': categoria_encontrada or 'Nao Classificado',
-            'classificado': 1 if categoria_encontrada else 0
+            'categoria': categoria_str,
+            'classificado': 1 if cats_encontradas else 0
         })
     
     return comentarios_result

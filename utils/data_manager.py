@@ -2165,16 +2165,29 @@ def atualizar_insights_ia(campanha_id: int, pagina: str, novos_insights: List[Di
 def salvar_comentarios(campanha_id: int, post_url: str, comentarios: List[Dict], 
                        influenciador_id: int = None, post_shortcode: str = None) -> int:
     """
-    Salva comentarios extraidos no banco
+    Salva comentarios no banco. Pula duplicados (mesmo comment_id + post_url).
     
     Returns:
-        Quantidade de comentarios salvos
+        Quantidade de comentarios novos salvos
     """
     count = 0
     now = datetime.now().isoformat()
     
+    # Buscar comment_ids ja existentes para este post
+    existentes = execute_select(
+        "SELECT comment_id FROM comentarios_posts WHERE campanha_id = ? AND post_url = ?",
+        (campanha_id, post_url)
+    )
+    ids_existentes = set(str(r.get('comment_id', '')) for r in existentes if r.get('comment_id'))
+    
     for comentario in comentarios:
         try:
+            cid = str(comentario.get('id', ''))
+            
+            # Pular se ja existe
+            if cid and cid in ids_existentes:
+                continue
+            
             execute_insert(
                 """INSERT INTO comentarios_posts 
                    (campanha_id, influenciador_id, post_url, post_shortcode, comment_id,
@@ -2186,22 +2199,76 @@ def salvar_comentarios(campanha_id: int, post_url: str, comentarios: List[Dict],
                     influenciador_id,
                     post_url,
                     post_shortcode or '',
-                    comentario.get('id', ''),
+                    cid,
                     comentario.get('usuario', ''),
                     comentario.get('texto', ''),
                     comentario.get('data', ''),
                     comentario.get('likes', 0),
-                    comentario.get('categoria', ''),
+                    comentario.get('categoria', 'Pendente'),
                     comentario.get('sentimento', ''),
                     comentario.get('confianca', 0),
                     comentario.get('justificativa', ''),
-                    1 if comentario.get('categoria') else 0,
+                    1 if comentario.get('categoria') and comentario.get('categoria') not in ('Pendente', 'Nao Classificado') else 0,
                     now
                 )
             )
             count += 1
         except Exception as e:
             print(f"Erro ao salvar comentario: {e}")
+    
+    invalidar_cache()
+    return count
+
+
+def atualizar_classificacao_comentario(comment_id: str, categoria: str) -> bool:
+    """Atualiza a classificacao de um comentario pelo comment_id"""
+    try:
+        execute_query(
+            """UPDATE comentarios_posts 
+               SET categoria = ?, classificado = 1
+               WHERE comment_id = ?""",
+            (categoria, str(comment_id))
+        )
+        invalidar_cache()
+        return True
+    except Exception as e:
+        print(f"Erro ao atualizar classificacao: {e}")
+        return False
+
+
+def atualizar_classificacoes_lote(classificacoes: list) -> int:
+    """
+    Atualiza classificacoes em lote.
+    Formato: [{"comment_id": "123", "classification": "Elogio"}, ...]
+    Um comment_id pode ter multiplas classificacoes (junta com ' | ').
+    
+    Returns:
+        Quantidade de comentarios atualizados
+    """
+    # Agrupar por comment_id
+    mapa = {}
+    for item in classificacoes:
+        cid = str(item.get('comment_id', ''))
+        cat = item.get('classification', '')
+        if cid and cat:
+            if cid not in mapa:
+                mapa[cid] = []
+            if cat not in mapa[cid]:
+                mapa[cid].append(cat)
+    
+    count = 0
+    for cid, cats in mapa.items():
+        categoria_str = " | ".join(cats)
+        try:
+            execute_query(
+                """UPDATE comentarios_posts 
+                   SET categoria = ?, classificado = 1
+                   WHERE comment_id = ?""",
+                (categoria_str, cid)
+            )
+            count += 1
+        except Exception as e:
+            print(f"Erro ao atualizar {cid}: {e}")
     
     invalidar_cache()
     return count
