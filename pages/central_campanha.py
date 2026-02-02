@@ -2051,8 +2051,8 @@ def render_comentarios(campanha):
     
     campanha_id = campanha['id']
     
-    # Webhook para classificacao
-    WEBHOOK_URL = "https://n8n.air.com.vc/webhook/e19fe530-62b6-44af-b6d1-3aeed59cfe0b"
+    # Webhook para classificacao com IA
+    WEBHOOK_URL = "https://n8n.air.com.vc/webhook/e19fe530-62b6-44af-b6d1-3aeed59cfe9i"
     
     # Categorias configuradas
     categorias_raw = campanha.get('categorias_comentarios', [])
@@ -2259,13 +2259,9 @@ def _processar_csv_comentarios(uploaded_file, campanha_id, post_info, categorias
         status.text(f"Classificando {len(comentarios)} comentarios com IA...")
         progress.progress(0.3)
         
-        # Preparar payload
+        # Preparar payload - formato: coments + classifications
         payload = {
-            "acao": "classificar_comentarios",
-            "campanha_id": campanha_id,
-            "post_url": post_info['link'],
-            "influenciador": post_info['influenciador'],
-            "comentarios": [
+            "coments": [
                 {
                     "id": c.get('id', ''),
                     "usuario": c.get('usuario', ''),
@@ -2274,14 +2270,13 @@ def _processar_csv_comentarios(uploaded_file, campanha_id, post_info, categorias
                 }
                 for c in comentarios
             ],
-            "categorias": [
+            "classifications": [
                 {
                     "nome": cat.get('nome', ''),
                     "descricao": cat.get('descricao', '')
                 }
                 for cat in categorias[:10]
-            ],
-            "timestamp": datetime.now().isoformat()
+            ]
         }
         
         progress.progress(0.5)
