@@ -58,8 +58,19 @@ def render():
                     st.warning("Cadastre um cliente primeiro")
                     cliente_obj = None
                 
-                di_val = datetime.strptime(camp_edit['data_inicio'], '%d/%m/%Y') if camp_edit else datetime.now()
-                df_val = datetime.strptime(camp_edit['data_fim'], '%d/%m/%Y') if camp_edit else datetime.now() + timedelta(days=30)
+                def parse_data(data_str, default=None):
+                    """Parse data em varios formatos"""
+                    if not data_str:
+                        return default or datetime.now()
+                    for fmt in ['%d/%m/%Y', '%Y-%m-%d', '%Y/%m/%d']:
+                        try:
+                            return datetime.strptime(data_str, fmt)
+                        except:
+                            continue
+                    return default or datetime.now()
+                
+                di_val = parse_data(camp_edit.get('data_inicio'), datetime.now()) if camp_edit else datetime.now()
+                df_val = parse_data(camp_edit.get('data_fim'), datetime.now() + timedelta(days=30)) if camp_edit else datetime.now() + timedelta(days=30)
                 data_inicio = st.date_input("Data Inicio", value=di_val)
                 data_fim = st.date_input("Data Fim", value=df_val)
             
