@@ -2324,7 +2324,7 @@ def render_comentarios(campanhas_list, cores):
             mask[dist <= center] = 0
             
             # Cor preta fixa
-            def black_color_func(**kwargs):
+            def black_color_func(*args, **kwargs):
                 return "rgb(17, 24, 39)"
             
             wc = WordCloud(
