@@ -768,16 +768,24 @@ def criar_campanha_do_air_com_preview(air_data, influenciadores_preview):
             for post_api in posts:
                 # DEBUG: Verificar campos do post
                 link_extraido = post_api.get('link') or post_api.get('permalink') or post_api.get('url') or ''
-                print(f"[CRIAR CAMPANHA DEBUG] post_api keys: {list(post_api.keys())}")
-                print(f"[CRIAR CAMPANHA DEBUG] link extraido: '{link_extraido}'")
+                
+                # Salvar debug no session_state
+                if 'debug_criar_posts' not in st.session_state:
+                    st.session_state.debug_criar_posts = []
+                st.session_state.debug_criar_posts.append({
+                    'post_api_keys': list(post_api.keys()),
+                    'link_extraido': link_extraido,
+                    'post_api_link': post_api.get('link', 'NENHUM'),
+                    'post_api_permalink': post_api.get('permalink', 'NENHUM')
+                })
                 
                 post_data = {
                     'formato': post_api.get('formato') or post_api.get('type', 'Feed'),
                     'plataforma': 'Instagram',
                     'data_publicacao': post_api.get('data_publicacao') or post_api.get('date', ''),
                     'link': link_extraido,
-                    'link_post': link_extraido,  # Campo alternativo
-                    'permalink': link_extraido,  # Mais um fallback
+                    'link_post': link_extraido,
+                    'permalink': link_extraido,
                     'views': post_api.get('views', 0) or 0,
                     'alcance': post_api.get('alcance') or post_api.get('reach', 0) or 0,
                     'interacoes': post_api.get('interacoes') or post_api.get('engagement', 0) or 0,
@@ -788,8 +796,6 @@ def criar_campanha_do_air_com_preview(air_data, influenciadores_preview):
                     'saves': post_api.get('saves', 0) or 0,
                     'imagens': [post_api.get('thumbnail', '')] if post_api.get('thumbnail') else []
                 }
-                
-                print(f"[CRIAR CAMPANHA DEBUG] post_data link: '{post_data.get('link')}'")
                 
                 try:
                     data_manager.adicionar_post(campanha_id, inf_id, post_data)
@@ -818,6 +824,15 @@ def criar_campanha_do_air_com_preview(air_data, influenciadores_preview):
         with st.expander(f"{len(erros)} avisos/erros"):
             for erro in erros:
                 st.warning(erro)
+    
+    # DEBUG: Mostrar dados dos posts salvos
+    debug_posts = st.session_state.get('debug_criar_posts', [])
+    if debug_posts:
+        with st.expander(f"DEBUG: {len(debug_posts)} posts processados"):
+            for i, dp in enumerate(debug_posts[:5]):
+                st.json(dp)
+        # Limpar debug
+        st.session_state.debug_criar_posts = []
     
     # Botao para ir para a central
     if st.button("Ir para Central da Campanha", type="primary"):
