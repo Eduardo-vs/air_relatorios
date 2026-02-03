@@ -766,11 +766,18 @@ def criar_campanha_do_air_com_preview(air_data, influenciadores_preview):
             status.text(f"Salvando {len(posts)} posts de {inf_data.get('nome', '')}...")
             
             for post_api in posts:
+                # DEBUG: Verificar campos do post
+                link_extraido = post_api.get('link') or post_api.get('permalink') or post_api.get('url') or ''
+                print(f"[CRIAR CAMPANHA DEBUG] post_api keys: {list(post_api.keys())}")
+                print(f"[CRIAR CAMPANHA DEBUG] link extraido: '{link_extraido}'")
+                
                 post_data = {
                     'formato': post_api.get('formato') or post_api.get('type', 'Feed'),
                     'plataforma': 'Instagram',
                     'data_publicacao': post_api.get('data_publicacao') or post_api.get('date', ''),
-                    'link': post_api.get('link') or post_api.get('permalink', ''),
+                    'link': link_extraido,
+                    'link_post': link_extraido,  # Campo alternativo
+                    'permalink': link_extraido,  # Mais um fallback
                     'views': post_api.get('views', 0) or 0,
                     'alcance': post_api.get('alcance') or post_api.get('reach', 0) or 0,
                     'interacoes': post_api.get('interacoes') or post_api.get('engagement', 0) or 0,
@@ -781,6 +788,8 @@ def criar_campanha_do_air_com_preview(air_data, influenciadores_preview):
                     'saves': post_api.get('saves', 0) or 0,
                     'imagens': [post_api.get('thumbnail', '')] if post_api.get('thumbnail') else []
                 }
+                
+                print(f"[CRIAR CAMPANHA DEBUG] post_data link: '{post_data.get('link')}'")
                 
                 try:
                     data_manager.adicionar_post(campanha_id, inf_id, post_data)
