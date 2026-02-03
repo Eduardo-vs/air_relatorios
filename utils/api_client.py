@@ -458,6 +458,11 @@ def buscar_posts_influenciador(profile_id: str, limite: int = 100, hashtags: Lis
             post_id = post_raw.get('id', '') or post_raw.get('post_id', '') or ''
             username = post_raw.get('username', '') or post_raw.get('user', '') or ''
             
+            # DEBUG: Log do permalink encontrado
+            print(f"[API DEBUG] post_raw keys: {list(post_raw.keys())}")
+            print(f"[API DEBUG] permalink extraido: '{permalink}'")
+            print(f"[API DEBUG] short_code: '{short_code}'")
+            
             # Se nao tem permalink, tentar construir de varias formas
             if not permalink and short_code:
                 if network == 'instagram':

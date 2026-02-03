@@ -642,7 +642,8 @@ def buscar_posts_preview(air_data, criar_ausentes=True, limite_posts=20):
                 'start_date': api_start_date,
                 'end_date': api_end_date
             },
-            'resposta_completa': posts_resultado
+            'resposta_completa': posts_resultado,
+            'posts_processados_links': [p.get('link', 'SEM LINK') for p in posts_resultado.get('posts', [])][:5]
         })
         
         posts = []
