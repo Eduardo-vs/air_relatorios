@@ -1430,7 +1430,7 @@ def get_posts_influenciador(camp_id: int, inf_id: int) -> List[Dict]:
 # ========================================
 
 def calcular_metricas_campanha(campanha: Dict) -> Dict:
-    """Calcula metricas agregadas de uma campanha. Stories do mesmo dia/influenciador = 1 publicacao."""
+    """Calcula metricas agregadas de uma campanha. Stories do mesmo dia/influenciador = 1 publicacao, alcance = maior valor."""
     
     total_influenciadores = 0
     total_seguidores = 0
@@ -1461,6 +1461,7 @@ def calcular_metricas_campanha(campanha: Dict) -> Dict:
         
         posts = inf_camp.get('posts', [])
         stories_datas = set()  # Para contar datas unicas de Stories
+        stories_alcance_max = 0  # Maior alcance de stories deste influenciador
         
         for post in posts:
             formato = post.get('formato', 'Outro')
@@ -1473,16 +1474,24 @@ def calcular_metricas_campanha(campanha: Dict) -> Dict:
                     total_posts += 1
                 elif not data_post:
                     total_posts += 1
+                
+                # Para Stories: pegar o MAIOR alcance (nao somar)
+                alcance_story = post.get('alcance', 0) or 0
+                if alcance_story > stories_alcance_max:
+                    stories_alcance_max = alcance_story
+                
+                # Views, impressoes e interacoes de stories ainda somam
+                total_views += post.get('views', 0) or 0
+                total_impressoes += post.get('impressoes', 0) or 0
+                total_interacoes += post.get('interacoes', 0) or 0
             else:
                 total_posts += 1
+                # Para outros formatos: somar normalmente
+                total_views += post.get('views', 0) or 0
+                total_impressoes += post.get('impressoes', 0) or 0
+                total_alcance += post.get('alcance', 0) or 0
+                total_interacoes += post.get('interacoes', 0) or 0
             
-            # Para views/impressoes, usa o maior valor ou soma se diferentes
-            views = post.get('views', 0) or 0
-            impressoes_post = post.get('impressoes', 0) or 0
-            total_views += views
-            total_impressoes += impressoes_post
-            total_alcance += post.get('alcance', 0) or 0
-            total_interacoes += post.get('interacoes', 0) or 0
             total_curtidas += post.get('curtidas', 0) or 0
             # comentarios pode ser lista de objetos ou numero
             comentarios = post.get('comentarios', 0)
@@ -1498,6 +1507,9 @@ def calcular_metricas_campanha(campanha: Dict) -> Dict:
             total_cliques_link += post.get('clique_link', 0) or 0
             total_conversoes += post.get('conversoes', 0) or 0
             total_conversoes += post.get('cupom_conversoes', 0) or 0
+        
+        # Somar o maior alcance de stories deste influenciador ao total
+        total_alcance += stories_alcance_max
     
     engajamento_efetivo = 0
     taxa_alcance = 0
@@ -1879,7 +1891,10 @@ def exportar_balizadores_csv(campanha: Dict) -> str:
                     metricas['ig_reels_alc'] += post.get('alcance', 0)
                 elif 'stor' in formato:
                     metricas['ig_stories_imp'] += post.get('impressoes', 0)
-                    metricas['ig_stories_alc'] += post.get('alcance', 0)
+                    # Stories: pegar o MAIOR alcance (nao somar)
+                    alcance_story = post.get('alcance', 0) or 0
+                    if alcance_story > metricas['ig_stories_alc']:
+                        metricas['ig_stories_alc'] = alcance_story
                 else:
                     # Outros formatos IG
                     metricas['ig_reels_imp'] += post.get('impressoes', 0)

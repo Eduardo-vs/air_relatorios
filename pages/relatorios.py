@@ -691,7 +691,7 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
         col1, col2, col3, col4 = st.columns(4)
         
         cpm = metricas.get('cpm_campanha', 0)
-        cpe = metricas.get('cpe_campanha', 0)
+        cpi = metricas.get('cpi_campanha', 0) or metricas.get('cpe_campanha', 0)  # CPI = Custo por Interacao
         cpa = metricas.get('cpa_campanha', 0)
         total_custo = metricas.get('total_custo', 0)
         
@@ -700,11 +700,11 @@ def render_pag1_big_numbers(campanhas_list, metricas, cores):
         with col2:
             st.markdown(render_card("CPM", f"R$ {cpm:.2f}"), unsafe_allow_html=True)
         with col3:
-            st.markdown(render_card("CPE", f"R$ {cpe:.2f}"), unsafe_allow_html=True)
+            st.markdown(render_card("CPI", f"R$ {cpi:.2f}"), unsafe_allow_html=True)
         with col4:
             st.markdown(render_card("CPA (x1000)", f"R$ {cpa:.2f}"), unsafe_allow_html=True)
         
-        st.caption("CPM = Custo por Mil Impressoes | CPE = Custo por Engajamento | CPA = Custo por Mil Alcance")
+        st.caption("CPM = Custo por Mil Impressoes | CPI = Custo por Interacao | CPA = Custo por Mil Alcance")
     
     st.markdown("---")
     

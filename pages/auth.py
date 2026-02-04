@@ -5,10 +5,123 @@ Login, registro por convite e gerenciamento de usuarios
 
 import streamlit as st
 from utils import data_manager
+import hashlib
+import json
+from datetime import datetime, timedelta
+
+# Tentar importar cookies manager
+try:
+    import extra_streamlit_components as stx
+    COOKIES_DISPONIVEL = True
+except ImportError:
+    COOKIES_DISPONIVEL = False
+
+
+def get_cookie_manager():
+    """Retorna o gerenciador de cookies"""
+    if not COOKIES_DISPONIVEL:
+        return None
+    return stx.CookieManager()
+
+
+def verificar_login_salvo():
+    """Verifica se existe login salvo em cookie e faz login automatico"""
+    if st.session_state.get('autenticado'):
+        return True
+    
+    if not COOKIES_DISPONIVEL:
+        return False
+    
+    try:
+        cookie_manager = get_cookie_manager()
+        if cookie_manager is None:
+            return False
+        
+        # Buscar cookie de sessao
+        token_cookie = cookie_manager.get("air_session")
+        
+        if token_cookie:
+            # Decodificar token
+            try:
+                dados = json.loads(token_cookie)
+                email = dados.get('email')
+                token_hash = dados.get('token')
+                expira = dados.get('expira')
+                
+                # Verificar expiracao
+                if expira and datetime.fromisoformat(expira) < datetime.now():
+                    # Cookie expirado, limpar
+                    cookie_manager.delete("air_session")
+                    return False
+                
+                # Verificar se usuario existe
+                if email:
+                    usuario = data_manager.get_usuario_por_email(email)
+                    if usuario:
+                        # Verificar token
+                        token_esperado = gerar_token_sessao(email, usuario.get('senha_hash', ''))
+                        if token_hash == token_esperado:
+                            st.session_state.usuario_logado = usuario
+                            st.session_state.autenticado = True
+                            return True
+            except:
+                pass
+    except:
+        pass
+    
+    return False
+
+
+def gerar_token_sessao(email: str, senha_hash: str) -> str:
+    """Gera token de sessao baseado no email e hash da senha"""
+    dados = f"{email}:{senha_hash}:air_secret_key"
+    return hashlib.sha256(dados.encode()).hexdigest()[:32]
+
+
+def salvar_login_cookie(email: str, senha_hash: str, dias: int = 30):
+    """Salva login em cookie para persistencia"""
+    if not COOKIES_DISPONIVEL:
+        return
+    
+    try:
+        cookie_manager = get_cookie_manager()
+        if cookie_manager is None:
+            return
+        
+        token = gerar_token_sessao(email, senha_hash)
+        expira = (datetime.now() + timedelta(days=dias)).isoformat()
+        
+        dados = json.dumps({
+            'email': email,
+            'token': token,
+            'expira': expira
+        })
+        
+        cookie_manager.set("air_session", dados, expires_at=datetime.now() + timedelta(days=dias))
+    except:
+        pass
+
+
+def limpar_cookie_login():
+    """Remove cookie de login"""
+    if not COOKIES_DISPONIVEL:
+        return
+    
+    try:
+        cookie_manager = get_cookie_manager()
+        if cookie_manager:
+            cookie_manager.delete("air_session")
+    except:
+        pass
 
 
 def render_login():
     """Renderiza tela de login"""
+    
+    # Verificar login salvo antes de mostrar formulario
+    if verificar_login_salvo():
+        st.rerun()
+        return
     
     st.markdown("""
     <style>
@@ -65,7 +178,7 @@ def render_form_login():
         
         col1, col2 = st.columns(2)
         with col1:
-            lembrar = st.checkbox("Lembrar-me")
+            lembrar = st.checkbox("Lembrar-me", value=True)
         
         if st.form_submit_button("Entrar", use_container_width=True, type="primary"):
             if email and senha:
@@ -74,6 +187,11 @@ def render_form_login():
                 if usuario:
                     st.session_state.usuario_logado = usuario
                     st.session_state.autenticado = True
+                    
+                    # Salvar em cookie se "Lembrar-me" estiver marcado
+                    if lembrar:
+                        salvar_login_cookie(email, usuario.get('senha_hash', ''))
+                    
                     st.success(f"Bem-vindo, {usuario['nome']}!")
                     st.rerun()
                 else:
@@ -287,7 +405,10 @@ def verificar_autenticacao():
 
 
 def fazer_logout():
-    """Faz logout do usuario"""
+    """Faz logout do usuario e limpa cookie"""
+    # Limpar cookie de sessao
+    limpar_cookie_login()
+    
     st.session_state.autenticado = False
     st.session_state.usuario_logado = None
     st.rerun()
