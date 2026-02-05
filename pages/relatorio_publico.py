@@ -61,6 +61,28 @@ def render_publico(token: str):
     </div>
     """, unsafe_allow_html=True)
     
+    # Botoes de download CSV
+    influenciadores_data = data_manager.get_influenciadores_campanha(campanha['id'])
+    col1, col2, col3 = st.columns([2, 1, 1])
+    with col2:
+        csv_data = funcoes_auxiliares.exportar_campanha_csv(campanha, influenciadores_data)
+        st.download_button(
+            "CSV Conteudo",
+            data=csv_data,
+            file_name=f"{campanha['nome']}_conteudo.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+    with col3:
+        csv_balizadores = funcoes_auxiliares.exportar_csv_balizadores(campanha, influenciadores_data)
+        st.download_button(
+            "CSV Balizadores",
+            data=csv_balizadores,
+            file_name=f"{campanha['nome']}_balizadores.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+    
     # Lista de campanhas (para compatibilidade com funcoes do relatorio)
     campanhas_list = [campanha]
     

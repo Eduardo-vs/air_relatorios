@@ -411,6 +411,40 @@ def render_modal_editar():
             categoria = st.text_input("Categorias:", value=inf.get('categoria', ''), 
                                      placeholder="Ex: Cabelo Crespo, Pele Negra, 18-24 anos")
             
+            # Colunas Dinamicas
+            colunas_dinamicas = data_manager.get_colunas_dinamicas()
+            valores_colunas = {}
+            
+            if colunas_dinamicas:
+                st.markdown("---")
+                st.markdown("**Colunas Dinamicas**")
+                
+                valores_atuais = data_manager.get_valores_colunas_influenciador(inf_id)
+                
+                cols = st.columns(2)
+                for i, col_din in enumerate(colunas_dinamicas):
+                    with cols[i % 2]:
+                        valor_atual = valores_atuais.get(col_din['id'], '')
+                        opcoes = col_din.get('opcoes', [])
+                        
+                        if opcoes:
+                            # Selectbox com opcoes pre-definidas
+                            opcoes_com_vazio = [''] + opcoes
+                            idx = opcoes_com_vazio.index(valor_atual) if valor_atual in opcoes_com_vazio else 0
+                            valores_colunas[col_din['id']] = st.selectbox(
+                                col_din['nome'],
+                                opcoes_com_vazio,
+                                index=idx,
+                                key=f"col_din_{col_din['id']}_{inf_id}"
+                            )
+                        else:
+                            # Text input para texto livre
+                            valores_colunas[col_din['id']] = st.text_input(
+                                col_din['nome'],
+                                value=valor_atual,
+                                key=f"col_din_{col_din['id']}_{inf_id}"
+                            )
+            
             col1, col2, col3 = st.columns(3)
             with col1:
                 if st.form_submit_button("Salvar", use_container_width=True):
@@ -429,6 +463,11 @@ def render_modal_editar():
                             'categoria': categoria,
                             'classificacao': data_manager.calcular_classificacao(seguidores)
                         })
+                        
+                        # Salvar valores das colunas dinamicas
+                        for col_id, valor in valores_colunas.items():
+                            data_manager.set_valor_coluna_influenciador(inf_id, col_id, valor)
+                        
                         st.session_state.edit_influenciador_id = None
                         st.success("Atualizado!")
                         st.rerun()

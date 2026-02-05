@@ -528,6 +528,30 @@ def init_db():
         )
     ''')
     
+    # Tabela de colunas dinamicas (categorias personalizadas)
+    cursor.execute(f'''
+        CREATE TABLE IF NOT EXISTS colunas_dinamicas (
+            id {pk_type},
+            nome {text_type} NOT NULL,
+            descricao {text_type},
+            opcoes {text_type},
+            ordem {int_type} DEFAULT 0,
+            ativo {int_type} DEFAULT 1,
+            created_at {text_type}
+        )
+    ''')
+    
+    # Tabela de valores das colunas dinamicas por influenciador
+    cursor.execute(f'''
+        CREATE TABLE IF NOT EXISTS influenciador_colunas (
+            id {pk_type},
+            influenciador_id {int_type} NOT NULL,
+            coluna_id {int_type} NOT NULL,
+            valor {text_type},
+            UNIQUE(influenciador_id, coluna_id)
+        )
+    ''')
+    
     conn.commit()
     
     # ========== MIGRACOES ==========
@@ -545,6 +569,7 @@ def _run_migrations(cursor, conn):
     migrations = [
         # (tabela, coluna, tipo, default)
         ("campanhas", "mostrar_aba_categoria", "INTEGER", "1"),
+        ("campanhas", "colunas_dinamicas_selecionadas", "TEXT", "NULL"),
     ]
     
     for table, column, col_type, default in migrations:
@@ -2251,6 +2276,41 @@ def atualizar_classificacao_comentario(comment_id: str, categoria: str) -> bool:
         return False
 
 
+def atualizar_comentario(campanha_id: int, post_url: str, usuario: str, texto: str, 
+                         categoria: str = None, sentimento: str = None) -> bool:
+    """Atualiza categoria e/ou sentimento de um comentario"""
+    try:
+        # Montar query dinamicamente
+        campos = []
+        valores = []
+        
+        if categoria is not None:
+            campos.append("categoria = ?")
+            valores.append(categoria)
+            campos.append("classificado = 1")
+        
+        if sentimento is not None:
+            campos.append("sentimento = ?")
+            valores.append(sentimento)
+        
+        if not campos:
+            return False
+        
+        # Adicionar WHERE
+        valores.extend([campanha_id, post_url, usuario, texto[:100]])
+        
+        query = f"""UPDATE comentarios_posts 
+                    SET {', '.join(campos)}
+                    WHERE campanha_id = ? AND post_url = ? AND usuario = ? AND texto LIKE ?"""
+        
+        execute_query(query, tuple(valores))
+        invalidar_cache()
+        return True
+    except Exception as e:
+        print(f"Erro ao atualizar comentario: {e}")
+        return False
+
+
 def atualizar_classificacoes_lote(classificacoes: list) -> int:
     """
     Atualiza classificacoes em lote.
@@ -2290,15 +2350,22 @@ def atualizar_classificacoes_lote(classificacoes: list) -> int:
 
 
 def get_comentarios_campanha(campanha_id: int, apenas_classificados: bool = False) -> List[Dict]:
-    """Retorna todos os comentarios de uma campanha"""
+    """Retorna todos os comentarios de uma campanha com nome do influenciador"""
+    query_base = """
+        SELECT c.*, i.nome as influenciador 
+        FROM comentarios_posts c
+        LEFT JOIN influenciadores i ON c.influenciador_id = i.id
+        WHERE c.campanha_id = ?
+    """
+    
     if apenas_classificados:
         rows = execute_select(
-            "SELECT * FROM comentarios_posts WHERE campanha_id = ? AND classificado = 1 ORDER BY created_at DESC",
+            query_base + " AND c.classificado = 1 ORDER BY c.created_at DESC",
             (campanha_id,)
         )
     else:
         rows = execute_select(
-            "SELECT * FROM comentarios_posts WHERE campanha_id = ? ORDER BY created_at DESC",
+            query_base + " ORDER BY c.created_at DESC",
             (campanha_id,)
         )
     return rows
@@ -2686,5 +2753,190 @@ def get_convites(criado_por: int = None) -> List[Dict]:
 def excluir_convite(convite_id: int) -> bool:
     """Exclui convite"""
     execute_update("DELETE FROM convites WHERE id = ?", (convite_id,))
+    return True
+
+
+# ========================================
+# COLUNAS DINAMICAS (CATEGORIAS PERSONALIZADAS)
+# ========================================
+
+def get_colunas_dinamicas() -> List[Dict]:
+    """Retorna todas as colunas dinamicas ativas"""
+    rows = execute_query(
+        "SELECT * FROM colunas_dinamicas WHERE ativo = 1 ORDER BY ordem, id"
+    )
+    colunas = []
+    for row in rows:
+        col = dict(row)
+        # Parsear opcoes como lista
+        if col.get('opcoes'):
+            try:
+                col['opcoes'] = json.loads(col['opcoes'])
+            except:
+                col['opcoes'] = [o.strip() for o in col['opcoes'].split(',') if o.strip()]
+        else:
+            col['opcoes'] = []
+        colunas.append(col)
+    return colunas
+
+
+def get_coluna_dinamica(coluna_id: int) -> Optional[Dict]:
+    """Retorna uma coluna dinamica por ID"""
+    rows = execute_query("SELECT * FROM colunas_dinamicas WHERE id = ?", (coluna_id,))
+    if rows:
+        col = dict(rows[0])
+        if col.get('opcoes'):
+            try:
+                col['opcoes'] = json.loads(col['opcoes'])
+            except:
+                col['opcoes'] = [o.strip() for o in col['opcoes'].split(',') if o.strip()]
+        else:
+            col['opcoes'] = []
+        return col
+    return None
+
+
+def criar_coluna_dinamica(nome: str, descricao: str = '', opcoes: List[str] = None) -> Optional[int]:
+    """Cria uma nova coluna dinamica"""
+    opcoes_json = json.dumps(opcoes or [])
+    now = datetime.now().isoformat()
+    
+    result = execute_insert(
+        """INSERT INTO colunas_dinamicas (nome, descricao, opcoes, created_at)
+           VALUES (?, ?, ?, ?)""",
+        (nome, descricao, opcoes_json, now)
+    )
+    invalidar_cache()
+    return result
+
+
+def atualizar_coluna_dinamica(coluna_id: int, dados: Dict) -> bool:
+    """Atualiza uma coluna dinamica"""
+    campos = []
+    valores = []
+    
+    if 'nome' in dados:
+        campos.append("nome = ?")
+        valores.append(dados['nome'])
+    if 'descricao' in dados:
+        campos.append("descricao = ?")
+        valores.append(dados['descricao'])
+    if 'opcoes' in dados:
+        campos.append("opcoes = ?")
+        valores.append(json.dumps(dados['opcoes']) if isinstance(dados['opcoes'], list) else dados['opcoes'])
+    if 'ordem' in dados:
+        campos.append("ordem = ?")
+        valores.append(dados['ordem'])
+    if 'ativo' in dados:
+        campos.append("ativo = ?")
+        valores.append(1 if dados['ativo'] else 0)
+    
+    if not campos:
+        return False
+    
+    valores.append(coluna_id)
+    execute_update(
+        f"UPDATE colunas_dinamicas SET {', '.join(campos)} WHERE id = ?",
+        tuple(valores)
+    )
+    invalidar_cache()
+    return True
+
+
+def excluir_coluna_dinamica(coluna_id: int) -> bool:
+    """Desativa uma coluna dinamica (soft delete)"""
+    execute_update("UPDATE colunas_dinamicas SET ativo = 0 WHERE id = ?", (coluna_id,))
+    invalidar_cache()
+    return True
+
+
+def get_valores_colunas_influenciador(influenciador_id: int) -> Dict[int, str]:
+    """Retorna os valores das colunas dinamicas de um influenciador
+    
+    Returns:
+        Dict mapeando coluna_id -> valor
+    """
+    rows = execute_query(
+        "SELECT coluna_id, valor FROM influenciador_colunas WHERE influenciador_id = ?",
+        (influenciador_id,)
+    )
+    return {row['coluna_id']: row['valor'] for row in rows}
+
+
+def set_valor_coluna_influenciador(influenciador_id: int, coluna_id: int, valor: str) -> bool:
+    """Define o valor de uma coluna dinamica para um influenciador"""
+    # Usar UPSERT (INSERT OR REPLACE para SQLite, ON CONFLICT para Postgres)
+    if USING_POSTGRES:
+        execute_update(
+            """INSERT INTO influenciador_colunas (influenciador_id, coluna_id, valor)
+               VALUES (%s, %s, %s)
+               ON CONFLICT (influenciador_id, coluna_id) 
+               DO UPDATE SET valor = EXCLUDED.valor""",
+            (influenciador_id, coluna_id, valor)
+        )
+    else:
+        execute_update(
+            """INSERT OR REPLACE INTO influenciador_colunas (influenciador_id, coluna_id, valor)
+               VALUES (?, ?, ?)""",
+            (influenciador_id, coluna_id, valor)
+        )
+    invalidar_cache()
+    return True
+
+
+def get_influenciadores_por_coluna(coluna_id: int, valor: str = None) -> List[Dict]:
+    """Retorna influenciadores filtrados por coluna dinamica
+    
+    Args:
+        coluna_id: ID da coluna
+        valor: Se fornecido, filtra por esse valor especifico
+    """
+    if valor:
+        rows = execute_query(
+            """SELECT i.* FROM influenciadores i
+               JOIN influenciador_colunas ic ON i.id = ic.influenciador_id
+               WHERE ic.coluna_id = ? AND ic.valor = ?""",
+            (coluna_id, valor)
+        )
+    else:
+        rows = execute_query(
+            """SELECT i.* FROM influenciadores i
+               JOIN influenciador_colunas ic ON i.id = ic.influenciador_id
+               WHERE ic.coluna_id = ?""",
+            (coluna_id,)
+        )
+    return [dict(row) for row in rows]
+
+
+def get_valores_unicos_coluna(coluna_id: int) -> List[str]:
+    """Retorna valores unicos usados em uma coluna dinamica"""
+    rows = execute_query(
+        "SELECT DISTINCT valor FROM influenciador_colunas WHERE coluna_id = ? AND valor IS NOT NULL AND valor != '' ORDER BY valor",
+        (coluna_id,)
+    )
+    return [row['valor'] for row in rows]
+
+
+def get_colunas_campanha(campanha_id: int) -> List[int]:
+    """Retorna IDs das colunas dinamicas selecionadas para uma campanha"""
+    campanha = get_campanha(campanha_id)
+    if campanha:
+        colunas_json = campanha.get('colunas_dinamicas_selecionadas')
+        if colunas_json:
+            try:
+                return json.loads(colunas_json)
+            except:
+                pass
+    return []
+
+
+def set_colunas_campanha(campanha_id: int, coluna_ids: List[int]) -> bool:
+    """Define quais colunas dinamicas estao selecionadas para uma campanha"""
+    colunas_json = json.dumps(coluna_ids)
+    execute_update(
+        "UPDATE campanhas SET colunas_dinamicas_selecionadas = ? WHERE id = ?",
+        (colunas_json, campanha_id)
+    )
+    invalidar_cache()
     return True
 

@@ -85,6 +85,52 @@ def filtrar_campanhas_por_periodo(campanhas_list: List[Dict], data_inicio: str, 
     return campanhas_filtradas
 
 
+def filtrar_campanhas_por_colunas_dinamicas(campanhas_list: List[Dict], filtros: Dict[int, str]) -> List[Dict]:
+    """
+    Filtra influenciadores das campanhas por colunas dinamicas
+    
+    Args:
+        campanhas_list: Lista de campanhas
+        filtros: Dict mapeando coluna_id -> valor selecionado (ou 'Todos')
+    
+    Returns:
+        Lista de campanhas com influenciadores filtrados
+    """
+    # Verificar se ha filtros ativos
+    filtros_ativos = {k: v for k, v in filtros.items() if v and v != 'Todos'}
+    
+    if not filtros_ativos:
+        return campanhas_list
+    
+    campanhas_filtradas = []
+    
+    for camp in campanhas_list:
+        camp_filtrada = copy.deepcopy(camp)
+        
+        influenciadores_filtrados = []
+        for inf_camp in camp_filtrada.get('influenciadores', []):
+            inf_id = inf_camp.get('influenciador_id')
+            
+            # Buscar valores das colunas do influenciador
+            valores_inf = data_manager.get_valores_colunas_influenciador(inf_id)
+            
+            # Verificar se passa em todos os filtros ativos
+            passa_filtro = True
+            for col_id, valor_filtro in filtros_ativos.items():
+                valor_inf = valores_inf.get(col_id, '')
+                if valor_inf != valor_filtro:
+                    passa_filtro = False
+                    break
+            
+            if passa_filtro:
+                influenciadores_filtrados.append(inf_camp)
+        
+        camp_filtrada['influenciadores'] = influenciadores_filtrados
+        campanhas_filtradas.append(camp_filtrada)
+    
+    return campanhas_filtradas
+
+
 # ========================================
 # INSIGHTS POR IA - COM PERSISTENCIA
 # ========================================
@@ -474,11 +520,103 @@ def render_relatorio(campanhas_list, cliente=None):
                 st.session_state.current_page = 'Clientes'
             st.rerun()
     
-    # Verificar se tem AON
-    has_aon = any(c.get('is_aon') for c in campanhas_list)
+    # FILTRO DE DATA GLOBAL
+    st.markdown("---")
+    with st.expander("Filtros do Relatorio", expanded=False):
+        # Filtro de Data
+        st.markdown("**Filtrar por Periodo**")
+        col_d1, col_d2, col_d3 = st.columns([2, 2, 1])
+        
+        # Pegar datas da campanha como default
+        data_min = None
+        data_max = None
+        for camp in campanhas_list:
+            try:
+                d_ini = datetime.strptime(camp.get('data_inicio', ''), '%Y-%m-%d')
+                d_fim = datetime.strptime(camp.get('data_fim', ''), '%Y-%m-%d')
+                if data_min is None or d_ini < data_min:
+                    data_min = d_ini
+                if data_max is None or d_fim > data_max:
+                    data_max = d_fim
+            except:
+                pass
+        
+        if data_min is None:
+            data_min = datetime.now() - timedelta(days=90)
+        if data_max is None:
+            data_max = datetime.now()
+        
+        with col_d1:
+            filtro_data_ini = st.date_input(
+                "Data inicio:",
+                value=data_min.date(),
+                key="filtro_data_ini_global"
+            )
+        
+        with col_d2:
+            filtro_data_fim = st.date_input(
+                "Data fim:",
+                value=data_max.date(),
+                key="filtro_data_fim_global"
+            )
+        
+        with col_d3:
+            aplicar_filtro = st.checkbox("Aplicar filtro", value=False, key="aplicar_filtro_data")
+        
+        if aplicar_filtro:
+            st.caption(f"Filtrando posts de {filtro_data_ini.strftime('%d/%m/%Y')} a {filtro_data_fim.strftime('%d/%m/%Y')}")
+        
+        # Filtro de Colunas Dinamicas
+        filtros_colunas = {}
+        if len(campanhas_list) == 1:
+            campanha_temp = campanhas_list[0]
+            colunas_json = campanha_temp.get('colunas_dinamicas_selecionadas')
+            colunas_ids = []
+            if colunas_json:
+                try:
+                    colunas_ids = json.loads(colunas_json) if isinstance(colunas_json, str) else colunas_json
+                except:
+                    pass
+            
+            if colunas_ids:
+                st.markdown("---")
+                st.markdown("**Filtrar por Colunas Dinamicas**")
+                
+                colunas_dinamicas = data_manager.get_colunas_dinamicas()
+                colunas_selecionadas = [c for c in colunas_dinamicas if c['id'] in colunas_ids]
+                
+                cols_filtro = st.columns(len(colunas_selecionadas)) if colunas_selecionadas else [st]
+                
+                for i, col_din in enumerate(colunas_selecionadas):
+                    with cols_filtro[i]:
+                        valores_disponiveis = data_manager.get_valores_unicos_coluna(col_din['id'])
+                        valores_disponiveis = ['Todos'] + valores_disponiveis
+                        
+                        filtros_colunas[col_din['id']] = st.selectbox(
+                            col_din['nome'],
+                            valores_disponiveis,
+                            key=f"filtro_col_din_{col_din['id']}"
+                        )
     
-    # Calcular metricas (se nao foi filtrado)
-    metricas = data_manager.calcular_metricas_multiplas_campanhas(campanhas_list)
+    # Guardar filtros no session_state para uso nas funcoes
+    st.session_state['filtros_colunas_dinamicas'] = filtros_colunas
+    
+    # Aplicar filtro de data se ativado
+    campanhas_filtradas = campanhas_list
+    if st.session_state.get('aplicar_filtro_data', False):
+        data_ini_str = filtro_data_ini.strftime('%d/%m/%Y')
+        data_fim_str = filtro_data_fim.strftime('%d/%m/%Y')
+        campanhas_filtradas = filtrar_campanhas_por_periodo(campanhas_list, data_ini_str, data_fim_str)
+    
+    # Aplicar filtro de colunas dinamicas se houver
+    if filtros_colunas:
+        campanhas_filtradas = filtrar_campanhas_por_colunas_dinamicas(campanhas_filtradas, filtros_colunas)
+    
+    # Verificar se tem AON
+    has_aon = any(c.get('is_aon') for c in campanhas_filtradas)
+    
+    # Calcular metricas (com campanhas filtradas)
+    metricas = data_manager.calcular_metricas_multiplas_campanhas(campanhas_filtradas)
     cores = funcoes_auxiliares.get_cores_graficos()
     
     # Verificar se campanha tem categorias e se deve mostrar aba
@@ -524,40 +662,40 @@ def render_relatorio(campanhas_list, cliente=None):
     
     # TAB 1: BIG NUMBERS
     with tabs[tab_idx]:
-        render_pag1_big_numbers(campanhas_list, metricas, cores)
+        render_pag1_big_numbers(campanhas_filtradas, metricas, cores)
     tab_idx += 1
     
     # TAB 2: VISAO AON (se aplicavel)
     if has_aon:
         with tabs[tab_idx]:
-            render_pag3_visao_aon(campanhas_list, metricas, cores, cliente)
+            render_pag3_visao_aon(campanhas_filtradas, metricas, cores, cliente)
         tab_idx += 1
     
     # TAB 3: KPIs por Influenciador
     with tabs[tab_idx]:
-        render_pag4_kpis_influenciador(campanhas_list, cores)
+        render_pag4_kpis_influenciador(campanhas_filtradas, cores)
     tab_idx += 1
     
     # TAB: KPIs por Categoria (condicional)
     if show_categoria_tab:
         with tabs[tab_idx]:
-            render_pag_kpis_categoria(campanhas_list, cores)
+            render_pag_kpis_categoria(campanhas_filtradas, cores)
         tab_idx += 1
     
     # TAB: Top Performance
     with tabs[tab_idx]:
-        render_pag5_top_performance(campanhas_list, cores)
+        render_pag5_top_performance(campanhas_filtradas, cores)
     tab_idx += 1
     
     # TAB: Lista Influenciadores
     with tabs[tab_idx]:
-        render_pag6_lista_influenciadores(campanhas_list, cores)
+        render_pag6_lista_influenciadores(campanhas_filtradas, cores)
     tab_idx += 1
     
     # TAB: Comentarios
     with tabs[tab_idx]:
         try:
-            render_comentarios(campanhas_list, cores)
+            render_comentarios(campanhas_filtradas, cores)
         except Exception as e:
             st.error(f"Erro em Comentarios: {str(e)}")
     tab_idx += 1
@@ -1358,16 +1496,14 @@ def render_pag4_kpis_influenciador(campanhas_list, cores):
     
     col1, col2 = st.columns([1, 3])
     with col1:
-        metrica_custo = st.selectbox("Metrica:", ["CPM", "CPE", "CPI", "CPV"], key="custo_pag4")
+        metrica_custo = st.selectbox("Metrica:", ["CPM", "CPI", "CPV"], key="custo_pag4")
     
     with col2:
         df_custo = df.copy()
         if metrica_custo == "CPM":
             df_custo['metrica'] = (df_custo['custo'] / df_custo['impressoes'] * 1000).round(2).fillna(0)
-        elif metrica_custo == "CPE":
-            df_custo['metrica'] = (df_custo['custo'] / df_custo['interacoes']).round(2).fillna(0)
         elif metrica_custo == "CPI":
-            df_custo['metrica'] = (df_custo['custo'] / df_custo['impressoes']).round(4).fillna(0)
+            df_custo['metrica'] = (df_custo['custo'] / df_custo['interacoes']).round(2).fillna(0)
         else:  # CPV
             df_custo['metrica'] = (df_custo['custo'] / df_custo['impressoes']).round(4).fillna(0)
         
@@ -1851,69 +1987,78 @@ def render_pag6_lista_influenciadores(campanhas_list, cores):
     
     st.dataframe(df_exibir, use_container_width=True, hide_index=True)
     
-    # Configuração e edição de colunas personalizadas
+    # ========== TABELA POR CONTEUDO ==========
     st.markdown("---")
-    with st.expander("Configurar Colunas Personalizadas", expanded=False):
-        st.caption("Configure os nomes das colunas e preencha os dados para cada influenciador")
-        
-        # Nomes das colunas
-        st.markdown("**Nomes das Colunas:**")
-        col_a, col_b = st.columns(2)
-        with col_a:
-            novo_col1_nome = st.text_input("Nome da Coluna 1:", value=col_custom1_nome or '', placeholder="Ex: Tipo de Cabelo", key="config_col1_nome")
-        with col_b:
-            novo_col2_nome = st.text_input("Nome da Coluna 2:", value=col_custom2_nome or '', placeholder="Ex: Faixa Etaria", key="config_col2_nome")
-        
-        st.markdown("---")
-        st.markdown("**Dados por Influenciador:**")
-        
-        # Pegar a primeira campanha para editar
-        if campanhas_list:
-            camp = campanhas_list[0]
-            camp_id = camp['id']
+    st.subheader("Lista de Conteudos")
+    
+    # Coletar dados de todos os posts
+    dados_conteudo = []
+    for camp in campanhas_list:
+        for inf_camp in camp.get('influenciadores', []):
+            inf = data_manager.get_influenciador(inf_camp.get('influenciador_id'))
+            if not inf:
+                continue
             
-            for idx, inf_camp in enumerate(camp.get('influenciadores', [])):
-                inf = data_manager.get_influenciador(inf_camp.get('influenciador_id'))
-                if not inf:
-                    continue
-                
-                nome_inf = inf.get('nome', 'Desconhecido')
-                col1, col2, col3 = st.columns([2, 2, 2])
-                
-                with col1:
-                    st.markdown(f"**{nome_inf}**")
-                
-                with col2:
-                    val1 = st.text_input(
-                        novo_col1_nome or "Coluna 1",
-                        value=inf_camp.get('dado_custom1', ''),
-                        key=f"edit_custom1_{inf['id']}",
-                        label_visibility="collapsed",
-                        placeholder=novo_col1_nome or "Coluna 1"
-                    )
-                    inf_camp['dado_custom1'] = val1
-                
-                with col3:
-                    val2 = st.text_input(
-                        novo_col2_nome or "Coluna 2",
-                        value=inf_camp.get('dado_custom2', ''),
-                        key=f"edit_custom2_{inf['id']}",
-                        label_visibility="collapsed",
-                        placeholder=novo_col2_nome or "Coluna 2"
-                    )
-                    inf_camp['dado_custom2'] = val2
-            
-            if st.button("Salvar colunas personalizadas", type="primary"):
-                # Salvar nomes das colunas e dados
-                data_manager.atualizar_campanha(camp_id, {
-                    'influenciadores': camp['influenciadores'],
-                    'colunas_personalizadas': {
-                        'col1_nome': novo_col1_nome,
-                        'col2_nome': novo_col2_nome
-                    }
+            for post in inf_camp.get('posts', []):
+                link = post.get('link', '') or post.get('link_post', '') or post.get('permalink', '') or ''
+                dados_conteudo.append({
+                    'Influenciador': inf.get('nome', ''),
+                    'Usuario': inf.get('usuario', ''),
+                    'Rede': inf.get('network', 'instagram'),
+                    'Classificacao': inf.get('classificacao', ''),
+                    'Seguidores': inf.get('seguidores', 0),
+                    'Formato': post.get('formato', ''),
+                    'Data': post.get('data_publicacao', ''),
+                    'Link': link,
+                    'Views': post.get('views', 0) or 0,
+                    'Alcance': post.get('alcance', 0) or 0,
+                    'Interacoes': post.get('interacoes', 0) or 0,
+                    'Impressoes': post.get('impressoes', 0) or 0,
+                    'Curtidas': post.get('curtidas', 0) or 0,
+                    'Comentarios': post.get('comentarios_qtd', 0) or 0,
+                    'Compartilhamentos': post.get('compartilhamentos', 0) or 0,
+                    'Saves': post.get('saves', 0) or 0,
+                    'Cliques Link': post.get('clique_link', 0) or post.get('cliques_link', 0) or 0,
+                    'Cliques @': post.get('cliques_arroba', 0) or post.get('cliques_perfil', 0) or 0,
+                    'Conversoes': post.get('cupom_conversoes', 0) or post.get('conversoes', 0) or 0
                 })
-                st.success("Dados salvos!")
-                st.rerun()
+    
+    if dados_conteudo:
+        df_conteudo = pd.DataFrame(dados_conteudo)
+        
+        # Filtros para tabela de conteudo
+        col_fc1, col_fc2 = st.columns(2)
+        with col_fc1:
+            formatos_cont = ['Todos'] + sorted(df_conteudo['Formato'].unique().tolist())
+            filtro_formato_cont = st.selectbox("Filtrar por formato:", formatos_cont, key="filtro_fmt_conteudo")
+        with col_fc2:
+            influs_cont = ['Todos'] + sorted(df_conteudo['Influenciador'].unique().tolist())
+            filtro_influ_cont = st.selectbox("Filtrar por influenciador:", influs_cont, key="filtro_inf_conteudo")
+        
+        # Aplicar filtros
+        df_cont_filtrado = df_conteudo.copy()
+        if filtro_formato_cont != 'Todos':
+            df_cont_filtrado = df_cont_filtrado[df_cont_filtrado['Formato'] == filtro_formato_cont]
+        if filtro_influ_cont != 'Todos':
+            df_cont_filtrado = df_cont_filtrado[df_cont_filtrado['Influenciador'] == filtro_influ_cont]
+        
+        # Formatar numeros
+        for col in ['Seguidores', 'Views', 'Alcance', 'Interacoes', 'Impressoes', 'Curtidas', 'Comentarios', 'Compartilhamentos', 'Saves', 'Cliques Link', 'Cliques @', 'Conversoes']:
+            if col in df_cont_filtrado.columns:
+                df_cont_filtrado[col] = df_cont_filtrado[col].apply(lambda x: f"{int(x):,}".replace(",", ".") if pd.notna(x) else "0")
+        
+        st.dataframe(df_cont_filtrado, use_container_width=True, hide_index=True)
+        
+        # Botao download CSV
+        csv_conteudo = df_conteudo.to_csv(index=False, sep=';').encode('utf-8-sig')
+        st.download_button(
+            "Baixar CSV Conteudos",
+            data=csv_conteudo,
+            file_name="conteudos_campanha.csv",
+            mime="text/csv"
+        )
+    else:
+        st.info("Nenhum conteudo encontrado")
 
 
 # ========================================
@@ -2287,7 +2432,7 @@ def render_comentarios(campanhas_list, cores):
             else:
                 st.info(f"Nenhum comentario para o formato {formato_sel}")
     
-    # Nuvem de palavras (circular, preta, centralizada)
+    # Nuvem de palavras (circular, preta, centralizada) - apenas substantivos, adjetivos e nomes proprios
     try:
         from wordcloud import WordCloud
         import matplotlib.pyplot as plt
@@ -2297,24 +2442,155 @@ def render_comentarios(campanhas_list, cores):
         
         todos_textos = " ".join([c.get('texto', '') for c in comentarios])
         
+        # Stopwords expandidas - verbos, artigos, preposicoes, pronomes, advérbios, interjeicoes
         stopwords_ptbr = {
+            # Artigos e preposicoes
             'a', 'o', 'e', 'de', 'do', 'da', 'dos', 'das', 'em', 'no', 'na', 'nos', 'nas',
-            'um', 'uma', 'uns', 'umas', 'que', 'para', 'com', 'por', 'se', 'mais', 'mas',
-            'como', 'ou', 'ao', 'aos', 'ja', 'muito', 'bem', 'so', 'tambem', 'eu', 'voce',
-            'ele', 'ela', 'nos', 'eles', 'elas', 'meu', 'minha', 'seu', 'sua', 'isso',
-            'esse', 'essa', 'este', 'esta', 'aqui', 'ali', 'la', 'nao', 'sim', 'tem',
-            'ter', 'foi', 'ser', 'esta', 'vai', 'vou', 'tudo', 'todo', 'toda', 'te',
-            'me', 'ti', 'lhe', 'pra', 'pro', 'the', 'and', 'is', 'to', 'of', 'in',
-            'it', 'you', 'that', 'this', 'for', 'are', 'was', 'with', 'on', 'at',
-            'kk', 'kkk', 'kkkk', 'kkkkk', 'haha', 'hahaha', 'rs', 'rsrs',
-            'ne', 'ai', 'eh', 'ta', 'tb', 'vc', 'vcs', 'q', 'pq', 'tbm',
-            'nan', 'none', 'null'
+            'um', 'uma', 'uns', 'umas', 'para', 'com', 'por', 'ao', 'aos', 'pelo', 'pela',
+            'sobre', 'sob', 'entre', 'sem', 'ate', 'desde', 'perante', 'ante',
+            # Pronomes
+            'que', 'se', 'eu', 'voce', 'vc', 'ele', 'ela', 'nos', 'vcs', 'eles', 'elas',
+            'meu', 'minha', 'meus', 'minhas', 'seu', 'sua', 'seus', 'suas', 'nosso', 'nossa',
+            'isso', 'esse', 'essa', 'este', 'esta', 'esses', 'essas', 'estes', 'estas',
+            'aquele', 'aquela', 'aquilo', 'quem', 'qual', 'cujo', 'onde', 'quando',
+            'me', 'te', 'ti', 'lhe', 'lo', 'la', 'nos', 'vos', 'lhes', 'los', 'las',
+            # Verbos comuns (conjugados)
+            'ser', 'estar', 'ter', 'haver', 'ir', 'vir', 'fazer', 'dar', 'ver', 'saber',
+            'sou', 'es', 'somos', 'sao', 'era', 'eram', 'foi', 'foram', 'sera', 'serao',
+            'estou', 'esta', 'estamos', 'estao', 'estava', 'estavam', 'esteve', 'estiveram',
+            'tenho', 'tem', 'temos', 'tinha', 'tinham', 'teve', 'tiveram', 'tera', 'terao',
+            'vou', 'vai', 'vamos', 'vao', 'ia', 'iam', 'fui', 'fomos', 'foram',
+            'faco', 'faz', 'fazemos', 'fazem', 'fez', 'fizeram', 'fazia', 'faziam',
+            'dou', 'da', 'damos', 'dao', 'deu', 'deram', 'dava', 'davam',
+            'vejo', 've', 'vemos', 'veem', 'viu', 'viram', 'via', 'viam',
+            'sei', 'sabe', 'sabemos', 'sabem', 'soube', 'souberam', 'sabia', 'sabiam',
+            'pode', 'podem', 'podia', 'podiam', 'poderia', 'poderiam', 'pude', 'puderam',
+            'quer', 'querem', 'queria', 'queriam', 'quis', 'quiseram',
+            'diz', 'dizem', 'disse', 'disseram', 'dizia', 'diziam',
+            'acho', 'acha', 'acham', 'achei', 'acharam', 'achava', 'achavam',
+            'fica', 'ficam', 'ficou', 'ficaram', 'ficava', 'ficavam',
+            'parece', 'parecem', 'pareceu', 'pareceram', 'parecia', 'pareciam',
+            'gosto', 'gosta', 'gostam', 'gostei', 'gostaram', 'gostava', 'gostavam',
+            'amo', 'ama', 'amam', 'amei', 'amaram', 'amava', 'amavam',
+            'quero', 'quer', 'querem', 'quis', 'quiseram', 'queria', 'queriam',
+            'preciso', 'precisa', 'precisam', 'precisei', 'precisaram', 'precisava',
+            'consigo', 'consegue', 'conseguem', 'consegui', 'conseguiram', 'conseguia',
+            'uso', 'usa', 'usam', 'usei', 'usaram', 'usava', 'usavam',
+            'compro', 'compra', 'compram', 'comprei', 'compraram', 'comprava',
+            # Adverbios
+            'mais', 'menos', 'muito', 'pouco', 'bem', 'mal', 'ja', 'ainda', 'sempre',
+            'nunca', 'so', 'tambem', 'tb', 'tbm', 'aqui', 'ali', 'la', 'ca', 'onde',
+            'como', 'assim', 'entao', 'depois', 'antes', 'agora', 'hoje', 'ontem',
+            'amanha', 'cedo', 'tarde', 'logo', 'talvez', 'certamente', 'realmente',
+            'demais', 'tao', 'tanto', 'quanto', 'quase', 'apenas', 'somente',
+            # Conjuncoes
+            'mas', 'porem', 'contudo', 'todavia', 'ou', 'nem', 'porque', 'pq', 'pois',
+            'portanto', 'logo', 'entretanto', 'embora', 'embora', 'apesar',
+            # Interjeicoes e expressoes informais
+            'ai', 'ui', 'oh', 'ah', 'ih', 'opa', 'nossa', 'puxa', 'caramba', 'uau',
+            'kk', 'kkk', 'kkkk', 'kkkkk', 'kkkkkk', 'haha', 'hahaha', 'hehe', 'hihi',
+            'rs', 'rsrs', 'rsrsrs', 'lol', 'hshshs',
+            'ne', 'eh', 'ta', 'to', 'q', 'oq', 'nd', 'mt', 'mto', 'pra', 'pro',
+            'blz', 'vlw', 'obg', 'pfv', 'plz',
+            # Ingles comum
+            'the', 'and', 'is', 'to', 'of', 'in', 'it', 'you', 'that', 'this',
+            'for', 'are', 'was', 'with', 'on', 'at', 'be', 'have', 'has', 'had',
+            'not', 'but', 'what', 'all', 'were', 'when', 'we', 'there', 'can',
+            'an', 'your', 'which', 'their', 'will', 'from', 'or', 'been', 'one',
+            'if', 'would', 'who', 'her', 'him', 'my', 'me', 'so', 'no', 'just',
+            'like', 'love', 'get', 'got', 'want', 'need', 'know', 'think', 'see',
+            'look', 'come', 'could', 'now', 'than', 'its', 'only', 'way', 'into',
+            # Nulos
+            'nan', 'none', 'null', 'na'
         }
         
-        texto_limpo = re.sub(r'[^\w\s]', ' ', todos_textos.lower())
+        # Processar texto
+        texto_limpo = re.sub(r'[^\w\s]', ' ', todos_textos)
         texto_limpo = re.sub(r'\s+', ' ', texto_limpo).strip()
         
-        if texto_limpo and len(texto_limpo.split()) > 5:
+        # Lista de verbos comuns em portugues para excluir
+        verbos_comuns = {
+            'ser', 'estar', 'ter', 'fazer', 'poder', 'dizer', 'dar', 'ver', 'ir', 'vir',
+            'querer', 'saber', 'ficar', 'parecer', 'chegar', 'passar', 'dever', 'acabar',
+            'deixar', 'falar', 'levar', 'encontrar', 'seguir', 'continuar', 'acontecer',
+            'conhecer', 'viver', 'sentir', 'tornar', 'morar', 'acreditar', 'pensar',
+            'achar', 'olhar', 'usar', 'comprar', 'gostar', 'amar', 'adorar', 'curtir',
+            'postar', 'comentar', 'compartilhar', 'assistir', 'ouvir', 'escutar',
+            'tentar', 'precisar', 'esperar', 'lembrar', 'esquecer', 'perder', 'ganhar',
+            'pegar', 'colocar', 'tirar', 'abrir', 'fechar', 'entrar', 'sair', 'voltar',
+            'morrer', 'nascer', 'crescer', 'trabalhar', 'estudar', 'aprender', 'ensinar',
+            'ajudar', 'pedir', 'responder', 'perguntar', 'contar', 'mostrar', 'trazer',
+            'mandar', 'receber', 'enviar', 'criar', 'mudar', 'trocar', 'virar', 'cair',
+            'subir', 'descer', 'correr', 'andar', 'parar', 'comecar', 'terminar',
+            # Conjugacoes comuns
+            'sou', 'somos', 'era', 'foi', 'eram', 'fui', 'fomos', 'sera', 'serao',
+            'estou', 'esta', 'estao', 'estava', 'estavam', 'estive', 'esteve',
+            'tenho', 'tem', 'tinha', 'tinham', 'tive', 'teve', 'tera', 'terao',
+            'faco', 'faz', 'fazem', 'fazia', 'fiz', 'fez', 'fara', 'farao',
+            'posso', 'pode', 'podem', 'podia', 'pude', 'pode', 'podera', 'poderao',
+            'digo', 'diz', 'dizem', 'disse', 'disseram', 'dira', 'dirao',
+            'vou', 'vai', 'vamos', 'vao', 'ia', 'iam', 'fui', 'foi', 'ira', 'irao',
+            'vejo', 've', 'veem', 'via', 'vi', 'viu', 'vera', 'verao',
+            'quero', 'quer', 'querem', 'queria', 'quis', 'quiseram',
+            'sei', 'sabe', 'sabem', 'sabia', 'soube', 'souberam',
+            'fico', 'fica', 'ficam', 'ficava', 'fiquei', 'ficou',
+            'gosto', 'gosta', 'gostam', 'gostava', 'gostei', 'gostou',
+            'amo', 'ama', 'amam', 'amava', 'amei', 'amou',
+            'adoro', 'adora', 'adoram', 'adorava', 'adorei', 'adorou'
+        }
+        
+        # Terminacoes tipicas de verbos em portugues
+        terminacoes_verbos = ('ar', 'er', 'ir', 'ando', 'endo', 'indo', 'ado', 'ido', 'ada', 'ida', 'aram', 'eram', 'iram', 'asse', 'esse', 'isse')
+        
+        # Terminacoes tipicas de adjetivos e substantivos
+        terminacoes_subst_adj = ('cao', 'sao', 'dade', 'mento', 'ncia', 'eza', 'ura', 'oso', 'osa', 'vel', 'ico', 'ica', 'ivo', 'iva', 'oso', 'osa', 'eiro', 'eira', 'ista', 'ante', 'ente')
+        
+        # Filtrar palavras - manter substantivos, adjetivos e nomes proprios
+        palavras = texto_limpo.split()
+        palavras_filtradas = []
+        contagem_palavras = {}
+        
+        for palavra in palavras:
+            palavra_lower = palavra.lower()
+            
+            # Ignorar stopwords, palavras curtas e numeros
+            if (palavra_lower in stopwords_ptbr or 
+                len(palavra) <= 3 or 
+                palavra.isdigit() or
+                re.match(r'^[0-9]+$', palavra)):
+                continue
+            
+            # Ignorar verbos comuns
+            if palavra_lower in verbos_comuns:
+                continue
+            
+            # Ignorar palavras que parecem ser verbos (terminacoes tipicas)
+            if palavra_lower.endswith(terminacoes_verbos) and len(palavra) > 5:
+                # Excecao: algumas terminacoes podem ser substantivos/adjetivos
+                if not palavra_lower.endswith(('ado', 'ada', 'ido', 'ida')):  # Participios podem ser adjetivos
+                    continue
+            
+            # Priorizar:
+            # 1. Nomes proprios (comeca com maiuscula no texto original)
+            # 2. Palavras com terminacoes de substantivo/adjetivo
+            # 3. Outras palavras que nao sao verbos
+            
+            eh_nome_proprio = palavra[0].isupper() and not palavra.isupper()
+            eh_subst_adj = palavra_lower.endswith(terminacoes_subst_adj)
+            
+            if eh_nome_proprio or eh_subst_adj or (not palavra_lower.endswith(terminacoes_verbos)):
+                # Contar frequencia para dar peso
+                contagem_palavras[palavra_lower] = contagem_palavras.get(palavra_lower, 0) + 1
+                if eh_nome_proprio:
+                    contagem_palavras[palavra_lower] += 1  # Peso extra para nomes proprios
+        
+        # Adicionar palavras na lista com frequencia como peso
+        for palavra, freq in contagem_palavras.items():
+            palavras_filtradas.extend([palavra] * freq)
+        
+        texto_final = ' '.join(palavras_filtradas)
+        
+        if texto_final and len(texto_final.split()) > 5:
             # Mascara circular
             size = 600
             center = size // 2
@@ -2332,14 +2608,14 @@ def render_comentarios(campanhas_list, cores):
                 background_color='white',
                 stopwords=stopwords_ptbr,
                 mask=mask,
-                max_words=150,
+                max_words=100,
                 color_func=black_color_func,
                 prefer_horizontal=0.6,
-                min_font_size=8,
+                min_font_size=10,
                 max_font_size=80,
                 relative_scaling=0.5,
                 contour_width=0,
-            ).generate(texto_limpo)
+            ).generate(texto_final)
             
             fig_wc, ax_wc = plt.subplots(figsize=(5, 5))
             ax_wc.imshow(wc, interpolation='bilinear')
@@ -2352,6 +2628,42 @@ def render_comentarios(campanhas_list, cores):
             plt.close(fig_wc)
     except Exception as e:
         st.caption(f"Nuvem de palavras indisponivel: {str(e)[:60]}")
+    
+    # Insights dos comentarios
+    st.markdown("---")
+    st.markdown("**Insights**")
+    
+    # Calcular percentuais
+    total_mencoes = sum(categorias_count.values())
+    if total_mencoes > 0:
+        # Top 3 categorias
+        top_cats = categorias_count.most_common(3)
+        
+        # Gerar insights automaticos
+        insights_list = []
+        
+        if top_cats:
+            pct_top1 = round(top_cats[0][1] / total_mencoes * 100, 1)
+            insights_list.append(f"A categoria mais mencionada foi **{top_cats[0][0]}** com {pct_top1}% das mencoes ({top_cats[0][1]} comentarios).")
+        
+        if len(top_cats) >= 2:
+            pct_top2 = round(top_cats[1][1] / total_mencoes * 100, 1)
+            insights_list.append(f"Em segundo lugar, **{top_cats[1][0]}** representa {pct_top2}% das mencoes.")
+        
+        # Concentracao (top 3 representam X%)
+        if len(top_cats) >= 3:
+            pct_top3_total = round(sum(c[1] for c in top_cats) / total_mencoes * 100, 1)
+            insights_list.append(f"As 3 principais categorias concentram {pct_top3_total}% de todos os comentarios classificados.")
+        
+        # Diversidade
+        qtd_categorias = len(categorias_count)
+        if qtd_categorias > 5:
+            insights_list.append(f"Os comentarios foram distribuidos em {qtd_categorias} categorias diferentes, indicando diversidade de percepcoes.")
+        elif qtd_categorias <= 3:
+            insights_list.append(f"Os comentarios se concentram em apenas {qtd_categorias} categorias, indicando percepcao focada.")
+        
+        for insight in insights_list:
+            st.markdown(f"- {insight}")
     
     # Exemplos por categoria (3 de cada)
     st.markdown("---")

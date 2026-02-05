@@ -6,113 +6,104 @@ Login, registro por convite e gerenciamento de usuarios
 import streamlit as st
 from utils import data_manager
 import hashlib
-import json
-from datetime import datetime, timedelta
-
-# Tentar importar cookies manager
-try:
-    import extra_streamlit_components as stx
-    COOKIES_DISPONIVEL = True
-except ImportError:
-    COOKIES_DISPONIVEL = False
-
-
-def get_cookie_manager():
-    """Retorna o gerenciador de cookies"""
-    if not COOKIES_DISPONIVEL:
-        return None
-    return stx.CookieManager()
-
-
-def verificar_login_salvo():
-    """Verifica se existe login salvo em cookie e faz login automatico"""
-    if st.session_state.get('autenticado'):
-        return True
-    
-    if not COOKIES_DISPONIVEL:
-        return False
-    
-    try:
-        cookie_manager = get_cookie_manager()
-        if cookie_manager is None:
-            return False
-        
-        # Buscar cookie de sessao
-        token_cookie = cookie_manager.get("air_session")
-        
-        if token_cookie:
-            # Decodificar token
-            try:
-                dados = json.loads(token_cookie)
-                email = dados.get('email')
-                token_hash = dados.get('token')
-                expira = dados.get('expira')
-                
-                # Verificar expiracao
-                if expira and datetime.fromisoformat(expira) < datetime.now():
-                    # Cookie expirado, limpar
-                    cookie_manager.delete("air_session")
-                    return False
-                
-                # Verificar se usuario existe
-                if email:
-                    usuario = data_manager.get_usuario_por_email(email)
-                    if usuario:
-                        # Verificar token
-                        token_esperado = gerar_token_sessao(email, usuario.get('senha_hash', ''))
-                        if token_hash == token_esperado:
-                            st.session_state.usuario_logado = usuario
-                            st.session_state.autenticado = True
-                            return True
-            except:
-                pass
-    except:
-        pass
-    
-    return False
+import base64
 
 
 def gerar_token_sessao(email: str, senha_hash: str) -> str:
     """Gera token de sessao baseado no email e hash da senha"""
-    dados = f"{email}:{senha_hash}:air_secret_key"
-    return hashlib.sha256(dados.encode()).hexdigest()[:32]
+    dados = f"{email}:{senha_hash}:air_2024_secret"
+    return hashlib.sha256(dados.encode()).hexdigest()
 
 
-def salvar_login_cookie(email: str, senha_hash: str, dias: int = 30):
-    """Salva login em cookie para persistencia"""
-    if not COOKIES_DISPONIVEL:
-        return
+def gerar_token_url(email: str, senha_hash: str) -> str:
+    """Gera token para URL/localStorage"""
+    token = gerar_token_sessao(email, senha_hash)
+    dados = f"{email}|{token}"
+    return base64.b64encode(dados.encode()).decode('utf-8')
+
+
+def verificar_login_salvo():
+    """Verifica se existe login salvo via query params"""
+    if st.session_state.get('autenticado'):
+        return True
     
-    try:
-        cookie_manager = get_cookie_manager()
-        if cookie_manager is None:
-            return
-        
-        token = gerar_token_sessao(email, senha_hash)
-        expira = (datetime.now() + timedelta(days=dias)).isoformat()
-        
-        dados = json.dumps({
-            'email': email,
-            'token': token,
-            'expira': expira
-        })
-        
-        cookie_manager.set("air_session", dados, expires_at=datetime.now() + timedelta(days=dias))
-    except:
-        pass
-
-
-def limpar_cookie_login():
-    """Remove cookie de login"""
-    if not COOKIES_DISPONIVEL:
-        return
+    # Verificar token na URL (via query params)
+    token_param = st.query_params.get('auth_token')
     
-    try:
-        cookie_manager = get_cookie_manager()
-        if cookie_manager:
-            cookie_manager.delete("air_session")
-    except:
-        pass
+    if token_param:
+        try:
+            # Decodificar token base64
+            dados = base64.b64decode(token_param).decode('utf-8')
+            partes = dados.split('|')
+            
+            if len(partes) >= 2:
+                email = partes[0]
+                token_hash = partes[1]
+                
+                # Buscar usuario
+                usuario = data_manager.get_usuario_por_email(email)
+                
+                if usuario:
+                    # Verificar token
+                    token_esperado = gerar_token_sessao(email, usuario.get('senha_hash', ''))
+                    
+                    if token_hash == token_esperado:
+                        st.session_state.usuario_logado = usuario
+                        st.session_state.autenticado = True
+                        return True
+        except:
+            pass
+    
+    return False
+
+
+def injetar_script_login(token: str):
+    """Injeta JavaScript para salvar token no localStorage e atualizar URL"""
+    js_code = f"""
+    <script>
+        localStorage.setItem('air_auth_token', '{token}');
+        const url = new URL(window.location.href);
+        url.searchParams.set('auth_token', '{token}');
+        window.history.replaceState({{}}, '', url.toString());
+    </script>
+    """
+    st.components.v1.html(js_code, height=0)
+
+
+def injetar_script_verificar_login():
+    """Injeta JavaScript para verificar localStorage e redirecionar se tiver token"""
+    js_code = """
+    <script>
+        (function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const tokenUrl = urlParams.get('auth_token');
+            
+            if (!tokenUrl) {
+                const tokenLocal = localStorage.getItem('air_auth_token');
+                
+                if (tokenLocal) {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('auth_token', tokenLocal);
+                    window.location.href = url.toString();
+                }
+            }
+        })();
+    </script>
+    """
+    st.components.v1.html(js_code, height=0)
+
+
+def injetar_script_logout():
+    """Injeta JavaScript para limpar localStorage"""
+    js_code = """
+    <script>
+        localStorage.removeItem('air_auth_token');
+        const url = new URL(window.location.href);
+        url.searchParams.delete('auth_token');
+        window.history.replaceState({}, '', url.toString());
+    </script>
+    """
+    st.components.v1.html(js_code, height=0)
 
 
 def render_login():
@@ -122,6 +113,9 @@ def render_login():
     if verificar_login_salvo():
         st.rerun()
         return
+    
+    # Injetar script para verificar localStorage
+    injetar_script_verificar_login()
     
     st.markdown("""
     <style>
@@ -138,7 +132,7 @@ def render_login():
         margin-bottom: 30px;
     }
     .login-logo h1 {
-        color: #7c3aed;
+        color: #111827;
         font-size: 48px;
         margin: 0;
     }
@@ -188,9 +182,11 @@ def render_form_login():
                     st.session_state.usuario_logado = usuario
                     st.session_state.autenticado = True
                     
-                    # Salvar em cookie se "Lembrar-me" estiver marcado
+                    # Salvar token se "Lembrar-me" estiver marcado
                     if lembrar:
-                        salvar_login_cookie(email, usuario.get('senha_hash', ''))
+                        token = gerar_token_url(email, usuario.get('senha_hash', ''))
+                        st.query_params['auth_token'] = token
+                        injetar_script_login(token)
                     
                     st.success(f"Bem-vindo, {usuario['nome']}!")
                     st.rerun()
@@ -245,169 +241,144 @@ def render_form_registro():
                             data_manager.usar_convite(token_convite, user_id)
                             
                             st.success("Conta criada com sucesso! Faca login para continuar.")
-                            st.session_state.token_convite = None
-                            st.rerun()
+                            st.balloons()
                         else:
-                            st.error("Erro ao criar conta. Tente novamente.")
+                            st.error("Erro ao criar conta")
         else:
             st.error("Convite invalido ou expirado")
-            st.info("Solicite um novo link de convite a um administrador")
     else:
-        # Campo para inserir codigo de convite
-        with st.form("form_convite"):
-            codigo = st.text_input("Codigo do convite", placeholder="Cole o codigo ou link de convite")
-            
-            if st.form_submit_button("Verificar Convite", use_container_width=True):
-                if codigo:
-                    # Extrair token se for URL completa
-                    if 'convite=' in codigo:
-                        token = codigo.split('convite=')[-1].split('&')[0]
-                    else:
-                        token = codigo.strip()
-                    
-                    convite = data_manager.validar_convite(token)
-                    
-                    if convite:
-                        st.session_state.token_convite = token
-                        st.rerun()
-                    else:
-                        st.error("Convite invalido ou expirado")
-                else:
-                    st.warning("Cole o codigo do convite")
+        st.info("Solicite um convite para criar sua conta")
 
 
 def render_gerenciar_usuarios():
-    """Pagina de gerenciamento de usuarios (admin)"""
+    """Renderiza gerenciamento de usuarios (apenas admins)"""
     
-    st.subheader("Gerenciar Usuarios")
-    
-    usuario_atual = st.session_state.get('usuario_logado', {})
-    
-    # Apenas admin pode gerenciar
-    if usuario_atual.get('role') != 'admin':
+    usuario = st.session_state.get('usuario_logado', {})
+    if usuario.get('role') != 'admin':
         st.warning("Acesso restrito a administradores")
         return
     
-    # Gerar convite
-    st.markdown("### Convidar Novo Usuario")
+    st.subheader("Gerenciar Usuarios")
     
-    col1, col2, col3 = st.columns([2, 1, 1])
+    # Tabs
+    tab1, tab2, tab3 = st.tabs(["Usuarios", "Convites", "Novo Convite"])
     
-    with col1:
-        email_convite = st.text_input("Email do convidado (opcional)", placeholder="deixe vazio para convite generico")
-    with col2:
-        dias_validade = st.number_input("Validade (dias)", min_value=1, max_value=30, value=7)
-    with col3:
-        st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("Gerar Convite", type="primary"):
-            token = data_manager.gerar_convite(
-                criado_por=usuario_atual['id'],
-                email_convidado=email_convite if email_convite else None,
-                dias_validade=dias_validade
+    with tab1:
+        usuarios = data_manager.get_usuarios()
+        
+        if usuarios:
+            for u in usuarios:
+                with st.container():
+                    col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
+                    
+                    with col1:
+                        st.write(f"**{u['nome']}**")
+                        st.caption(u['email'])
+                    
+                    with col2:
+                        role_atual = u.get('role', 'user')
+                        novo_role = st.selectbox(
+                            "Role",
+                            ["user", "admin"],
+                            index=0 if role_atual == 'user' else 1,
+                            key=f"role_{u['id']}",
+                            label_visibility="collapsed"
+                        )
+                        if novo_role != role_atual:
+                            if st.button("Salvar", key=f"save_role_{u['id']}"):
+                                data_manager.atualizar_role_usuario(u['id'], novo_role)
+                                st.rerun()
+                    
+                    with col3:
+                        status = "Ativo" if u.get('ativo', True) else "Inativo"
+                        st.caption(status)
+                    
+                    with col4:
+                        if u['id'] != usuario['id']:  # Nao pode desativar a si mesmo
+                            if u.get('ativo', True):
+                                if st.button("Desativar", key=f"desat_{u['id']}"):
+                                    data_manager.desativar_usuario(u['id'])
+                                    st.rerun()
+                            else:
+                                if st.button("Ativar", key=f"ativar_{u['id']}"):
+                                    data_manager.ativar_usuario(u['id'])
+                                    st.rerun()
+                    
+                    st.markdown("---")
+        else:
+            st.info("Nenhum usuario cadastrado")
+    
+    with tab2:
+        convites = data_manager.get_convites()
+        
+        if convites:
+            for c in convites:
+                with st.container():
+                    col1, col2, col3 = st.columns([3, 2, 1])
+                    
+                    with col1:
+                        email_conv = c.get('email_convidado', 'Qualquer email')
+                        st.write(f"**{email_conv}**")
+                        st.caption(f"Token: {c['token'][:20]}...")
+                    
+                    with col2:
+                        status = "Usado" if c.get('usado') else "Pendente"
+                        st.caption(f"Status: {status}")
+                        if c.get('expira_em'):
+                            st.caption(f"Expira: {c['expira_em']}")
+                    
+                    with col3:
+                        if not c.get('usado'):
+                            # Copiar link
+                            app_url = st.session_state.get('app_url', '')
+                            link = f"{app_url}?convite={c['token']}"
+                            st.code(link, language=None)
+                    
+                    st.markdown("---")
+        else:
+            st.info("Nenhum convite criado")
+    
+    with tab3:
+        st.markdown("### Criar Novo Convite")
+        
+        with st.form("form_convite"):
+            email_convite = st.text_input(
+                "Email especifico (opcional)",
+                placeholder="deixe vazio para aceitar qualquer email"
             )
             
-            # Gerar link
-            base_url = st.session_state.get('app_url', 'https://airrelatoriosgit-csve5an6pncvhztci8rbn9.streamlit.app')
-            link = f"{base_url}?convite={token}"
+            dias_validade = st.number_input(
+                "Dias de validade",
+                min_value=1,
+                max_value=90,
+                value=7
+            )
             
-            st.success("Convite gerado!")
-            st.code(link)
-            st.caption("Compartilhe este link com a pessoa que deseja convidar")
-    
-    st.markdown("---")
-    
-    # Listar usuarios
-    st.markdown("### Usuarios Cadastrados")
-    
-    usuarios = data_manager.get_usuarios()
-    
-    if usuarios:
-        for user in usuarios:
-            with st.expander(f"{user['nome']} ({user['email']}) - {user['role']}"):
-                col1, col2, col3 = st.columns([2, 1, 1])
+            if st.form_submit_button("Criar Convite", type="primary"):
+                token = data_manager.criar_convite(
+                    criado_por=usuario['id'],
+                    email_convidado=email_convite if email_convite else None,
+                    dias_validade=dias_validade
+                )
                 
-                with col1:
-                    st.write(f"**Email:** {user['email']}")
-                    st.write(f"**Funcao:** {user['role']}")
-                    st.write(f"**Criado em:** {user.get('created_at', '-')[:10] if user.get('created_at') else '-'}")
-                    st.write(f"**Ultimo login:** {user.get('last_login', '-')[:10] if user.get('last_login') else '-'}")
-                
-                with col2:
-                    novo_role = st.selectbox(
-                        "Funcao",
-                        ["user", "admin"],
-                        index=0 if user['role'] == 'user' else 1,
-                        key=f"role_{user['id']}"
-                    )
-                    if novo_role != user['role']:
-                        if st.button("Atualizar", key=f"update_{user['id']}"):
-                            data_manager.atualizar_usuario(user['id'], {'nome': user['nome'], 'email': user['email'], 'role': novo_role})
-                            st.success("Atualizado!")
-                            st.rerun()
-                
-                with col3:
-                    if user['id'] != usuario_atual['id']:  # Nao pode desativar a si mesmo
-                        if user.get('ativo', 1):
-                            if st.button("Desativar", key=f"desat_{user['id']}"):
-                                data_manager.desativar_usuario(user['id'])
-                                st.success("Usuario desativado")
-                                st.rerun()
-    else:
-        st.info("Nenhum usuario cadastrado")
-    
-    st.markdown("---")
-    
-    # Listar convites
-    st.markdown("### Convites Pendentes")
-    
-    convites = data_manager.get_convites()
-    convites_pendentes = [c for c in convites if not c.get('usado')]
-    
-    if convites_pendentes:
-        for conv in convites_pendentes:
-            col1, col2, col3 = st.columns([3, 1, 1])
-            
-            with col1:
-                email_info = conv.get('email_convidado') or "Qualquer email"
-                st.write(f"Para: {email_info}")
-                st.caption(f"Expira: {conv.get('expira_em', '-')[:10] if conv.get('expira_em') else 'Nunca'}")
-            
-            with col2:
-                base_url = st.session_state.get('app_url', 'https://airrelatoriosgit-csve5an6pncvhztci8rbn9.streamlit.app')
-                link = f"{base_url}?convite={conv['token']}"
-                st.code(conv['token'][:20] + "...")
-            
-            with col3:
-                if st.button("Excluir", key=f"del_conv_{conv['id']}"):
-                    data_manager.excluir_convite(conv['id'])
-                    st.rerun()
-    else:
-        st.info("Nenhum convite pendente")
-
-
-def criar_admin_inicial():
-    """Cria usuario admin inicial se nao existir nenhum usuario"""
-    if data_manager.contar_usuarios() == 0:
-        # Criar admin padrao
-        data_manager.criar_usuario(
-            email="admin@air.com",
-            nome="Administrador",
-            senha="admin123",
-            role="admin"
-        )
-        return True
-    return False
-
-
-def verificar_autenticacao():
-    """Verifica se usuario esta autenticado"""
-    return st.session_state.get('autenticado', False)
+                if token:
+                    app_url = st.session_state.get('app_url', '')
+                    link = f"{app_url}?convite={token}"
+                    st.success("Convite criado!")
+                    st.code(link)
+                    st.caption("Compartilhe este link com a pessoa que deseja convidar")
+                else:
+                    st.error("Erro ao criar convite")
 
 
 def fazer_logout():
-    """Faz logout do usuario e limpa cookie"""
-    # Limpar cookie de sessao
-    limpar_cookie_login()
+    """Faz logout do usuario e limpa localStorage"""
+    # Limpar query params
+    if 'auth_token' in st.query_params:
+        del st.query_params['auth_token']
+    
+    # Injetar script para limpar localStorage
+    injetar_script_logout()
     
     st.session_state.autenticado = False
     st.session_state.usuario_logado = None

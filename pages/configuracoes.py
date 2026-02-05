@@ -17,9 +17,9 @@ def render():
     is_admin = usuario.get('role') == 'admin'
     
     if is_admin:
-        tab1, tab2, tab3, tab4 = st.tabs(["Aparencia", "Classificacao de Influenciadores", "Sistema", "Usuarios"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["Aparencia", "Classificacao de Influenciadores", "Colunas Dinamicas", "Sistema", "Usuarios"])
     else:
-        tab1, tab2, tab3 = st.tabs(["Aparencia", "Classificacao de Influenciadores", "Sistema"])
+        tab1, tab2, tab3, tab4 = st.tabs(["Aparencia", "Classificacao de Influenciadores", "Colunas Dinamicas", "Sistema"])
     
     with tab1:
         render_aparencia()
@@ -28,10 +28,13 @@ def render():
         render_faixas_classificacao()
     
     with tab3:
+        render_colunas_dinamicas()
+    
+    with tab4:
         render_sistema()
     
     if is_admin:
-        with tab4:
+        with tab5:
             auth.render_gerenciar_usuarios()
 
 
@@ -367,3 +370,105 @@ def render_sistema():
             if st.button("Cancelar"):
                 st.session_state.confirmar_limpeza = False
                 st.rerun()
+
+
+def render_colunas_dinamicas():
+    """Gerenciar colunas dinamicas para categorizar influenciadores"""
+    
+    st.subheader("Colunas Dinamicas")
+    st.caption("Crie colunas personalizadas para categorizar influenciadores (ex: Tipo de Cabelo, Faixa Etaria, Tom de Pele)")
+    
+    # Buscar colunas existentes
+    colunas = data_manager.get_colunas_dinamicas()
+    
+    # Criar nova coluna
+    st.markdown("---")
+    st.markdown("**Criar Nova Coluna**")
+    
+    with st.form("form_nova_coluna"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            nome_coluna = st.text_input("Nome da Coluna", placeholder="Ex: Tipo de Cabelo")
+        with col2:
+            descricao_coluna = st.text_input("Descricao (opcional)", placeholder="Ex: Classificacao por tipo de cabelo")
+        
+        opcoes_coluna = st.text_input(
+            "Opcoes (separadas por virgula)", 
+            placeholder="Ex: Liso, Ondulado, Cacheado, Crespo",
+            help="Deixe vazio para permitir texto livre"
+        )
+        
+        if st.form_submit_button("Criar Coluna", type="primary"):
+            if nome_coluna:
+                opcoes_lista = [o.strip() for o in opcoes_coluna.split(',') if o.strip()] if opcoes_coluna else []
+                coluna_id = data_manager.criar_coluna_dinamica(nome_coluna, descricao_coluna, opcoes_lista)
+                if coluna_id:
+                    st.success(f"Coluna '{nome_coluna}' criada!")
+                    st.rerun()
+                else:
+                    st.error("Erro ao criar coluna")
+            else:
+                st.warning("Informe o nome da coluna")
+    
+    # Listar colunas existentes
+    if colunas:
+        st.markdown("---")
+        st.markdown(f"**Colunas Cadastradas ({len(colunas)})**")
+        
+        for col in colunas:
+            with st.expander(f"{col['nome']}", expanded=False):
+                st.caption(col.get('descricao', '') or 'Sem descricao')
+                
+                # Mostrar opcoes
+                opcoes = col.get('opcoes', [])
+                if opcoes:
+                    st.markdown(f"**Opcoes:** {', '.join(opcoes)}")
+                else:
+                    st.caption("Texto livre (sem opcoes pre-definidas)")
+                
+                # Valores em uso
+                valores_usados = data_manager.get_valores_unicos_coluna(col['id'])
+                if valores_usados:
+                    st.markdown(f"**Valores em uso:** {', '.join(valores_usados[:10])}" + ("..." if len(valores_usados) > 10 else ""))
+                
+                # Editar
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button(f"Editar", key=f"edit_col_{col['id']}"):
+                        st.session_state[f"editing_col_{col['id']}"] = True
+                        st.rerun()
+                with col2:
+                    if st.button(f"Excluir", key=f"del_col_{col['id']}"):
+                        data_manager.excluir_coluna_dinamica(col['id'])
+                        st.success("Coluna excluida!")
+                        st.rerun()
+                
+                # Form de edicao
+                if st.session_state.get(f"editing_col_{col['id']}"):
+                    with st.form(f"form_edit_col_{col['id']}"):
+                        novo_nome = st.text_input("Nome", value=col['nome'])
+                        nova_desc = st.text_input("Descricao", value=col.get('descricao', ''))
+                        novas_opcoes = st.text_input(
+                            "Opcoes (separadas por virgula)", 
+                            value=', '.join(opcoes) if opcoes else ''
+                        )
+                        
+                        col_a, col_b = st.columns(2)
+                        with col_a:
+                            if st.form_submit_button("Salvar", type="primary"):
+                                opcoes_lista = [o.strip() for o in novas_opcoes.split(',') if o.strip()] if novas_opcoes else []
+                                data_manager.atualizar_coluna_dinamica(col['id'], {
+                                    'nome': novo_nome,
+                                    'descricao': nova_desc,
+                                    'opcoes': opcoes_lista
+                                })
+                                st.session_state[f"editing_col_{col['id']}"] = False
+                                st.success("Coluna atualizada!")
+                                st.rerun()
+                        with col_b:
+                            if st.form_submit_button("Cancelar"):
+                                st.session_state[f"editing_col_{col['id']}"] = False
+                                st.rerun()
+    else:
+        st.info("Nenhuma coluna dinamica cadastrada. Crie a primeira acima!")

@@ -54,6 +54,13 @@ def render():
             st.session_state.current_page = 'Relatorios'
             st.rerun()
     
+    # Botao de atualizar dados para campanhas estaticas
+    if campanha.get('tipo_dados') == 'estatico':
+        col_upd1, col_upd2 = st.columns([3, 1])
+        with col_upd2:
+            if st.button("Atualizar Dados", use_container_width=True, help="Buscar dados atualizados da API para todos os influenciadores"):
+                atualizar_dados_campanha_estatica(campanha)
+    
     # Tabs
     tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "Influenciadores e Posts",
@@ -85,6 +92,79 @@ def render():
     
     with tab7:
         render_categorias_comentarios(campanha)
+
+
+def atualizar_dados_campanha_estatica(campanha):
+    """Atualiza dados dos influenciadores de uma campanha estatica via API"""
+    from utils import api_client
+    
+    st.info("Atualizando dados dos influenciadores...")
+    progress = st.progress(0)
+    status = st.empty()
+    
+    influenciadores = campanha.get('influenciadores', [])
+    total = len(influenciadores)
+    atualizados = 0
+    erros = []
+    
+    for idx, inf_camp in enumerate(influenciadores):
+        progress.progress((idx + 1) / total)
+        
+        inf_id = inf_camp.get('influenciador_id')
+        inf = data_manager.get_influenciador(inf_id)
+        
+        if not inf:
+            continue
+        
+        profile_id = inf.get('profile_id')
+        nome = inf.get('nome', 'Influenciador')
+        
+        status.text(f"Atualizando {nome}...")
+        
+        if not profile_id:
+            erros.append(f"{nome}: sem profile_id")
+            continue
+        
+        # Buscar dados atualizados da API
+        resultado = api_client.buscar_por_profile_id(profile_id)
+        
+        if resultado.get('success') and resultado.get('data'):
+            dados_api = resultado['data']
+            
+            # Atualizar influenciador no banco
+            dados_atualizados = {
+                'seguidores': dados_api.get('seguidores', inf.get('seguidores', 0)),
+                'engagement_rate': dados_api.get('engagement_rate', inf.get('engagement_rate', 0)),
+                'media_curtidas': dados_api.get('media_curtidas', inf.get('media_curtidas', 0)),
+                'media_comentarios': dados_api.get('media_comentarios', inf.get('media_comentarios', 0)),
+                'media_views': dados_api.get('media_views', inf.get('media_views', 0)),
+            }
+            
+            # Manter outros dados existentes
+            for key in ['nome', 'usuario', 'network', 'profile_id', 'nicho', 'classificacao', 'foto_url']:
+                if inf.get(key):
+                    dados_atualizados[key] = inf[key]
+            
+            data_manager.atualizar_influenciador(inf_id, dados_atualizados)
+            atualizados += 1
+        else:
+            erro_msg = resultado.get('error', 'Erro desconhecido')
+            erros.append(f"{nome}: {erro_msg[:50]}")
+    
+    progress.empty()
+    status.empty()
+    
+    # Resultado
+    if atualizados > 0:
+        st.success(f"{atualizados} influenciadores atualizados com sucesso!")
+    
+    if erros:
+        with st.expander(f"{len(erros)} erros"):
+            for erro in erros:
+                st.warning(erro)
+    
+    if atualizados > 0:
+        st.rerun()
 
 
 def render_influenciadores_posts(campanha):
@@ -229,8 +309,9 @@ def render_influenciadores_posts(campanha):
                         with col1:
                             st.write(f"**{post['formato']}** ({post['plataforma']})")
                             st.caption(post['data_publicacao'])
-                            if post.get('link_post'):
-                                st.markdown(f"[Link]({post['link_post']})")
+                            link_do_post = post.get('link_post') or post.get('link') or post.get('permalink') or ''
+                            if link_do_post:
+                                st.markdown(f"[Link]({link_do_post})")
                         
                         with col2:
                             st.caption("Impressoes")
@@ -831,6 +912,11 @@ def render_form_post_manual(campanha, inf):
         with col2:
             cupom_conversoes = st.number_input("Conversões Cupom", min_value=0, value=0) if metricas_config.get('cupom_conversoes') else 0
         
+        # Cliques no @ (principalmente para Stories)
+        col1, col2 = st.columns(2)
+        with col1:
+            clique_arroba = st.number_input("Cliques no @", min_value=0, value=0, help="Cliques no perfil/@ (comum em Stories)")
+        
         col1, col2 = st.columns(2)
         submitted = col1.form_submit_button("Adicionar Post", use_container_width=True, type="primary")
         cancel = col2.form_submit_button("Cancelar", use_container_width=True)
@@ -850,6 +936,7 @@ def render_form_post_manual(campanha, inf):
                 'compartilhamentos': compartilhamentos,
                 'saves': saves,
                 'clique_link': clique_link,
+                'clique_arroba': clique_arroba,
                 'cupom_conversoes': cupom_conversoes,
                 'imagens': [],
                 'qtd_telas': qtd_telas if formato == "Stories" else 1
@@ -1130,6 +1217,38 @@ def render_configuracoes_campanha(campanha):
             help="Quando habilitado e existirem influenciadores com categoria definida, exibe uma aba adicional no relatorio agrupando metricas por categoria"
         )
         
+        # Colunas Dinamicas para filtro no relatorio
+        st.markdown("---")
+        st.markdown("**Colunas Dinamicas para Filtro:**")
+        st.caption("Selecione quais colunas dinamicas serao usadas como filtro nos graficos do relatorio")
+        
+        colunas_disponiveis = data_manager.get_colunas_dinamicas()
+        colunas_selecionadas_atual = []
+        
+        # Buscar colunas ja selecionadas
+        colunas_json = campanha.get('colunas_dinamicas_selecionadas')
+        if colunas_json:
+            try:
+                import json
+                colunas_selecionadas_atual = json.loads(colunas_json) if isinstance(colunas_json, str) else colunas_json
+            except:
+                pass
+        
+        colunas_selecionadas = []
+        if colunas_disponiveis:
+            cols_check = st.columns(3)
+            for i, col_din in enumerate(colunas_disponiveis):
+                with cols_check[i % 3]:
+                    selecionada = st.checkbox(
+                        col_din['nome'],
+                        value=col_din['id'] in colunas_selecionadas_atual,
+                        key=f"col_din_sel_{col_din['id']}"
+                    )
+                    if selecionada:
+                        colunas_selecionadas.append(col_din['id'])
+        else:
+            st.info("Nenhuma coluna dinamica cadastrada. Configure em Ajustes > Colunas Dinamicas")
+        
         submitted = st.form_submit_button("Salvar Configuracoes", type="primary", use_container_width=True)
         
         if submitted:
@@ -1146,6 +1265,7 @@ def render_configuracoes_campanha(campanha):
                 'cupom_conversoes': m_cupom
             }
             
+            import json
             data_manager.atualizar_campanha(campanha['id'], {
                 'nome': nome,
                 'objetivo': objetivo,
@@ -1157,7 +1277,8 @@ def render_configuracoes_campanha(campanha):
                 'estimativa_alcance': estimativa_alcance,
                 'estimativa_impressoes': estimativa_impressoes,
                 'investimento_total': investimento_total,
-                'mostrar_aba_categoria': mostrar_aba_categoria
+                'mostrar_aba_categoria': mostrar_aba_categoria,
+                'colunas_dinamicas_selecionadas': json.dumps(colunas_selecionadas)
             })
             
             st.success("Configuracoes salvas!")
@@ -2072,12 +2193,17 @@ def render_comentarios(campanha):
     
     st.markdown("---")
     
-    # Buscar influenciadores e posts
+    # Buscar influenciadores e posts (excluindo Stories)
     influenciadores = data_manager.get_influenciadores_campanha(campanha_id)
     
     posts_campanha = []
     for inf in influenciadores:
         for idx, post in enumerate(inf.get('posts', [])):
+            # Excluir Stories da lista de comentarios
+            formato = post.get('formato', '').lower()
+            if 'stor' in formato:
+                continue
+            
             link = post.get('link', '') or post.get('link_post', '') or post.get('permalink', '') or post.get('url', '') or ''
             posts_campanha.append({
                 'influenciador': inf.get('nome', ''),
@@ -2180,38 +2306,257 @@ def render_comentarios(campanha):
     # Secao: comentarios salvos
     if total_coments > 0:
         st.markdown("---")
-        st.markdown("**Resumo de Comentarios Salvos**")
         
-        # Estatisticas por categoria
-        stats = data_manager.get_estatisticas_comentarios(campanha_id)
+        # Botoes de acao
+        col_titulo, col_editar, col_download, col_excluir = st.columns([2, 1, 1, 1])
         
-        if stats.get('por_categoria'):
-            for cat, dados in stats['por_categoria'].items():
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    st.progress(dados['percentual'] / 100)
-                with col2:
-                    st.caption(f"{cat}: {dados['quantidade']} ({dados['percentual']}%)")
+        with col_titulo:
+            st.markdown("**Resumo de Comentarios Salvos**")
         
-        # Tabela completa em expander
-        with st.expander(f"Ver todos ({total_coments} comentarios)"):
-            df = pd.DataFrame([
+        with col_editar:
+            if st.button("Editar Comentarios", key="btn_editar_coments", use_container_width=True):
+                st.session_state['modo_editar_coments'] = True
+                st.rerun()
+        
+        with col_download:
+            # Preparar CSV para download
+            df_download = pd.DataFrame([
                 {
                     'Usuario': c.get('usuario', ''),
-                    'Texto': c.get('texto', '')[:80] + '...' if len(c.get('texto', '')) > 80 else c.get('texto', ''),
+                    'Texto': c.get('texto', ''),
                     'Categoria': c.get('categoria', '-'),
-                    'Likes': c.get('likes', 0)
+                    'Sentimento': c.get('sentimento', '-'),
+                    'Likes': c.get('likes', 0),
+                    'Data': c.get('data', ''),
+                    'Influenciador': c.get('influenciador', ''),
+                    'Post URL': c.get('post_url', '')
                 }
                 for c in comentarios_salvos
             ])
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            csv_coments = df_download.to_csv(index=False).encode('utf-8-sig')
+            st.download_button(
+                "Baixar CSV",
+                data=csv_coments,
+                file_name=f"comentarios_{campanha['nome']}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
         
-        # Botao excluir
-        col1, col2 = st.columns([4, 1])
-        with col2:
-            if st.button("Excluir todos", key="btn_excluir_coments"):
+        with col_excluir:
+            if st.button("Excluir todos", key="btn_excluir_coments", use_container_width=True):
                 data_manager.excluir_comentarios_campanha(campanha_id)
                 st.success("Comentarios excluidos!")
+                import time
+                time.sleep(1)
+                st.rerun()
+        
+        # Modo editar comentarios
+        if st.session_state.get('modo_editar_coments'):
+            _render_editar_comentarios(campanha_id, categorias, comentarios_salvos, influenciadores)
+        else:
+            # Estatisticas por categoria
+            stats = data_manager.get_estatisticas_comentarios(campanha_id)
+            
+            if stats.get('por_categoria'):
+                for cat, dados in stats['por_categoria'].items():
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.progress(dados['percentual'] / 100)
+                    with col2:
+                        st.caption(f"{cat}: {dados['quantidade']} ({dados['percentual']}%)")
+            
+            # Estatisticas por sentimento
+            stats_sent = {}
+            for c in comentarios_salvos:
+                sent = c.get('sentimento', 'Nao classificado') or 'Nao classificado'
+                stats_sent[sent] = stats_sent.get(sent, 0) + 1
+            
+            if stats_sent:
+                st.markdown("**Por Sentimento:**")
+                cols_sent = st.columns(len(stats_sent))
+                cores_sent = {'Positivo': '#22c55e', 'Neutro': '#6b7280', 'Negativo': '#ef4444', 'Nao classificado': '#9ca3af'}
+                for i, (sent, qtd) in enumerate(stats_sent.items()):
+                    with cols_sent[i]:
+                        cor = cores_sent.get(sent, '#6b7280')
+                        st.markdown(f"<span style='color:{cor};font-weight:500;'>{sent}: {qtd}</span>", unsafe_allow_html=True)
+
+
+def _render_editar_comentarios(campanha_id, categorias, comentarios_salvos, influenciadores):
+    """Interface de edicao de comentarios com paginacao e filtros"""
+    import pandas as pd
+    
+    st.markdown("---")
+    st.markdown("### Editar Classificacao de Comentarios")
+    
+    # Botao voltar
+    if st.button("Voltar ao resumo", key="btn_voltar_coments"):
+        st.session_state['modo_editar_coments'] = False
+        st.rerun()
+    
+    # Filtros
+    col_f1, col_f2, col_f3 = st.columns(3)
+    
+    with col_f1:
+        # Filtro por influenciador
+        nomes_influs = ['Todos'] + sorted(set(c.get('influenciador', '') for c in comentarios_salvos if c.get('influenciador')))
+        filtro_influ = st.selectbox("Influenciador:", nomes_influs, key="filtro_influ_coments")
+    
+    with col_f2:
+        # Filtro por usuario
+        filtro_usuario = st.text_input("Usuario (@):", placeholder="Digite o @ do usuario", key="filtro_usuario_coments")
+    
+    with col_f3:
+        # Pesquisa por palavra-chave
+        filtro_texto = st.text_input("Palavra-chave:", placeholder="Pesquisar no texto", key="filtro_texto_coments")
+    
+    # Filtro por sentimento e categoria
+    col_f4, col_f5 = st.columns(2)
+    
+    with col_f4:
+        sentimentos = ['Todos', 'Positivo', 'Neutro', 'Negativo', 'Nao classificado']
+        filtro_sentimento = st.selectbox("Sentimento:", sentimentos, key="filtro_sent_coments")
+    
+    with col_f5:
+        cats_disponiveis = ['Todas'] + [c.get('nome', '') for c in categorias] + ['Pendente', 'Nao Classificado']
+        filtro_categoria = st.selectbox("Categoria:", cats_disponiveis, key="filtro_cat_coments")
+    
+    # Aplicar filtros
+    comentarios_filtrados = comentarios_salvos.copy()
+    
+    if filtro_influ != 'Todos':
+        comentarios_filtrados = [c for c in comentarios_filtrados if c.get('influenciador') == filtro_influ]
+    
+    if filtro_usuario:
+        filtro_usuario_lower = filtro_usuario.lower().replace('@', '')
+        comentarios_filtrados = [c for c in comentarios_filtrados if filtro_usuario_lower in c.get('usuario', '').lower()]
+    
+    if filtro_texto:
+        filtro_texto_lower = filtro_texto.lower()
+        comentarios_filtrados = [c for c in comentarios_filtrados if filtro_texto_lower in c.get('texto', '').lower()]
+    
+    if filtro_sentimento != 'Todos':
+        if filtro_sentimento == 'Nao classificado':
+            comentarios_filtrados = [c for c in comentarios_filtrados if not c.get('sentimento') or c.get('sentimento') == 'Nao classificado']
+        else:
+            comentarios_filtrados = [c for c in comentarios_filtrados if c.get('sentimento') == filtro_sentimento]
+    
+    if filtro_categoria != 'Todas':
+        comentarios_filtrados = [c for c in comentarios_filtrados if filtro_categoria in (c.get('categoria', '') or '')]
+    
+    total_filtrados = len(comentarios_filtrados)
+    st.caption(f"Mostrando {total_filtrados} comentarios")
+    
+    if total_filtrados == 0:
+        st.info("Nenhum comentario encontrado com os filtros selecionados.")
+        return
+    
+    # Paginacao
+    POR_PAGINA = 100
+    total_paginas = max(1, (total_filtrados + POR_PAGINA - 1) // POR_PAGINA)
+    
+    pagina_atual = st.session_state.get('pagina_coments', 1)
+    if pagina_atual > total_paginas:
+        pagina_atual = 1
+    
+    col_pag1, col_pag2, col_pag3 = st.columns([1, 2, 1])
+    with col_pag2:
+        pagina_atual = st.number_input(
+            f"Pagina (1 a {total_paginas}):",
+            min_value=1,
+            max_value=total_paginas,
+            value=pagina_atual,
+            key="input_pagina_coments"
+        )
+        st.session_state['pagina_coments'] = pagina_atual
+    
+    # Comentarios da pagina atual
+    inicio = (pagina_atual - 1) * POR_PAGINA
+    fim = inicio + POR_PAGINA
+    comentarios_pagina = comentarios_filtrados[inicio:fim]
+    
+    # Opcoes para selects
+    categorias_opcoes = [''] + [c.get('nome', '') for c in categorias] + ['Nao Classificado']
+    sentimentos_opcoes = ['', 'Positivo', 'Neutro', 'Negativo']
+    
+    # Lista de comentarios para editar
+    st.markdown("---")
+    
+    alteracoes = {}
+    
+    for i, coment in enumerate(comentarios_pagina):
+        coment_id = coment.get('id') or coment.get('_id') or f"{coment.get('post_url', '')}_{coment.get('usuario', '')}_{i}"
+        
+        col1, col2, col3, col4 = st.columns([1, 3, 2, 2])
+        
+        with col1:
+            st.markdown(f"**@{coment.get('usuario', '-')[:15]}**")
+            st.caption(f"{coment.get('likes', 0)} likes")
+        
+        with col2:
+            texto = coment.get('texto', '')[:150]
+            st.markdown(f"<p style='font-size:12px;margin:0;'>{texto}</p>", unsafe_allow_html=True)
+            st.caption(coment.get('influenciador', ''))
+        
+        with col3:
+            cat_atual = coment.get('categoria', '') or ''
+            # Se tem multiplas categorias, pegar a primeira
+            cat_principal = cat_atual.split(' | ')[0] if ' | ' in cat_atual else cat_atual
+            idx_cat = categorias_opcoes.index(cat_principal) if cat_principal in categorias_opcoes else 0
+            
+            nova_cat = st.selectbox(
+                "Categoria",
+                categorias_opcoes,
+                index=idx_cat,
+                key=f"edit_cat_{coment_id}_{i}",
+                label_visibility="collapsed"
+            )
+            
+            if nova_cat != cat_atual:
+                alteracoes[coment_id] = alteracoes.get(coment_id, {})
+                alteracoes[coment_id]['categoria'] = nova_cat
+                alteracoes[coment_id]['coment'] = coment
+        
+        with col4:
+            sent_atual = coment.get('sentimento', '') or ''
+            idx_sent = sentimentos_opcoes.index(sent_atual) if sent_atual in sentimentos_opcoes else 0
+            
+            novo_sent = st.selectbox(
+                "Sentimento",
+                sentimentos_opcoes,
+                index=idx_sent,
+                key=f"edit_sent_{coment_id}_{i}",
+                label_visibility="collapsed"
+            )
+            
+            if novo_sent != sent_atual:
+                alteracoes[coment_id] = alteracoes.get(coment_id, {})
+                alteracoes[coment_id]['sentimento'] = novo_sent
+                alteracoes[coment_id]['coment'] = coment
+        
+        if i < len(comentarios_pagina) - 1:
+            st.markdown("<hr style='margin:0.3rem 0;border-color:#f3f4f6;'>", unsafe_allow_html=True)
+    
+    # Botao salvar alteracoes
+    if alteracoes:
+        st.markdown("---")
+        col_save1, col_save2 = st.columns([3, 1])
+        with col_save2:
+            if st.button(f"Salvar {len(alteracoes)} alteracoes", type="primary", use_container_width=True):
+                for coment_id, dados in alteracoes.items():
+                    coment = dados.get('coment', {})
+                    nova_cat = dados.get('categoria')
+                    novo_sent = dados.get('sentimento')
+                    
+                    data_manager.atualizar_comentario(
+                        campanha_id,
+                        coment.get('post_url', ''),
+                        coment.get('usuario', ''),
+                        coment.get('texto', ''),
+                        nova_cat,
+                        novo_sent
+                    )
+                
+                st.success(f"{len(alteracoes)} comentarios atualizados!")
                 import time
                 time.sleep(1)
                 st.rerun()
@@ -2285,7 +2630,9 @@ def _processar_csv_comentarios(uploaded_file, campanha_id, post_info, categorias
                     "descricao": cat.get('descricao', '')
                 }
                 for cat in categorias[:10]
-            ]
+            ],
+            "include_sentiment": True,
+            "sentiment_options": ["Positivo", "Neutro", "Negativo"]
         }
         
         try:
@@ -2337,32 +2684,66 @@ def extrair_classificacoes_webhook(resultado) -> list:
 
 def aplicar_classificacoes(comentarios: list, classificacoes: list, categorias: list) -> list:
     """
-    Aplica classificacoes aos comentarios.
-    Formato: [{"comment_id": "123", "classification": "Elogio ao Produto"}, ...]
+    Aplica classificacoes e sentimentos aos comentarios.
+    
+    Formato esperado da resposta da IA:
+    [
+        {
+            "comment_id": "123", 
+            "classification": "Elogio ao Produto",
+            "sentiment": "Positivo"
+        },
+        {
+            "comment_id": "123", 
+            "classification": "Conexao Emocional",
+            "sentiment": "Positivo"
+        },
+        {
+            "comment_id": "456", 
+            "classification": "Critica",
+            "sentiment": "Negativo"
+        }
+    ]
+    
+    - comment_id: ID do comentario (obrigatorio)
+    - classification: Categoria do comentario (obrigatorio)
+    - sentiment: Sentimento - "Positivo", "Neutro" ou "Negativo" (opcional)
+    
     Um comentario pode ter multiplas classificacoes, juntamos com " | ".
+    O sentimento eh pego da primeira ocorrencia do comment_id.
     """
-    # Agrupar classificacoes por comment_id
+    # Agrupar classificacoes e sentimentos por comment_id
     mapa_class = {}
+    mapa_sent = {}
+    
     for item in classificacoes:
         cid = str(item.get('comment_id', ''))
         cat = item.get('classification', '')
+        sent = item.get('sentiment', '')
+        
         if cid and cat:
             if cid not in mapa_class:
                 mapa_class[cid] = []
             if cat not in mapa_class[cid]:
                 mapa_class[cid].append(cat)
+        
+        # Pegar o primeiro sentimento encontrado para o comment_id
+        if cid and sent and cid not in mapa_sent:
+            mapa_sent[cid] = sent
     
     # Aplicar aos comentarios
     comentarios_result = []
     for c in comentarios:
         comment_id = str(c.get('id', ''))
         cats_encontradas = mapa_class.get(comment_id, [])
+        sentimento = mapa_sent.get(comment_id, '')
         
         categoria_str = " | ".join(cats_encontradas) if cats_encontradas else 'Nao Classificado'
         
         comentarios_result.append({
             **c,
             'categoria': categoria_str,
+            'sentimento': sentimento,
             'classificado': 1 if cats_encontradas else 0
         })
     
@@ -2494,7 +2875,7 @@ def render_form_editar_post(campanha, inf, post_idx, post):
                 )
                 link_post = st.text_input(
                     "Link do Post",
-                    value=post.get('link_post', ''),
+                    value=post.get('link_post') or post.get('link') or post.get('permalink') or '',
                     key=f"edit_link_{post_key}"
                 )
             
